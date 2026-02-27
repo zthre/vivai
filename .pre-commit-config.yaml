@@ -1,0 +1,8 @@
+# .pre-commit-config.yaml
+
+repos:
+  - repo: https://github.com/pre-commit/mirrors-eslint
+    rev: v8.35.0  # Puedes usar la versión que prefieras
+    hooks:
+      - id: eslint
+        files: \.js$  # Esto asegura que solo se ejecutará en archivos .js
