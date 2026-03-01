@@ -22,6 +22,13 @@ export class UnitService {
   private firestore = inject(Firestore);
   private auth = inject(AuthService);
 
+  getAllOccupied(): Observable<Unit[]> {
+    const uid = this.auth.uid()!;
+    const ref = collection(this.firestore, 'units');
+    const q = query(ref, where('ownerId', '==', uid), where('status', '==', 'ocupado'));
+    return collectionData(q, { idField: 'id' }) as Observable<Unit[]>;
+  }
+
   getByProperty(propertyId: string): Observable<Unit[]> {
     const ref = collection(this.firestore, 'units');
     const q = query(ref, where('propertyId', '==', propertyId), orderBy('number'));

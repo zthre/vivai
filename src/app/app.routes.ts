@@ -68,6 +68,13 @@ export const routes: Routes = [
             m => m.UnitDetailComponent
           ),
       },
+      {
+        path: 'finances',
+        loadComponent: () =>
+          import('./features/finances/finances-dashboard/finances-dashboard.component').then(
+            m => m.FinancesDashboardComponent
+          ),
+      },
     ],
   },
   { path: '**', redirectTo: 'dashboard' },

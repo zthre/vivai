@@ -1,8 +1,9 @@
-import { Injectable, inject, signal, computed } from '@angular/core';
+import { Injectable, inject, computed, effect } from '@angular/core';
 import {
   Auth,
   GoogleAuthProvider,
-  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut,
   user,
   User,
@@ -26,11 +27,19 @@ export class AuthService {
   readonly isLoggedIn = computed(() => !!this.currentUser());
   readonly uid = computed(() => this.currentUser()?.uid ?? null);
 
+  constructor() {
+    // Handle redirect result after Google login
+    getRedirectResult(this.auth).then(async result => {
+      if (result?.user) {
+        await this.saveUserToFirestore(result.user);
+        await this.router.navigate(['/dashboard']);
+      }
+    }).catch(() => {});
+  }
+
   async loginWithGoogle(): Promise<void> {
     const provider = new GoogleAuthProvider();
-    const credential = await signInWithPopup(this.auth, provider);
-    await this.saveUserToFirestore(credential.user);
-    await this.router.navigate(['/dashboard']);
+    await signInWithRedirect(this.auth, provider);
   }
 
   async logout(): Promise<void> {

@@ -118,6 +118,7 @@ export class ShellComponent {
   navItems: NavItem[] = [
     { label: 'Dashboard', icon: 'dashboard', route: '/dashboard' },
     { label: 'Inmuebles', icon: 'apartment', route: '/properties' },
+    { label: 'Finanzas', icon: 'bar_chart', route: '/finances' },
   ];
 
   logout() {

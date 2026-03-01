@@ -1,12 +1,12 @@
-import { Component, inject, signal, computed, OnInit } from '@angular/core';
+import { Component, inject, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { PropertyService } from '../../core/services/property.service';
 import { PaymentService } from '../../core/services/payment.service';
+import { UnitService } from '../../core/services/unit.service';
 import { AuthService } from '../../core/auth/auth.service';
-import { map } from 'rxjs';
 
 @Component({
   selector: 'app-dashboard',
@@ -106,14 +106,16 @@ import { map } from 'rxjs';
 export class DashboardComponent {
   private propertyService = inject(PropertyService);
   private paymentService = inject(PaymentService);
+  private unitService = inject(UnitService);
   private authService = inject(AuthService);
 
   private properties = toSignal(this.propertyService.getAll(), { initialValue: [] });
+  private allOccupied = toSignal(this.unitService.getAllOccupied(), { initialValue: [] });
   recentPayments = toSignal(this.paymentService.getRecent(5), { initialValue: [] });
 
   totalProperties = computed(() => this.properties().length);
   totalUnits = computed(() => this.properties().reduce((acc, p) => acc + (p.unitCount ?? 0), 0));
-  occupiedUnits = signal(0);  // Will be computed from units in a future iteration
+  occupiedUnits = computed(() => this.allOccupied().length);
   availableUnits = computed(() => this.totalUnits() - this.occupiedUnits());
 
   firstName = computed(() => {

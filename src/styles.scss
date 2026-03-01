@@ -1,3 +1,21 @@
+@use '@angular/material' as mat;
+
+@include mat.core();
+
+$vivai-primary: mat.define-palette(mat.$orange-palette, 500);
+$vivai-accent:  mat.define-palette(mat.$brown-palette, 400);
+
+$vivai-theme: mat.define-light-theme((
+  color: (
+    primary: $vivai-primary,
+    accent:  $vivai-accent,
+  ),
+  typography: mat.define-typography-config(),
+  density: 0,
+));
+
+@include mat.all-component-themes($vivai-theme);
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
