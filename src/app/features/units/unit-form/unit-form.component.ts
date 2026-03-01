@@ -54,27 +54,49 @@ import { PropertyService } from '../../../core/services/property.service';
         <!-- Estado -->
         <div>
           <label class="block text-sm font-medium text-warm-700 mb-1.5">Estado</label>
-          <div class="grid grid-cols-2 gap-2">
-            <button type="button" (click)="form.get('status')?.setValue('disponible')"
-              class="flex items-center gap-2 px-3 py-2.5 border rounded-lg text-sm font-medium transition-all"
-              [class.border-warm-400]="form.get('status')?.value === 'disponible'"
-              [class.bg-warm-100]="form.get('status')?.value === 'disponible'"
-              [class.text-warm-700]="form.get('status')?.value === 'disponible'"
-              [class.border-warm-200]="form.get('status')?.value !== 'disponible'"
-              [class.text-warm-500]="form.get('status')?.value !== 'disponible'">
-              <mat-icon class="text-[18px]">door_open</mat-icon> Disponible
+          <div class="grid grid-cols-3 gap-2">
+            <button type="button" (click)="form.get('status')?.setValue('disponible_renta')"
+              class="flex items-center gap-1.5 px-2 py-2.5 border rounded-lg text-xs font-medium transition-all"
+              [class.border-blue-500]="form.get('status')?.value === 'disponible_renta'"
+              [class.bg-blue-50]="form.get('status')?.value === 'disponible_renta'"
+              [class.text-blue-700]="form.get('status')?.value === 'disponible_renta'"
+              [class.border-warm-200]="form.get('status')?.value !== 'disponible_renta'"
+              [class.text-warm-500]="form.get('status')?.value !== 'disponible_renta'">
+              <mat-icon class="text-[16px]">door_open</mat-icon> Disponible (renta)
+            </button>
+            <button type="button" (click)="form.get('status')?.setValue('disponible_venta')"
+              class="flex items-center gap-1.5 px-2 py-2.5 border rounded-lg text-xs font-medium transition-all"
+              [class.border-green-500]="form.get('status')?.value === 'disponible_venta'"
+              [class.bg-green-50]="form.get('status')?.value === 'disponible_venta'"
+              [class.text-green-700]="form.get('status')?.value === 'disponible_venta'"
+              [class.border-warm-200]="form.get('status')?.value !== 'disponible_venta'"
+              [class.text-warm-500]="form.get('status')?.value !== 'disponible_venta'">
+              <mat-icon class="text-[16px]">sell</mat-icon> Disponible (venta)
             </button>
             <button type="button" (click)="form.get('status')?.setValue('ocupado')"
-              class="flex items-center gap-2 px-3 py-2.5 border rounded-lg text-sm font-medium transition-all"
-              [class.border-green-500]="form.get('status')?.value === 'ocupado'"
-              [class.bg-green-50]="form.get('status')?.value === 'ocupado'"
-              [class.text-green-700]="form.get('status')?.value === 'ocupado'"
+              class="flex items-center gap-1.5 px-2 py-2.5 border rounded-lg text-xs font-medium transition-all"
+              [class.border-warm-500]="form.get('status')?.value === 'ocupado'"
+              [class.bg-warm-100]="form.get('status')?.value === 'ocupado'"
+              [class.text-warm-700]="form.get('status')?.value === 'ocupado'"
               [class.border-warm-200]="form.get('status')?.value !== 'ocupado'"
               [class.text-warm-500]="form.get('status')?.value !== 'ocupado'">
-              <mat-icon class="text-[18px]">person</mat-icon> Ocupado
+              <mat-icon class="text-[16px]">person</mat-icon> Ocupado
             </button>
           </div>
         </div>
+
+        <!-- Descripción pública (solo si disponible) -->
+        @if (form.get('status')?.value !== 'ocupado') {
+          <div>
+            <label class="block text-sm font-medium text-warm-700 mb-1.5">Descripción pública (marketplace)</label>
+            <textarea
+              formControlName="publicDescription"
+              rows="3"
+              placeholder="Describe las características de la unidad para el marketplace..."
+              class="w-full px-3 py-2.5 border border-warm-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
+            ></textarea>
+          </div>
+        }
 
         <!-- Inquilino (solo si ocupado) -->
         @if (form.get('status')?.value === 'ocupado') {
@@ -126,9 +148,10 @@ export class UnitFormComponent implements OnInit {
   form = this.fb.group({
     number: ['', Validators.required],
     rentPrice: [null as number | null, [Validators.required, Validators.min(1)]],
-    status: ['disponible'],
+    status: ['disponible_renta'],
     tenantEmail: [null as string | null],
     tenantName: [null as string | null],
+    publicDescription: [null as string | null],
   });
 
   ngOnInit() {
@@ -147,7 +170,7 @@ export class UnitFormComponent implements OnInit {
     this.loading.set(true);
     try {
       const value = this.form.value as any;
-      if (value.status === 'disponible') {
+      if (value.status !== 'ocupado') {
         value.tenantEmail = null;
         value.tenantName = null;
       }

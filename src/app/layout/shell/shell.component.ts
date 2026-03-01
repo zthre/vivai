@@ -55,6 +55,13 @@ interface NavItem {
           }
         </nav>
 
+        <!-- Version -->
+        @if (sidebarOpen()) {
+          <div class="px-4 pb-2">
+            <span class="text-xs text-warm-600 font-mono">v0.4.0</span>
+          </div>
+        }
+
         <!-- User info + logout -->
         <div class="border-t border-warm-700 p-4">
           @if (sidebarOpen()) {
@@ -119,6 +126,7 @@ export class ShellComponent {
     { label: 'Dashboard', icon: 'dashboard', route: '/dashboard' },
     { label: 'Inmuebles', icon: 'apartment', route: '/properties' },
     { label: 'Finanzas', icon: 'bar_chart', route: '/finances' },
+    { label: 'Marketplace', icon: 'storefront', route: '/inmuebles' },
   ];
 
   logout() {

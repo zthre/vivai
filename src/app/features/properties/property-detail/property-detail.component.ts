@@ -69,7 +69,7 @@ import { PhotoGalleryComponent } from './photo-gallery/photo-gallery.component';
         @for (unit of units(); track unit.id) {
           <div class="bg-white rounded-xl border shadow-sm hover:shadow-md transition-shadow"
             [class.border-green-200]="unit.status === 'ocupado'"
-            [class.border-warm-200]="unit.status === 'disponible'"
+            [class.border-warm-200]="unit.status !== 'ocupado'"
           >
             <div class="p-5">
               <div class="flex items-start justify-between gap-2 mb-3">
@@ -86,10 +86,12 @@ import { PhotoGalleryComponent } from './photo-gallery/photo-gallery.component';
                   class="text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0"
                   [class.bg-green-100]="unit.status === 'ocupado'"
                   [class.text-green-700]="unit.status === 'ocupado'"
-                  [class.bg-warm-100]="unit.status === 'disponible'"
-                  [class.text-warm-600]="unit.status === 'disponible'"
+                  [class.bg-blue-100]="unit.status === 'disponible_renta'"
+                  [class.text-blue-600]="unit.status === 'disponible_renta'"
+                  [class.bg-emerald-100]="unit.status === 'disponible_venta'"
+                  [class.text-emerald-600]="unit.status === 'disponible_venta'"
                 >
-                  {{ unit.status }}
+                  {{ unit.status === 'disponible_renta' ? 'En renta' : unit.status === 'disponible_venta' ? 'En venta' : 'Ocupado' }}
                 </span>
               </div>
               <p class="text-lg font-bold text-warm-900">

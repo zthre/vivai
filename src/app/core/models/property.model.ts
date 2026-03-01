@@ -15,6 +15,8 @@ export interface Property {
   type: 'apartamento' | 'casa' | 'local' | 'bodega';
   unitCount: number;
   photos?: PhotoItem[];
+  isPublic?: boolean;
+  whatsappPhone?: string | null;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 }

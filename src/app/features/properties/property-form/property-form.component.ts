@@ -1,6 +1,6 @@
 import { Component, inject, signal, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
+import { ReactiveFormsModule, FormBuilder, Validators, AbstractControl, ValidationErrors } from '@angular/forms';
 import { Router, ActivatedRoute, RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
@@ -80,6 +80,37 @@ type PropertyType = 'apartamento' | 'casa' | 'local' | 'bodega';
           </div>
         </div>
 
+        <!-- Marketplace -->
+        <div class="pt-2 border-t border-warm-200 space-y-4">
+          <p class="text-xs font-semibold text-warm-500 uppercase tracking-wide">Marketplace</p>
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              formControlName="isPublic"
+              class="w-4 h-4 accent-primary-500 cursor-pointer"
+            >
+            <span class="text-sm text-warm-700">Publicar esta propiedad en el marketplace</span>
+          </label>
+
+          @if (form.get('isPublic')?.value) {
+            <div>
+              <label class="block text-sm font-medium text-warm-700 mb-1.5">
+                Número de WhatsApp (con código de país) *
+              </label>
+              <input
+                formControlName="whatsappPhone"
+                type="text"
+                placeholder="+57 300 123 4567"
+                class="w-full px-3 py-2.5 border border-warm-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+                [class.border-red-400]="form.get('whatsappPhone')?.invalid && form.get('whatsappPhone')?.touched"
+              >
+              @if (form.get('whatsappPhone')?.invalid && form.get('whatsappPhone')?.touched) {
+                <p class="text-xs text-red-500 mt-1">El número de WhatsApp es obligatorio si la propiedad es pública</p>
+              }
+            </div>
+          }
+        </div>
+
         <!-- Actions -->
         <div class="flex gap-3 pt-2">
           <a
@@ -118,7 +149,22 @@ export class PropertyFormComponent implements OnInit {
     name: ['', Validators.required],
     address: ['', Validators.required],
     type: ['apartamento' as PropertyType, Validators.required],
-  });
+    isPublic: [false],
+    whatsappPhone: [null as string | null],
+  }, { validators: this.whatsappRequiredWhenPublic });
+
+  private whatsappRequiredWhenPublic(control: AbstractControl): ValidationErrors | null {
+    const isPublic = control.get('isPublic')?.value;
+    const phone = control.get('whatsappPhone')?.value;
+    if (isPublic && !phone) {
+      control.get('whatsappPhone')?.setErrors({ required: true });
+      return { whatsappRequired: true };
+    }
+    if (!isPublic || phone) {
+      control.get('whatsappPhone')?.setErrors(null);
+    }
+    return null;
+  }
 
   propertyTypes = [
     { value: 'apartamento', label: 'Apartamento', icon: 'apartment' },

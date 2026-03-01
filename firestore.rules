@@ -7,20 +7,19 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Properties: only the owner can read/write
+    // Properties: public read if isPublic == true, owner read/write otherwise
     match /properties/{propertyId} {
-      allow read, write: if request.auth != null
-                         && request.auth.uid == resource.data.ownerId;
-      allow create: if request.auth != null
-                    && request.auth.uid == request.resource.data.ownerId;
+      allow read: if resource.data.isPublic == true || (request.auth != null && request.auth.uid == resource.data.ownerId);
+      allow write: if request.auth != null && request.auth.uid == resource.data.ownerId;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.ownerId;
     }
 
-    // Units: only the owner can read/write
+    // Units: public read if parent property isPublic == true, owner read/write otherwise
     match /units/{unitId} {
-      allow read, write: if request.auth != null
-                         && request.auth.uid == resource.data.ownerId;
-      allow create: if request.auth != null
-                    && request.auth.uid == request.resource.data.ownerId;
+      allow read: if get(/databases/$(database)/documents/properties/$(resource.data.propertyId)).data.isPublic == true
+                  || (request.auth != null && request.auth.uid == resource.data.ownerId);
+      allow write: if request.auth != null && request.auth.uid == resource.data.ownerId;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.ownerId;
     }
 
     // Payments: only the owner can read/write

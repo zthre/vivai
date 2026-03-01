@@ -40,10 +40,12 @@ import { ContractSectionComponent } from './contract-section/contract-section.co
                   class="text-xs px-2 py-0.5 rounded-full font-medium"
                   [class.bg-green-100]="unit()?.status === 'ocupado'"
                   [class.text-green-700]="unit()?.status === 'ocupado'"
-                  [class.bg-warm-100]="unit()?.status === 'disponible'"
-                  [class.text-warm-600]="unit()?.status === 'disponible'"
+                  [class.bg-blue-100]="unit()?.status === 'disponible_renta'"
+                  [class.text-blue-600]="unit()?.status === 'disponible_renta'"
+                  [class.bg-emerald-100]="unit()?.status === 'disponible_venta'"
+                  [class.text-emerald-600]="unit()?.status === 'disponible_venta'"
                 >
-                  {{ unit()?.status }}
+                  {{ unit()?.status === 'disponible_renta' ? 'En renta' : unit()?.status === 'disponible_venta' ? 'En venta' : 'Ocupado' }}
                 </span>
               </div>
               <p class="text-lg font-semibold text-primary-600 mt-1">

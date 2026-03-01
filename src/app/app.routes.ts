@@ -77,5 +77,10 @@ export const routes: Routes = [
       },
     ],
   },
+  {
+    path: 'inmuebles',
+    loadChildren: () =>
+      import('./features/marketplace/marketplace.routes').then(m => m.MARKETPLACE_ROUTES),
+  },
   { path: '**', redirectTo: 'dashboard' },
 ];
