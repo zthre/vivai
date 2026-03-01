@@ -9,12 +9,14 @@ import { switchMap } from 'rxjs';
 import { PropertyService } from '../../../core/services/property.service';
 import { UnitService } from '../../../core/services/unit.service';
 import { Unit } from '../../../core/models/unit.model';
+import { Property } from '../../../core/models/property.model';
 import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialog/confirm-dialog.component';
+import { PhotoGalleryComponent } from './photo-gallery/photo-gallery.component';
 
 @Component({
   selector: 'app-property-detail',
   standalone: true,
-  imports: [CommonModule, RouterLink, MatIconModule, MatDialogModule, MatSnackBarModule],
+  imports: [CommonModule, RouterLink, MatIconModule, MatDialogModule, MatSnackBarModule, PhotoGalleryComponent],
   template: `
     <div class="space-y-6">
       <!-- Breadcrumb -->
@@ -121,6 +123,15 @@ import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialo
           </div>
         }
       </div>
+
+      <!-- Photo gallery -->
+      @if (property()) {
+        <app-photo-gallery
+          [photos]="property()?.photos ?? []"
+          [propertyId]="propertyId"
+          [ownerId]="property()!.ownerId"
+        />
+      }
     </div>
   `,
 })
@@ -132,7 +143,7 @@ export class PropertyDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
 
   propertyId!: string;
-  property = signal<any>(null);
+  property = signal<Property | null>(null);
   units = toSignal(
     this.route.paramMap.pipe(
       switchMap(params => this.unitService.getByProperty(params.get('id')!))

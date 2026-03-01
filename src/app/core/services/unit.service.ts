@@ -14,7 +14,7 @@ import {
   docData,
 } from '@angular/fire/firestore';
 import { Observable } from 'rxjs';
-import { Unit } from '../models/unit.model';
+import { Unit, ContractFile } from '../models/unit.model';
 import { AuthService } from '../auth/auth.service';
 
 @Injectable({ providedIn: 'root' })
@@ -60,5 +60,10 @@ export class UnitService {
   async delete(id: string): Promise<void> {
     const ref = doc(this.firestore, `units/${id}`);
     await deleteDoc(ref);
+  }
+
+  async setContract(unitId: string, contract: ContractFile | null): Promise<void> {
+    const ref = doc(this.firestore, `units/${unitId}`);
+    await updateDoc(ref, { contract: contract ?? null, updatedAt: serverTimestamp() });
   }
 }

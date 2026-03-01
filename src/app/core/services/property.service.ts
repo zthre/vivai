@@ -14,7 +14,7 @@ import {
   docData,
 } from '@angular/fire/firestore';
 import { Observable } from 'rxjs';
-import { Property } from '../models/property.model';
+import { Property, PhotoItem } from '../models/property.model';
 import { AuthService } from '../auth/auth.service';
 
 @Injectable({ providedIn: 'root' })
@@ -55,6 +55,18 @@ export class PropertyService {
   async delete(id: string): Promise<void> {
     const ref = doc(this.firestore, `properties/${id}`);
     await deleteDoc(ref);
+  }
+
+  async addPhoto(propertyId: string, photo: PhotoItem): Promise<void> {
+    const ref = doc(this.firestore, `properties/${propertyId}`);
+    const snap = await import('@angular/fire/firestore').then(m => m.getDoc(ref));
+    const current = ((snap.data() as Property)?.photos ?? []) as PhotoItem[];
+    await updateDoc(ref, { photos: [...current, photo] });
+  }
+
+  async removePhoto(propertyId: string, remainingPhotos: PhotoItem[]): Promise<void> {
+    const ref = doc(this.firestore, `properties/${propertyId}`);
+    await updateDoc(ref, { photos: remainingPhotos });
   }
 
   async incrementUnitCount(id: string, delta: number): Promise<void> {

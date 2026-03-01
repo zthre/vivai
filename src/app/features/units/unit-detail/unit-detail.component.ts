@@ -7,12 +7,14 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { switchMap } from 'rxjs';
 import { UnitService } from '../../../core/services/unit.service';
 import { PaymentService } from '../../../core/services/payment.service';
+import { Unit } from '../../../core/models/unit.model';
 import { PaymentFormComponent } from '../../payments/payment-form/payment-form.component';
+import { ContractSectionComponent } from './contract-section/contract-section.component';
 
 @Component({
   selector: 'app-unit-detail',
   standalone: true,
-  imports: [CommonModule, RouterLink, MatIconModule, MatDialogModule],
+  imports: [CommonModule, RouterLink, MatIconModule, MatDialogModule, ContractSectionComponent],
   template: `
     <div class="space-y-6">
       <!-- Breadcrumb -->
@@ -77,6 +79,15 @@ import { PaymentFormComponent } from '../../payments/payment-form/payment-form.c
         }
       </div>
 
+      <!-- Contract section -->
+      @if (unit()) {
+        <app-contract-section
+          [contract]="unit()!.contract"
+          [unitId]="unitId"
+          [ownerId]="unit()!.ownerId"
+        />
+      }
+
       <!-- Payment history -->
       <div class="bg-white rounded-xl border border-warm-200 shadow-sm">
         <div class="px-5 py-4 border-b border-warm-100">
@@ -118,7 +129,7 @@ export class UnitDetailComponent implements OnInit {
 
   propertyId!: string;
   unitId!: string;
-  unit = signal<any>(null);
+  unit = signal<Unit | null>(null);
 
   payments = toSignal(
     this.route.paramMap.pipe(
