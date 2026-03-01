@@ -48,9 +48,16 @@ import { ContractSectionComponent } from './contract-section/contract-section.co
                   {{ unit()?.status === 'disponible_renta' ? 'En renta' : unit()?.status === 'disponible_venta' ? 'En venta' : 'Ocupado' }}
                 </span>
               </div>
-              <p class="text-lg font-semibold text-primary-600 mt-1">
-                {{ unit()?.rentPrice | currency:'COP':'symbol-narrow':'1.0-0' }}/mes
-              </p>
+              @if (unit()?.status === 'disponible_venta') {
+                <p class="text-lg font-semibold text-primary-600 mt-1">
+                  {{ (unit()?.salePrice ?? 0) | currency:'COP':'symbol-narrow':'1.0-0' }}
+                  <span class="text-sm font-normal text-warm-400">venta</span>
+                </p>
+              } @else {
+                <p class="text-lg font-semibold text-primary-600 mt-1">
+                  {{ unit()?.rentPrice | currency:'COP':'symbol-narrow':'1.0-0' }}/mes
+                </p>
+              }
             </div>
           </div>
 

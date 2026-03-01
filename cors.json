@@ -1,0 +1,8 @@
+[
+  {
+    "origin": ["http://localhost:4200", "http://localhost:4201", "https://vivai-now.web.app", "https://vivai-now.firebaseapp.com"],
+    "method": ["GET", "HEAD", "PUT", "POST", "DELETE"],
+    "responseHeader": ["Content-Type", "Authorization", "Content-Length", "User-Agent"],
+    "maxAgeSeconds": 3600
+  }
+]

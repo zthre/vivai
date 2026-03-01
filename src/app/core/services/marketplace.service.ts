@@ -12,9 +12,29 @@ import { Observable, combineLatest, of, switchMap, map } from 'rxjs';
 import { Property } from '../models/property.model';
 import { Unit } from '../models/unit.model';
 
-export interface ListingItem {
-  unit: Unit;
+export interface UnitListing {
+  kind: 'unit';
   property: Property;
+  unit: Unit;
+}
+
+export interface PropertyListing {
+  kind: 'property';
+  property: Property;
+}
+
+export type ListingItem = UnitListing | PropertyListing;
+
+export function listingPrice(item: ListingItem): number {
+  if (item.kind === 'property') return item.property.salePrice ?? 0;
+  return item.unit.status === 'disponible_venta'
+    ? (item.unit.salePrice ?? 0)
+    : item.unit.rentPrice;
+}
+
+export function listingStatus(item: ListingItem): 'disponible_renta' | 'disponible_venta' {
+  if (item.kind === 'property') return 'disponible_venta';
+  return item.unit.status as 'disponible_renta' | 'disponible_venta';
 }
 
 @Injectable({ providedIn: 'root' })
@@ -29,19 +49,31 @@ export class MarketplaceService {
       switchMap(properties => {
         if (properties.length === 0) return of([]);
 
-        const unitStreams = properties.map(prop => {
+        const streams = properties.map(prop => {
+          // Property-level sale
+          const propListing$: Observable<ListingItem[]> = of(
+            prop.isForSale && prop.salePrice
+              ? [{ kind: 'property' as const, property: prop }]
+              : []
+          );
+
+          // Unit listings
           const unitsRef = collection(this.firestore, 'units');
           const unitsQuery = query(
             unitsRef,
             where('propertyId', '==', prop.id!),
             where('status', 'in', ['disponible_renta', 'disponible_venta'])
           );
-          return (collectionData(unitsQuery, { idField: 'id' }) as Observable<Unit[]>).pipe(
-            map(units => units.map(unit => ({ unit, property: prop })))
+          const unitListings$ = (collectionData(unitsQuery, { idField: 'id' }) as Observable<Unit[]>).pipe(
+            map(units => units.map(unit => ({ kind: 'unit' as const, unit, property: prop })))
+          );
+
+          return combineLatest([propListing$, unitListings$]).pipe(
+            map(([pl, ul]) => [...pl, ...ul])
           );
         });
 
-        return combineLatest(unitStreams).pipe(map(results => results.flat()));
+        return combineLatest(streams).pipe(map(results => results.flat()));
       })
     );
   }

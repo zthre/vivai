@@ -2,7 +2,7 @@ import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
-import { ListingItem } from '../../../../core/services/marketplace.service';
+import { ListingItem, listingPrice, listingStatus } from '../../../../core/services/marketplace.service';
 
 @Component({
   selector: 'app-listing-card',
@@ -27,16 +27,16 @@ import { ListingItem } from '../../../../core/services/marketplace.service';
 
       <!-- Content -->
       <div class="p-4 flex flex-col flex-1 gap-2">
-        <!-- Badge status -->
+        <!-- Badges -->
         <div class="flex items-center justify-between">
           <span
             class="text-xs font-semibold px-2.5 py-0.5 rounded-full"
-            [class.bg-blue-100]="item.unit.status === 'disponible_renta'"
-            [class.text-blue-700]="item.unit.status === 'disponible_renta'"
-            [class.bg-green-100]="item.unit.status === 'disponible_venta'"
-            [class.text-green-700]="item.unit.status === 'disponible_venta'"
+            [class.bg-blue-100]="status() === 'disponible_renta'"
+            [class.text-blue-700]="status() === 'disponible_renta'"
+            [class.bg-green-100]="status() === 'disponible_venta'"
+            [class.text-green-700]="status() === 'disponible_venta'"
           >
-            {{ item.unit.status === 'disponible_renta' ? 'En renta' : 'En venta' }}
+            {{ status() === 'disponible_renta' ? 'En renta' : 'En venta' }}
           </span>
           <span class="text-xs text-warm-400 capitalize">{{ item.property.type }}</span>
         </div>
@@ -47,21 +47,25 @@ import { ListingItem } from '../../../../core/services/marketplace.service';
           <p class="text-xs text-warm-500 mt-0.5">{{ item.property.address }}</p>
         </div>
 
-        <!-- Unit number -->
-        <p class="text-xs text-warm-400">Unidad {{ item.unit.number }}</p>
+        <!-- Unit / Propiedad completa -->
+        @if (item.kind === 'unit') {
+          <p class="text-xs text-warm-400">Unidad {{ item.unit.number }}</p>
+        } @else {
+          <p class="text-xs font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded-full w-fit">Propiedad completa</p>
+        }
 
         <!-- Price -->
         <p class="text-lg font-bold text-primary-600">
-          {{ item.unit.rentPrice | currency:'COP':'symbol-narrow':'1.0-0' }}
+          {{ price() | currency:'COP':'symbol-narrow':'1.0-0' }}
           <span class="text-xs font-normal text-warm-400">
-            {{ item.unit.status === 'disponible_renta' ? '/mes' : '' }}
+            {{ status() === 'disponible_renta' ? '/mes' : '' }}
           </span>
         </p>
 
         <!-- Actions -->
         <div class="mt-auto pt-2 flex flex-col gap-2">
           <a
-            [routerLink]="['/inmuebles', item.unit.id]"
+            [routerLink]="detailLink()"
             class="w-full text-center px-3 py-2 border border-warm-200 text-warm-700 rounded-lg text-xs font-medium hover:bg-warm-50 transition-colors"
           >
             Ver detalles
@@ -85,10 +89,23 @@ import { ListingItem } from '../../../../core/services/marketplace.service';
 export class ListingCardComponent {
   @Input({ required: true }) item!: ListingItem;
 
+  price(): number { return listingPrice(this.item); }
+  status() { return listingStatus(this.item); }
+
+  detailLink(): string[] {
+    return this.item.kind === 'unit'
+      ? ['/inmuebles', 'u', this.item.unit.id!]
+      : ['/inmuebles', 'p', this.item.property.id!];
+  }
+
   whatsappLink(): string {
     const phone = this.item.property.whatsappPhone ?? '';
+    const label =
+      this.item.kind === 'unit'
+        ? `la unidad ${this.item.unit.number} en ${this.item.property.name}`
+        : `la propiedad ${this.item.property.name}`;
     const text = encodeURIComponent(
-      `Hola, me interesa la unidad ${this.item.unit.number} en ${this.item.property.name} ( ${this.item.property.address} )`
+      `Hola, me interesa ${label} ( ${this.item.property.address} )`
     );
     return `https://wa.me/${phone}?text=${text}`;
   }

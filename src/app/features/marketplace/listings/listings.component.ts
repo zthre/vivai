@@ -3,7 +3,13 @@ import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { MarketplaceService, ListingItem } from '../../../core/services/marketplace.service';
+import { MarketplaceService, ListingItem, listingPrice, listingStatus } from '../../../core/services/marketplace.service';
+
+function listingId(item: ListingItem): string {
+  return item.kind === 'unit'
+    ? `u-${item.unit.id}`
+    : `p-${item.property.id}`;
+}
 import { ListingCardComponent } from './listing-card/listing-card.component';
 
 type FilterType = 'todos' | 'renta' | 'venta';
@@ -89,7 +95,7 @@ const PAGE_SIZE = 12;
           </div>
         } @else {
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            @for (item of pagedListings(); track item.unit.id) {
+            @for (item of pagedListings(); track listingId(item)) {
               <app-listing-card [item]="item" />
             }
           </div>
@@ -143,13 +149,13 @@ export class ListingsComponent {
       filter === 'todos'
         ? items
         : filter === 'renta'
-          ? items.filter(i => i.unit.status === 'disponible_renta')
-          : items.filter(i => i.unit.status === 'disponible_venta');
+          ? items.filter(i => listingStatus(i) === 'disponible_renta')
+          : items.filter(i => listingStatus(i) === 'disponible_venta');
 
     return [...filtered].sort((a, b) =>
       this.sortOrder() === 'asc'
-        ? a.unit.rentPrice - b.unit.rentPrice
-        : b.unit.rentPrice - a.unit.rentPrice
+        ? listingPrice(a) - listingPrice(b)
+        : listingPrice(b) - listingPrice(a)
     );
   });
 
@@ -178,4 +184,6 @@ export class ListingsComponent {
   nextPage() {
     if (this.currentPage() < this.totalPages()) this.currentPage.update(p => p + 1);
   }
+
+  listingId(item: ListingItem): string { return listingId(item); }
 }

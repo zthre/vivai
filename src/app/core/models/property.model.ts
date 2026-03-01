@@ -17,6 +17,9 @@ export interface Property {
   photos?: PhotoItem[];
   isPublic?: boolean;
   whatsappPhone?: string | null;
+  isForSale?: boolean;
+  salePrice?: number | null;
+  publicDescription?: string | null;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 }

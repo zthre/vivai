@@ -14,6 +14,7 @@ export interface Unit {
   ownerId: string;
   number: string;
   rentPrice: number;
+  salePrice?: number | null;
   status: 'ocupado' | 'disponible_renta' | 'disponible_venta';
   tenantEmail: string | null;
   tenantName: string | null;

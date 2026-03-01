@@ -3,11 +3,10 @@ import { CommonModule } from '@angular/common';
 import { RouterLink, ActivatedRoute } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MarketplaceService } from '../../../core/services/marketplace.service';
-import { Unit } from '../../../core/models/unit.model';
 import { Property } from '../../../core/models/property.model';
 
 @Component({
-  selector: 'app-listing-detail',
+  selector: 'app-property-listing-detail',
   standalone: true,
   imports: [CommonModule, RouterLink, MatIconModule],
   template: `
@@ -34,7 +33,7 @@ import { Property } from '../../../core/models/property.model';
           Volver al listado
         </a>
 
-        @if (!unit() || !property()) {
+        @if (!property()) {
           <div class="space-y-4">
             <div class="h-72 bg-white rounded-xl border border-warm-200 animate-pulse"></div>
             <div class="h-40 bg-white rounded-xl border border-warm-200 animate-pulse"></div>
@@ -57,13 +56,10 @@ import { Property } from '../../../core/models/property.model';
           <!-- Info card -->
           <div class="bg-white rounded-xl border border-warm-200 shadow-sm p-6 space-y-4">
             <div class="flex items-center gap-2">
-              <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full"
-                [class.bg-blue-100]="unit()!.status === 'disponible_renta'"
-                [class.text-blue-700]="unit()!.status === 'disponible_renta'"
-                [class.bg-green-100]="unit()!.status === 'disponible_venta'"
-                [class.text-green-700]="unit()!.status === 'disponible_venta'">
-                {{ unit()!.status === 'disponible_renta' ? 'En renta' : 'En venta' }}
+              <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-green-100 text-green-700">
+                En venta
               </span>
+              <span class="text-xs font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded-full">Propiedad completa</span>
               <span class="text-xs text-warm-400 capitalize">{{ property()!.type }}</span>
             </div>
 
@@ -73,30 +69,21 @@ import { Property } from '../../../core/models/property.model';
                 <mat-icon class="text-[16px]">location_on</mat-icon>
                 {{ property()!.address }}
               </p>
-              <p class="text-sm text-warm-400 mt-0.5">Unidad {{ unit()!.number }}</p>
             </div>
 
             <!-- Price -->
             <div class="pt-2 border-t border-warm-100">
-              @if (unit()!.status === 'disponible_venta') {
-                <p class="text-xs text-warm-400 mb-0.5">Precio de venta</p>
-                <p class="text-3xl font-bold text-primary-600">
-                  {{ (unit()!.salePrice ?? 0) | currency:'COP':'symbol-narrow':'1.0-0' }}
-                </p>
-              } @else {
-                <p class="text-xs text-warm-400 mb-0.5">Precio de renta</p>
-                <p class="text-3xl font-bold text-primary-600">
-                  {{ unit()!.rentPrice | currency:'COP':'symbol-narrow':'1.0-0' }}
-                  <span class="text-base font-normal text-warm-400">/mes</span>
-                </p>
-              }
+              <p class="text-xs text-warm-400 mb-0.5">Precio de venta</p>
+              <p class="text-3xl font-bold text-primary-600">
+                {{ (property()!.salePrice ?? 0) | currency:'COP':'symbol-narrow':'1.0-0' }}
+              </p>
             </div>
 
-            @if (unit()!.publicDescription) {
+            @if (property()!.publicDescription) {
               <div class="pt-2 border-t border-warm-100">
                 <h2 class="text-sm font-semibold text-warm-700 mb-2">Descripción</h2>
                 <p class="text-sm text-warm-600 leading-relaxed whitespace-pre-line">
-                  {{ unit()!.publicDescription }}
+                  {{ property()!.publicDescription }}
                 </p>
               </div>
             }
@@ -116,27 +103,21 @@ import { Property } from '../../../core/models/property.model';
     </div>
   `,
 })
-export class ListingDetailComponent implements OnInit {
+export class PropertyListingDetailComponent implements OnInit {
   private marketplaceService = inject(MarketplaceService);
   private route = inject(ActivatedRoute);
 
-  unit = signal<Unit | null>(null);
   property = signal<Property | null>(null);
 
   ngOnInit() {
-    const unitId = this.route.snapshot.paramMap.get('unitId')!;
-    this.marketplaceService.getUnitById(unitId).subscribe(u => {
-      if (u) {
-        this.unit.set(u);
-        this.marketplaceService.getPropertyById(u.propertyId).subscribe(p => this.property.set(p));
-      }
-    });
+    const propertyId = this.route.snapshot.paramMap.get('propertyId')!;
+    this.marketplaceService.getPropertyById(propertyId).subscribe(p => this.property.set(p));
   }
 
   whatsappLink(): string {
     const phone = this.property()?.whatsappPhone ?? '';
     const text = encodeURIComponent(
-      `Hola, me interesa la unidad ${this.unit()?.number} en ${this.property()?.name} ( ${this.property()?.address} )`
+      `Hola, me interesa la propiedad ${this.property()?.name} ( ${this.property()?.address} )`
     );
     return `https://wa.me/${phone}?text=${text}`;
   }

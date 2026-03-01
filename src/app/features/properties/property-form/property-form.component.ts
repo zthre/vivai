@@ -84,11 +84,7 @@ type PropertyType = 'apartamento' | 'casa' | 'local' | 'bodega';
         <div class="pt-2 border-t border-warm-200 space-y-4">
           <p class="text-xs font-semibold text-warm-500 uppercase tracking-wide">Marketplace</p>
           <label class="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              formControlName="isPublic"
-              class="w-4 h-4 accent-primary-500 cursor-pointer"
-            >
+            <input type="checkbox" formControlName="isPublic" class="w-4 h-4 accent-primary-500 cursor-pointer">
             <span class="text-sm text-warm-700">Publicar esta propiedad en el marketplace</span>
           </label>
 
@@ -97,15 +93,39 @@ type PropertyType = 'apartamento' | 'casa' | 'local' | 'bodega';
               <label class="block text-sm font-medium text-warm-700 mb-1.5">
                 Número de WhatsApp (con código de país) *
               </label>
-              <input
-                formControlName="whatsappPhone"
-                type="text"
-                placeholder="+57 300 123 4567"
+              <input formControlName="whatsappPhone" type="text" placeholder="+57 300 123 4567"
                 class="w-full px-3 py-2.5 border border-warm-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
-                [class.border-red-400]="form.get('whatsappPhone')?.invalid && form.get('whatsappPhone')?.touched"
-              >
+                [class.border-red-400]="form.get('whatsappPhone')?.invalid && form.get('whatsappPhone')?.touched">
               @if (form.get('whatsappPhone')?.invalid && form.get('whatsappPhone')?.touched) {
                 <p class="text-xs text-red-500 mt-1">El número de WhatsApp es obligatorio si la propiedad es pública</p>
+              }
+            </div>
+
+            <!-- Venta directa de la propiedad completa -->
+            <div class="p-4 bg-green-50 rounded-lg border border-green-100 space-y-4">
+              <p class="text-xs font-semibold text-green-700 uppercase tracking-wide">Venta de propiedad completa</p>
+              <label class="flex items-center gap-3 cursor-pointer">
+                <input type="checkbox" formControlName="isForSale" class="w-4 h-4 accent-green-600 cursor-pointer">
+                <span class="text-sm text-warm-700">Publicar como venta directa (sin unidades)</span>
+              </label>
+
+              @if (form.get('isForSale')?.value) {
+                <div>
+                  <label class="block text-sm font-medium text-warm-700 mb-1.5">Precio de venta *</label>
+                  <input formControlName="salePrice" type="number" placeholder="Ej: 250000000"
+                    class="w-full px-3 py-2.5 border border-warm-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    [class.border-red-400]="form.get('salePrice')?.invalid && form.get('salePrice')?.touched">
+                  @if (form.get('salePrice')?.invalid && form.get('salePrice')?.touched) {
+                    <p class="text-xs text-red-500 mt-1">El precio de venta es obligatorio</p>
+                  }
+                </div>
+
+                <div>
+                  <label class="block text-sm font-medium text-warm-700 mb-1.5">Descripción pública</label>
+                  <textarea formControlName="publicDescription" rows="3"
+                    placeholder="Describe el inmueble para los compradores..."
+                    class="w-full px-3 py-2.5 border border-warm-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"></textarea>
+                </div>
               }
             </div>
           }
@@ -151,18 +171,29 @@ export class PropertyFormComponent implements OnInit {
     type: ['apartamento' as PropertyType, Validators.required],
     isPublic: [false],
     whatsappPhone: [null as string | null],
-  }, { validators: this.whatsappRequiredWhenPublic });
+    isForSale: [false],
+    salePrice: [null as number | null],
+    publicDescription: [null as string | null],
+  }, { validators: this.marketplaceValidator });
 
-  private whatsappRequiredWhenPublic(control: AbstractControl): ValidationErrors | null {
+  private marketplaceValidator(control: AbstractControl): ValidationErrors | null {
     const isPublic = control.get('isPublic')?.value;
     const phone = control.get('whatsappPhone')?.value;
+    const isForSale = control.get('isForSale')?.value;
+    const salePrice = control.get('salePrice')?.value;
+
     if (isPublic && !phone) {
       control.get('whatsappPhone')?.setErrors({ required: true });
-      return { whatsappRequired: true };
-    }
-    if (!isPublic || phone) {
+    } else {
       control.get('whatsappPhone')?.setErrors(null);
     }
+
+    if (isForSale && !salePrice) {
+      control.get('salePrice')?.setErrors({ required: true });
+    } else {
+      control.get('salePrice')?.setErrors(null);
+    }
+
     return null;
   }
 
