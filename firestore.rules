@@ -2,32 +2,79 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Users can read/write their own profile
+    // Users: own read/write. Also allow updating colaborator-related fields by other auth'd users
+    // (needed when owner assigns existing user as colaborador).
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                       .hasOnly(['collaboratingPropertyIds', 'roles', 'updatedAt']);
     }
 
-    // Properties: public read if isPublic == true, owner read/write otherwise
+    // Properties: public read if isPublic, owner or colaborator read/write.
     match /properties/{propertyId} {
-      allow read: if resource.data.isPublic == true || (request.auth != null && request.auth.uid == resource.data.ownerId);
-      allow write: if request.auth != null && request.auth.uid == resource.data.ownerId;
+      allow read: if resource.data.isPublic == true
+                  || (request.auth != null && request.auth.uid == resource.data.ownerId)
+                  || (request.auth != null && request.auth.uid in resource.data.get('collaboratorUids', []));
       allow create: if request.auth != null && request.auth.uid == request.resource.data.ownerId;
+      allow update, delete: if request.auth != null && (
+        request.auth.uid == resource.data.ownerId
+        || request.auth.uid in resource.data.get('collaboratorUids', [])
+      );
     }
 
-    // Units: public read if parent property isPublic == true, owner read/write otherwise
+    // Units: public read if parent property is public; owner, colaborador, or assigned tenant can access.
     match /units/{unitId} {
-      allow read: if get(/databases/$(database)/documents/properties/$(resource.data.propertyId)).data.isPublic == true
-                  || (request.auth != null && request.auth.uid == resource.data.ownerId);
-      allow write: if request.auth != null && request.auth.uid == resource.data.ownerId;
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.ownerId;
+      function isPublicProperty() {
+        return get(/databases/$(database)/documents/properties/$(resource.data.propertyId)).data.isPublic == true;
+      }
+      function isOwner() {
+        return request.auth != null && request.auth.uid == resource.data.ownerId;
+      }
+      function isTenant() {
+        return request.auth != null && request.auth.uid == resource.data.tenantUid;
+      }
+      function isCollaborator() {
+        return request.auth != null
+               && request.auth.uid in get(/databases/$(database)/documents/properties/$(resource.data.propertyId))
+                                      .data.get('collaboratorUids', []);
+      }
+
+      allow read: if isPublicProperty() || isOwner() || isTenant() || isCollaborator();
+      allow write: if isOwner() || isCollaborator();
+      allow create: if request.auth != null && (
+        request.auth.uid == request.resource.data.ownerId
+        || request.auth.uid in get(/databases/$(database)/documents/properties/$(request.resource.data.propertyId))
+                               .data.get('collaboratorUids', [])
+      );
+      // Allow tenant to link their uid on first login (only tenantUid + updatedAt fields)
+      allow update: if request.auth != null
+                    && request.auth.token.email == resource.data.tenantEmail
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['tenantUid', 'updatedAt']);
     }
 
-    // Payments: only the owner can read/write
+    // Payments: owner or colaborador can read/write; tenant can read their unit's payments.
     match /payments/{paymentId} {
-      allow read, write: if request.auth != null
-                         && request.auth.uid == resource.data.ownerId;
-      allow create: if request.auth != null
-                    && request.auth.uid == request.resource.data.ownerId;
+      function isCollaboratorOnPayment() {
+        return request.auth != null
+               && request.auth.uid in get(/databases/$(database)/documents/properties/$(resource.data.propertyId))
+                                      .data.get('collaboratorUids', []);
+      }
+
+      allow read: if request.auth != null && (
+        request.auth.uid == resource.data.ownerId
+        || isCollaboratorOnPayment()
+        || request.auth.uid == get(/databases/$(database)/documents/units/$(resource.data.unitId)).data.tenantUid
+      );
+      allow write: if request.auth != null && (
+        request.auth.uid == resource.data.ownerId
+        || isCollaboratorOnPayment()
+      );
+      allow create: if request.auth != null && (
+        request.auth.uid == request.resource.data.ownerId
+        || request.auth.uid in get(/databases/$(database)/documents/properties/$(request.resource.data.propertyId))
+                               .data.get('collaboratorUids', [])
+      );
     }
 
     // Expenses: only the owner can read/write
@@ -36,6 +83,28 @@ service cloud.firestore {
                          && request.auth.uid == resource.data.ownerId;
       allow create: if request.auth != null
                     && request.auth.uid == request.resource.data.ownerId;
+    }
+
+    // Tickets: owner or colaborador can read/update; tenant can read/create their own.
+    match /tickets/{ticketId} {
+      function isCollaboratorOnTicket() {
+        return request.auth != null
+               && request.auth.uid in get(/databases/$(database)/documents/properties/$(resource.data.propertyId))
+                                      .data.get('collaboratorUids', []);
+      }
+
+      allow read: if request.auth != null && (
+        request.auth.uid == resource.data.ownerId
+        || request.auth.uid == resource.data.tenantUid
+        || isCollaboratorOnTicket()
+      );
+      allow create: if request.auth != null
+                    && request.auth.uid == request.resource.data.tenantUid;
+      allow update: if request.auth != null && (
+        request.auth.uid == resource.data.ownerId
+        || isCollaboratorOnTicket()
+      );
+      allow delete: if false;
     }
   }
 }

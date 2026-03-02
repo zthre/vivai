@@ -55,11 +55,14 @@ import { Property } from '../../../core/models/property.model';
 
           <!-- Info card -->
           <div class="bg-white rounded-xl border border-warm-200 shadow-sm p-6 space-y-4">
-            <div class="flex items-center gap-2">
-              <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-green-100 text-green-700">
-                En venta
-              </span>
-              <span class="text-xs font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded-full">Propiedad completa</span>
+            <div class="flex items-center gap-2 flex-wrap">
+              @if (property()!.isForRent) {
+                <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-700">En renta</span>
+              }
+              @if (property()!.isForSale) {
+                <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-green-100 text-green-700">En venta</span>
+              }
+              <span class="text-xs font-medium text-warm-600 bg-warm-100 px-2 py-0.5 rounded-full">Propiedad completa</span>
               <span class="text-xs text-warm-400 capitalize">{{ property()!.type }}</span>
             </div>
 
@@ -72,11 +75,24 @@ import { Property } from '../../../core/models/property.model';
             </div>
 
             <!-- Price -->
-            <div class="pt-2 border-t border-warm-100">
-              <p class="text-xs text-warm-400 mb-0.5">Precio de venta</p>
-              <p class="text-3xl font-bold text-primary-600">
-                {{ (property()!.salePrice ?? 0) | currency:'COP':'symbol-narrow':'1.0-0' }}
-              </p>
+            <div class="pt-2 border-t border-warm-100 space-y-3">
+              @if (property()!.isForRent && property()!.rentPrice) {
+                <div>
+                  <p class="text-xs text-warm-400 mb-0.5">Precio de renta</p>
+                  <p class="text-3xl font-bold text-primary-600">
+                    {{ property()!.rentPrice! | currency:'COP':'symbol-narrow':'1.0-0' }}
+                    <span class="text-base font-normal text-warm-400">/mes</span>
+                  </p>
+                </div>
+              }
+              @if (property()!.isForSale && property()!.salePrice) {
+                <div>
+                  <p class="text-xs text-warm-400 mb-0.5">Precio de venta</p>
+                  <p class="text-3xl font-bold text-primary-600">
+                    {{ property()!.salePrice! | currency:'COP':'symbol-narrow':'1.0-0' }}
+                  </p>
+                </div>
+              }
             </div>
 
             @if (property()!.publicDescription) {

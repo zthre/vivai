@@ -1,14 +1,18 @@
-import { Component, signal, inject } from '@angular/core';
+import { Component, signal, inject, computed } from '@angular/core';
 import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { AuthService } from '../../core/auth/auth.service';
+import { toSignal, toObservable } from '@angular/core/rxjs-interop';
+import { switchMap, of } from 'rxjs';
+import { AuthService, UserRole } from '../../core/auth/auth.service';
+import { TicketService } from '../../core/services/ticket.service';
 
 interface NavItem {
   label: string;
   icon: string;
   route: string;
+  badge?: () => number;
 }
 
 @Component({
@@ -36,20 +40,48 @@ interface NavItem {
           </div>
         </div>
 
+        <!-- Role selector (only when user has multiple roles) -->
+        @if (hasMultipleRoles()) {
+          <div class="px-2 py-2 border-b border-warm-700">
+            <button
+              (click)="cycleRole()"
+              class="flex items-center gap-2 w-full px-3 py-2 rounded-lg bg-warm-800 text-warm-200 hover:bg-warm-700 transition-colors"
+              [matTooltip]="!sidebarOpen() ? roleLabel(activeRole()) : ''"
+              matTooltipPosition="right"
+            >
+              <mat-icon class="text-[18px] flex-shrink-0">{{ roleIcon(activeRole()) }}</mat-icon>
+              @if (sidebarOpen()) {
+                <span class="text-xs font-medium flex-1 text-left">{{ roleLabel(activeRole()) }}</span>
+                <mat-icon class="text-[16px]">unfold_more</mat-icon>
+              }
+            </button>
+          </div>
+        }
+
         <!-- Nav items -->
         <nav class="flex-1 py-4 space-y-1 overflow-y-auto">
-          @for (item of navItems; track item.route) {
+          @for (item of navItems(); track item.route) {
             <a
               [routerLink]="item.route"
               routerLinkActive="bg-primary-600 text-white"
-              [routerLinkActiveOptions]="{ exact: item.route === '/dashboard' }"
-              class="flex items-center gap-3 px-4 py-2.5 mx-2 rounded-lg text-warm-300 hover:bg-warm-700 hover:text-white transition-colors"
+              [routerLinkActiveOptions]="{ exact: item.route === '/dashboard' || item.route === '/tenant' }"
+              class="relative flex items-center gap-3 px-4 py-2.5 mx-2 rounded-lg text-warm-300 hover:bg-warm-700 hover:text-white transition-colors"
               [matTooltip]="!sidebarOpen() ? item.label : ''"
               matTooltipPosition="right"
             >
               <mat-icon class="flex-shrink-0 text-[20px]">{{ item.icon }}</mat-icon>
               @if (sidebarOpen()) {
-                <span class="text-sm font-medium truncate">{{ item.label }}</span>
+                <span class="text-sm font-medium truncate flex-1">{{ item.label }}</span>
+              }
+              @if (item.badge && item.badge() > 0) {
+                <span
+                  class="flex items-center justify-center min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full"
+                  [class.absolute]="!sidebarOpen()"
+                  [class.top-1]="!sidebarOpen()"
+                  [class.right-1]="!sidebarOpen()"
+                >
+                  {{ item.badge()! > 99 ? '99+' : item.badge() }}
+                </span>
               }
             </a>
           }
@@ -58,7 +90,7 @@ interface NavItem {
         <!-- Version -->
         @if (sidebarOpen()) {
           <div class="px-4 pb-2">
-            <span class="text-xs text-warm-600 font-mono">v0.4.0</span>
+            <span class="text-xs text-warm-600 font-mono">v0.7.0</span>
           </div>
         }
 
@@ -116,18 +148,72 @@ interface NavItem {
 })
 export class ShellComponent {
   private authService = inject(AuthService);
+  private ticketService = inject(TicketService);
 
   sidebarOpen = signal(true);
   user = this.authService.currentUser;
+  activeRole = this.authService.activeRole;
+  userRoles = this.authService.userRoles;
 
   userInitial = () => this.user()?.displayName?.[0]?.toUpperCase() ?? 'U';
+  hasMultipleRoles = computed(() => this.userRoles().length > 1);
 
-  navItems: NavItem[] = [
+  pendingTicketsCount = toSignal(
+    toObservable(this.authService.uid).pipe(
+      switchMap(uid => {
+        const role = this.authService.activeRole();
+        return uid && (role === 'owner' || role === 'colaborador')
+          ? this.ticketService.getPendingCount$(uid)
+          : of(0);
+      })
+    ),
+    { initialValue: 0 }
+  );
+
+  private ownerNavItems: NavItem[] = [
     { label: 'Dashboard', icon: 'dashboard', route: '/dashboard' },
     { label: 'Inmuebles', icon: 'apartment', route: '/properties' },
     { label: 'Finanzas', icon: 'bar_chart', route: '/finances' },
     { label: 'Marketplace', icon: 'storefront', route: '/inmuebles' },
+    { label: 'Tickets', icon: 'build_circle', route: '/tickets', badge: () => this.pendingTicketsCount() },
   ];
+
+  private tenantNavItems: NavItem[] = [
+    { label: 'Mi Arriendo', icon: 'home', route: '/tenant' },
+    { label: 'Mis Pagos', icon: 'receipt_long', route: '/tenant/payments' },
+    { label: 'Soporte', icon: 'build_circle', route: '/tenant/tickets' },
+  ];
+
+  navItems = computed(() =>
+    this.activeRole() === 'tenant' ? this.tenantNavItems : this.ownerNavItems
+  );
+
+  cycleRole(): void {
+    const roles = this.userRoles();
+    if (roles.length <= 1) return;
+    const current = this.activeRole();
+    const idx = roles.indexOf(current!);
+    const nextRole = roles[(idx + 1) % roles.length];
+    this.authService.setActiveRole(nextRole);
+  }
+
+  roleLabel(role: UserRole | null): string {
+    switch (role) {
+      case 'owner': return 'Propietario';
+      case 'tenant': return 'Inquilino';
+      case 'colaborador': return 'Colaborador';
+      default: return 'Sin rol';
+    }
+  }
+
+  roleIcon(role: UserRole | null): string {
+    switch (role) {
+      case 'owner': return 'manage_accounts';
+      case 'tenant': return 'home';
+      case 'colaborador': return 'group';
+      default: return 'person';
+    }
+  }
 
   logout() {
     this.authService.logout();

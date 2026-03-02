@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
 import { Router } from '@angular/router';
 import { Auth, authState } from '@angular/fire/auth';
+import { Firestore, doc, getDoc } from '@angular/fire/firestore';
 import { AuthService } from '../../../core/auth/auth.service';
 
 @Component({
@@ -34,7 +35,7 @@ import { AuthService } from '../../../core/auth/auth.service';
           >
             @if (loading()) {
               <div class="w-5 h-5 border-2 border-warm-300 border-t-primary-500 rounded-full animate-spin"></div>
-              <span>Redirigiendo a Google...</span>
+              <span>Abriendo Google...</span>
             } @else {
               <svg class="w-5 h-5" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -54,7 +55,7 @@ import { AuthService } from '../../../core/auth/auth.service';
         }
 
         <p class="text-xs text-warm-400 text-center mt-6">
-          Solo para administradores del sistema
+          Para propietarios e inquilinos registrados
         </p>
       </div>
     </div>
@@ -63,6 +64,7 @@ import { AuthService } from '../../../core/auth/auth.service';
 export class LoginComponent implements OnInit {
   private authService = inject(AuthService);
   private firebaseAuth = inject(Auth);
+  private firestore = inject(Firestore);
   private router = inject(Router);
 
   loading = signal(false);
@@ -70,10 +72,12 @@ export class LoginComponent implements OnInit {
   error = signal<string | null>(null);
 
   ngOnInit() {
-    // If user is already authenticated (e.g. returning from redirect), go to dashboard
-    authState(this.firebaseAuth).pipe().subscribe(user => {
+    authState(this.firebaseAuth).subscribe(async user => {
       if (user) {
-        this.router.navigate(['/dashboard']);
+        // Redirect based on role
+        const snap = await getDoc(doc(this.firestore, `users/${user.uid}`));
+        const role = snap.data()?.['role'];
+        await this.router.navigate([role === 'tenant' ? '/tenant' : '/dashboard']);
       } else {
         this.checkingAuth.set(false);
       }

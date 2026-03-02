@@ -5,16 +5,16 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { PhotoItem } from '../../../../core/models/property.model';
-import { PropertyService } from '../../../../core/services/property.service';
+import { UnitService } from '../../../../core/services/unit.service';
 import { StorageService } from '../../../../core/services/storage.service';
 import { ConfirmDialogComponent } from '../../../../shared/components/confirm-dialog/confirm-dialog.component';
-import { PhotoUploadComponent, UploadItem } from './photo-upload.component';
+import { PhotoUploadComponent, UploadItem } from '../../../properties/property-detail/photo-gallery/photo-upload.component';
 
 const MAX_PHOTOS = 10;
 const MAX_SIZE_MB = 5;
 
 @Component({
-  selector: 'app-photo-gallery',
+  selector: 'app-unit-photo-gallery',
   standalone: true,
   imports: [
     CommonModule,
@@ -28,7 +28,7 @@ const MAX_SIZE_MB = 5;
     <div class="bg-white rounded-xl border border-warm-200 shadow-sm">
       <div class="flex items-center justify-between px-5 py-4 border-b border-warm-100">
         <h2 class="font-semibold text-warm-900">
-          Fotos ({{ photos().length }}/{{ maxPhotos }})
+          Fotos de la unidad ({{ photos().length }}/{{ maxPhotos }})
         </h2>
         <button
           (click)="triggerFileInput()"
@@ -95,7 +95,6 @@ const MAX_SIZE_MB = 5;
                     [alt]="photo.filename"
                     class="w-full h-full object-cover rounded-lg"
                   >
-                  <!-- Set as principal -->
                   <button
                     (click)="setPrimary(photo)"
                     matTooltip="Marcar como principal"
@@ -106,7 +105,6 @@ const MAX_SIZE_MB = 5;
                   >
                     <mat-icon class="text-[12px]">star</mat-icon>
                   </button>
-                  <!-- Delete -->
                   <button
                     (click)="confirmDelete(photo)"
                     class="absolute top-1 right-1 w-6 h-6 bg-black/60 text-white rounded-full
@@ -125,12 +123,12 @@ const MAX_SIZE_MB = 5;
     </div>
   `,
 })
-export class PhotoGalleryComponent {
+export class UnitPhotoGalleryComponent {
   photos = input.required<PhotoItem[]>();
-  propertyId = input.required<string>();
+  unitId = input.required<string>();
   ownerId = input.required<string>();
 
-  private propertyService = inject(PropertyService);
+  private unitService = inject(UnitService);
   private storageService = inject(StorageService);
   private dialog = inject(MatDialog);
   private snackBar = inject(MatSnackBar);
@@ -141,7 +139,7 @@ export class PhotoGalleryComponent {
   canAddMore = computed(() => this.photos().length < MAX_PHOTOS && !this.isUploading());
 
   triggerFileInput() {
-    const el = document.querySelector('app-photo-gallery input[type="file"]') as HTMLInputElement;
+    const el = document.querySelector('app-unit-photo-gallery input[type="file"]') as HTMLInputElement;
     el?.click();
   }
 
@@ -174,7 +172,7 @@ export class PhotoGalleryComponent {
     this.uploadQueue.update(q => [...q, item]);
 
     const timestamp = Date.now();
-    const path = `owners/${this.ownerId()}/properties/${this.propertyId()}/photos/${timestamp}_${file.name}`;
+    const path = `owners/${this.ownerId()}/units/${this.unitId()}/photos/${timestamp}_${file.name}`;
 
     this.storageService.uploadFile(path, file).subscribe({
       next: pct => progress.set(pct),
@@ -187,7 +185,7 @@ export class PhotoGalleryComponent {
             filename: file.name,
             uploadedAt: (await import('@angular/fire/firestore')).Timestamp.now(),
           };
-          await this.propertyService.addPhoto(this.propertyId(), photo);
+          await this.unitService.addPhoto(this.unitId(), photo);
         } catch {
           this.snackBar.open('Error al guardar la foto.', 'OK', { duration: 4000 });
         } finally {
@@ -207,7 +205,7 @@ export class PhotoGalleryComponent {
 
   async setPrimary(photo: PhotoItem) {
     const rest = this.photos().filter(p => p.storagePath !== photo.storagePath);
-    await this.propertyService.removePhoto(this.propertyId(), [photo, ...rest]);
+    await this.unitService.removePhoto(this.unitId(), [photo, ...rest]);
   }
 
   confirmDelete(photo: PhotoItem) {
@@ -224,7 +222,7 @@ export class PhotoGalleryComponent {
       try {
         await this.storageService.deleteFile(photo.storagePath);
         const remaining = this.photos().filter(p => p.storagePath !== photo.storagePath);
-        await this.propertyService.removePhoto(this.propertyId(), remaining);
+        await this.unitService.removePhoto(this.unitId(), remaining);
       } catch {
         this.snackBar.open('Error al eliminar la foto.', 'OK', { duration: 4000 });
       }

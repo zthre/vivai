@@ -4,6 +4,7 @@ import {
   collection,
   collectionData,
   doc,
+  getDoc,
   addDoc,
   updateDoc,
   deleteDoc,
@@ -15,6 +16,7 @@ import {
 } from '@angular/fire/firestore';
 import { Observable } from 'rxjs';
 import { Unit, ContractFile } from '../models/unit.model';
+import { PhotoItem } from '../models/property.model';
 import { AuthService } from '../auth/auth.service';
 
 @Injectable({ providedIn: 'root' })
@@ -65,5 +67,17 @@ export class UnitService {
   async setContract(unitId: string, contract: ContractFile | null): Promise<void> {
     const ref = doc(this.firestore, `units/${unitId}`);
     await updateDoc(ref, { contract: contract ?? null, updatedAt: serverTimestamp() });
+  }
+
+  async addPhoto(unitId: string, photo: PhotoItem): Promise<void> {
+    const ref = doc(this.firestore, `units/${unitId}`);
+    const snap = await getDoc(ref);
+    const current: PhotoItem[] = (snap.data() as any)?.photos ?? [];
+    await updateDoc(ref, { photos: [...current, photo], updatedAt: serverTimestamp() });
+  }
+
+  async removePhoto(unitId: string, remaining: PhotoItem[]): Promise<void> {
+    const ref = doc(this.firestore, `units/${unitId}`);
+    await updateDoc(ref, { photos: remaining, updatedAt: serverTimestamp() });
   }
 }

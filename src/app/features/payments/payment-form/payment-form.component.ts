@@ -6,6 +6,19 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { PaymentService } from '../../../core/services/payment.service';
 
+function localDateString(): string {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function parseLocalDate(dateStr: string): Date {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d); // midnight local time — avoids UTC-offset day shift
+}
+
 @Component({
   selector: 'app-payment-form',
   standalone: true,
@@ -16,7 +29,9 @@ import { PaymentService } from '../../../core/services/payment.service';
       <div class="flex items-center justify-between mb-5">
         <div>
           <h2 class="text-lg font-bold text-warm-900">Registrar pago</h2>
-          <p class="text-sm text-warm-400">Unidad · {{ data.unitId }}</p>
+          <p class="text-sm text-warm-400">
+            {{ data.label ?? (data.unitId ? 'Unidad · ' + data.unitId : 'Inmueble · ' + data.propertyId) }}
+          </p>
         </div>
         <button (click)="close()" class="p-1.5 text-warm-400 hover:text-warm-700 hover:bg-warm-100 rounded-lg transition-colors">
           <mat-icon>close</mat-icon>
@@ -32,16 +47,15 @@ import { PaymentService } from '../../../core/services/payment.service';
             <input
               formControlName="amount"
               type="number"
-              [placeholder]="data.rentPrice"
+              placeholder="0"
               class="w-full pl-7 pr-3 py-2.5 border border-warm-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               [class.border-red-400]="form.get('amount')?.invalid && form.get('amount')?.touched"
             >
           </div>
           @if (data.rentPrice) {
-            <button type="button" (click)="form.get('amount')?.setValue(data.rentPrice)"
-              class="text-xs text-primary-600 hover:text-primary-700 mt-1">
-              Usar precio de renta ({{ data.rentPrice | currency:'COP':'symbol-narrow':'1.0-0' }})
-            </button>
+            <p class="text-xs text-warm-400 mt-1">
+              Renta mensual: <span class="font-medium text-warm-600">{{ data.rentPrice | currency:'COP':'symbol-narrow':'1.0-0' }}</span>
+            </p>
           }
         </div>
 
@@ -90,13 +104,18 @@ export class PaymentFormComponent {
   private snackBar = inject(MatSnackBar);
   private fb = inject(FormBuilder);
 
-  data: { unitId: string; propertyId: string; rentPrice?: number } = inject(MAT_DIALOG_DATA);
+  data: {
+    unitId?: string | null;
+    propertyId: string;
+    rentPrice?: number | null;
+    label?: string;
+  } = inject(MAT_DIALOG_DATA);
 
   loading = signal(false);
 
   form = this.fb.group({
-    amount: [null as number | null, [Validators.required, Validators.min(1)]],
-    date: [new Date().toISOString().split('T')[0], Validators.required],
+    amount: [(this.data.rentPrice ?? null) as number | null, [Validators.required, Validators.min(1)]],
+    date: [localDateString(), Validators.required],
     notes: [''],
   });
 
@@ -106,10 +125,10 @@ export class PaymentFormComponent {
     try {
       const { amount, date, notes } = this.form.value;
       await this.paymentService.create({
-        unitId: this.data.unitId,
+        unitId: this.data.unitId ?? null,
         propertyId: this.data.propertyId,
         amount: amount!,
-        date: new Date(date!),
+        date: parseLocalDate(date!),
         notes: notes || null,
       });
       this.snackBar.open('Pago registrado exitosamente.', 'OK', { duration: 3000 });

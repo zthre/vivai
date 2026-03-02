@@ -26,15 +26,18 @@ export interface PropertyListing {
 export type ListingItem = UnitListing | PropertyListing;
 
 export function listingPrice(item: ListingItem): number {
-  if (item.kind === 'property') return item.property.salePrice ?? 0;
-  return item.unit.status === 'disponible_venta'
-    ? (item.unit.salePrice ?? 0)
-    : item.unit.rentPrice;
+  if (item.kind === 'property') {
+    return item.property.isForRent ? (item.property.rentPrice ?? 0) : (item.property.salePrice ?? 0);
+  }
+  // Primary price: rent if available, else sale
+  return item.unit.isForRent ? (item.unit.rentPrice ?? 0) : (item.unit.salePrice ?? 0);
 }
 
 export function listingStatus(item: ListingItem): 'disponible_renta' | 'disponible_venta' {
-  if (item.kind === 'property') return 'disponible_venta';
-  return item.unit.status as 'disponible_renta' | 'disponible_venta';
+  if (item.kind === 'property') {
+    return item.property.isForRent ? 'disponible_renta' : 'disponible_venta';
+  }
+  return item.unit.isForRent ? 'disponible_renta' : 'disponible_venta';
 }
 
 @Injectable({ providedIn: 'root' })
@@ -50,19 +53,19 @@ export class MarketplaceService {
         if (properties.length === 0) return of([]);
 
         const streams = properties.map(prop => {
-          // Property-level sale
+          // Property-level listing (renta o venta directa)
+          const isDirectListing =
+            (prop.isForSale && prop.salePrice) || (prop.isForRent && prop.rentPrice);
           const propListing$: Observable<ListingItem[]> = of(
-            prop.isForSale && prop.salePrice
-              ? [{ kind: 'property' as const, property: prop }]
-              : []
+            isDirectListing ? [{ kind: 'property' as const, property: prop }] : []
           );
 
-          // Unit listings
+          // Unit listings (isListed = isForRent || isForSale)
           const unitsRef = collection(this.firestore, 'units');
           const unitsQuery = query(
             unitsRef,
             where('propertyId', '==', prop.id!),
-            where('status', 'in', ['disponible_renta', 'disponible_venta'])
+            where('isListed', '==', true)
           );
           const unitListings$ = (collectionData(unitsQuery, { idField: 'id' }) as Observable<Unit[]>).pipe(
             map(units => units.map(unit => ({ kind: 'unit' as const, unit, property: prop })))

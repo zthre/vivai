@@ -1,4 +1,5 @@
 import { Timestamp } from '@angular/fire/firestore';
+import { PhotoItem } from './property.model';
 
 export interface ContractFile {
   url: string;
@@ -13,12 +14,23 @@ export interface Unit {
   propertyId: string;
   ownerId: string;
   number: string;
-  rentPrice: number;
+  /** Marketplace listing rent price (asking price for public listing) */
+  rentPrice?: number | null;
   salePrice?: number | null;
-  status: 'ocupado' | 'disponible_renta' | 'disponible_venta';
-  tenantEmail: string | null;
+  /** What the current tenant pays per month — used for payment suggestions and financial tracking */
+  tenantRentPrice?: number | null;
+  /** Occupancy: 'disponible' (vacant) | 'ocupado' (tenant) */
+  status: 'ocupado' | 'disponible';
+  isForRent: boolean;
+  isForSale: boolean;
+  /** Computed: isForRent || isForSale — used for Firestore marketplace query */
+  isListed: boolean;
   tenantName: string | null;
+  tenantPhone: string | null;
+  tenantEmail: string | null;
+  tenantUid?: string | null;
   publicDescription?: string | null;
+  photos?: PhotoItem[];
   contract?: ContractFile | null;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;

@@ -41,9 +41,9 @@ import { Property } from '../../../core/models/property.model';
           </div>
         } @else {
           <!-- Photo gallery -->
-          @if (property()!.photos && property()!.photos!.length > 0) {
+          @if (photos().length > 0) {
             <div class="mb-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
-              @for (photo of property()!.photos!; track photo.storagePath) {
+              @for (photo of photos(); track photo.storagePath) {
                 <img [src]="photo.url" [alt]="property()!.name"
                   class="w-full h-56 object-cover rounded-xl border border-warm-200">
               }
@@ -56,14 +56,13 @@ import { Property } from '../../../core/models/property.model';
 
           <!-- Info card -->
           <div class="bg-white rounded-xl border border-warm-200 shadow-sm p-6 space-y-4">
-            <div class="flex items-center gap-2">
-              <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full"
-                [class.bg-blue-100]="unit()!.status === 'disponible_renta'"
-                [class.text-blue-700]="unit()!.status === 'disponible_renta'"
-                [class.bg-green-100]="unit()!.status === 'disponible_venta'"
-                [class.text-green-700]="unit()!.status === 'disponible_venta'">
-                {{ unit()!.status === 'disponible_renta' ? 'En renta' : 'En venta' }}
-              </span>
+            <div class="flex items-center gap-2 flex-wrap">
+              @if (unit()!.isForRent) {
+                <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-700">En renta</span>
+              }
+              @if (unit()!.isForSale) {
+                <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-green-100 text-green-700">En venta</span>
+              }
               <span class="text-xs text-warm-400 capitalize">{{ property()!.type }}</span>
             </div>
 
@@ -77,18 +76,23 @@ import { Property } from '../../../core/models/property.model';
             </div>
 
             <!-- Price -->
-            <div class="pt-2 border-t border-warm-100">
-              @if (unit()!.status === 'disponible_venta') {
-                <p class="text-xs text-warm-400 mb-0.5">Precio de venta</p>
-                <p class="text-3xl font-bold text-primary-600">
-                  {{ (unit()!.salePrice ?? 0) | currency:'COP':'symbol-narrow':'1.0-0' }}
-                </p>
-              } @else {
-                <p class="text-xs text-warm-400 mb-0.5">Precio de renta</p>
-                <p class="text-3xl font-bold text-primary-600">
-                  {{ unit()!.rentPrice | currency:'COP':'symbol-narrow':'1.0-0' }}
-                  <span class="text-base font-normal text-warm-400">/mes</span>
-                </p>
+            <div class="pt-2 border-t border-warm-100 space-y-3">
+              @if (unit()!.isForRent && unit()!.rentPrice) {
+                <div>
+                  <p class="text-xs text-warm-400 mb-0.5">Precio de renta</p>
+                  <p class="text-3xl font-bold text-primary-600">
+                    {{ unit()!.rentPrice! | currency:'COP':'symbol-narrow':'1.0-0' }}
+                    <span class="text-base font-normal text-warm-400">/mes</span>
+                  </p>
+                </div>
+              }
+              @if (unit()!.isForSale && unit()!.salePrice) {
+                <div>
+                  <p class="text-xs text-warm-400 mb-0.5">Precio de venta</p>
+                  <p class="text-3xl font-bold text-green-600">
+                    {{ unit()!.salePrice! | currency:'COP':'symbol-narrow':'1.0-0' }}
+                  </p>
+                </div>
               }
             </div>
 
@@ -131,6 +135,11 @@ export class ListingDetailComponent implements OnInit {
         this.marketplaceService.getPropertyById(u.propertyId).subscribe(p => this.property.set(p));
       }
     });
+  }
+
+  photos(): { url: string; storagePath: string; filename: string }[] {
+    if (this.unit()?.photos?.length) return this.unit()!.photos!;
+    return this.property()?.photos ?? [];
   }
 
   whatsappLink(): string {

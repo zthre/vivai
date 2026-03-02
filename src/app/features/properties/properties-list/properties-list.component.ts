@@ -8,6 +8,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { PropertyService } from '../../../core/services/property.service';
 import { Property } from '../../../core/models/property.model';
 import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialog/confirm-dialog.component';
+import { PaymentFormComponent } from '../../payments/payment-form/payment-form.component';
 
 @Component({
   selector: 'app-properties-list',
@@ -60,29 +61,64 @@ import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialo
                   <div class="min-w-0">
                     <h3 class="font-semibold text-warm-900 truncate">{{ property.name }}</h3>
                     <p class="text-xs text-warm-400 truncate">{{ property.address }}</p>
+                    @if (property.tenantRentPrice) {
+                      <p class="text-sm font-semibold text-primary-600 mt-0.5">
+                        {{ property.tenantRentPrice | currency:'COP':'symbol-narrow':'1.0-0' }}/mes
+                      </p>
+                    }
                   </div>
                 </div>
-                <span class="flex-shrink-0 text-xs px-2 py-0.5 bg-warm-100 text-warm-600 rounded-full capitalize">
-                  {{ property.type }}
-                </span>
+                <div class="flex flex-col items-end gap-1 flex-shrink-0">
+                  <span class="text-xs px-2 py-0.5 bg-warm-100 text-warm-600 rounded-full capitalize">
+                    {{ property.type }}
+                  </span>
+                  @if (property.status === 'ocupado') {
+                    <span class="text-xs px-2 py-0.5 bg-warm-200 text-warm-700 rounded-full font-medium">Ocupado</span>
+                  } @else if (property.status === 'disponible') {
+                    <span class="text-xs px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full font-medium">Disponible</span>
+                  }
+                </div>
               </div>
 
-              <!-- Unit count -->
-              <div class="mt-4 flex items-center gap-2 text-sm text-warm-500">
-                <mat-icon class="text-[16px]">meeting_room</mat-icon>
-                <span>{{ property.unitCount ?? 0 }} unidad(es)</span>
+              <!-- Unit count + listing badges -->
+              <div class="mt-4 flex items-center justify-between gap-2">
+                <div class="flex items-center gap-2 text-sm text-warm-500">
+                  <mat-icon class="text-[16px]">meeting_room</mat-icon>
+                  <span>{{ property.unitCount }} unidad(es)</span>
+                </div>
+                @if (property.isPublic && (property.isForRent || property.isForSale)) {
+                  <div class="flex gap-1">
+                    @if (property.isForRent) {
+                      <span class="text-xs px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full font-medium">En renta</span>
+                    }
+                    @if (property.isForSale) {
+                      <span class="text-xs px-2 py-0.5 bg-green-50 text-green-700 rounded-full font-medium">En venta</span>
+                    }
+                  </div>
+                }
               </div>
             </div>
 
             <!-- Card actions -->
             <div class="border-t border-warm-100 px-5 py-3 flex items-center justify-between">
-              <a
-                [routerLink]="['/properties', property.id]"
-                class="text-sm text-primary-600 hover:text-primary-700 font-medium flex items-center gap-1"
-              >
-                Ver unidades
-                <mat-icon class="text-[16px]">arrow_forward</mat-icon>
-              </a>
+              <div class="flex items-center gap-3">
+                <a
+                  [routerLink]="['/properties', property.id]"
+                  class="text-sm text-primary-600 hover:text-primary-700 font-medium flex items-center gap-1"
+                >
+                  Ver detalle
+                  <mat-icon class="text-[16px]">arrow_forward</mat-icon>
+                </a>
+                @if (property.unitCount === 0) {
+                  <button
+                    (click)="openPaymentForm(property)"
+                    class="text-sm text-green-600 hover:text-green-700 font-medium flex items-center gap-1"
+                  >
+                    <mat-icon class="text-[16px]">add</mat-icon>
+                    Pago
+                  </button>
+                }
+              </div>
               <div class="flex items-center gap-1">
                 <a
                   [routerLink]="['/properties', property.id, 'edit']"
@@ -119,6 +155,18 @@ export class PropertiesListComponent {
       bodega: 'warehouse',
     };
     return icons[type] ?? 'apartment';
+  }
+
+  openPaymentForm(property: Property) {
+    this.dialog.open(PaymentFormComponent, {
+      width: '420px',
+      data: {
+        unitId: null,
+        propertyId: property.id,
+        rentPrice: property.tenantRentPrice ?? property.rentPrice ?? null,
+        label: property.name,
+      },
+    });
   }
 
   confirmDelete(property: Property) {

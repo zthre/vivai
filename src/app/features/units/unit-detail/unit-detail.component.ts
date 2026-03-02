@@ -7,21 +7,24 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { switchMap } from 'rxjs';
 import { UnitService } from '../../../core/services/unit.service';
 import { PaymentService } from '../../../core/services/payment.service';
+import { PropertyService } from '../../../core/services/property.service';
 import { Unit } from '../../../core/models/unit.model';
+import { Property } from '../../../core/models/property.model';
 import { PaymentFormComponent } from '../../payments/payment-form/payment-form.component';
 import { ContractSectionComponent } from './contract-section/contract-section.component';
+import { UnitPhotoGalleryComponent } from './unit-photo-gallery/unit-photo-gallery.component';
 
 @Component({
   selector: 'app-unit-detail',
   standalone: true,
-  imports: [CommonModule, RouterLink, MatIconModule, MatDialogModule, ContractSectionComponent],
+  imports: [CommonModule, RouterLink, MatIconModule, MatDialogModule, ContractSectionComponent, UnitPhotoGalleryComponent],
   template: `
     <div class="space-y-6">
       <!-- Breadcrumb -->
       <div class="flex items-center gap-2 text-sm text-warm-400">
         <a routerLink="/properties" class="hover:text-warm-600">Inmuebles</a>
         <mat-icon class="text-[16px]">chevron_right</mat-icon>
-        <a [routerLink]="['/properties', propertyId]" class="hover:text-warm-600">{{ unit()?.propertyId }}</a>
+        <a [routerLink]="['/properties', propertyId]" class="hover:text-warm-600">{{ property()?.name ?? '...' }}</a>
         <mat-icon class="text-[16px]">chevron_right</mat-icon>
         <span class="text-warm-700 font-medium">Unidad {{ unit()?.number }}</span>
       </div>
@@ -34,30 +37,39 @@ import { ContractSectionComponent } from './contract-section/contract-section.co
               <mat-icon>arrow_back</mat-icon>
             </a>
             <div>
-              <div class="flex items-center gap-2">
+              <div class="flex items-center gap-2 flex-wrap">
                 <h1 class="text-2xl font-bold text-warm-900">Unidad {{ unit()?.number }}</h1>
-                <span
-                  class="text-xs px-2 py-0.5 rounded-full font-medium"
-                  [class.bg-green-100]="unit()?.status === 'ocupado'"
-                  [class.text-green-700]="unit()?.status === 'ocupado'"
-                  [class.bg-blue-100]="unit()?.status === 'disponible_renta'"
-                  [class.text-blue-600]="unit()?.status === 'disponible_renta'"
-                  [class.bg-emerald-100]="unit()?.status === 'disponible_venta'"
-                  [class.text-emerald-600]="unit()?.status === 'disponible_venta'"
-                >
-                  {{ unit()?.status === 'disponible_renta' ? 'En renta' : unit()?.status === 'disponible_venta' ? 'En venta' : 'Ocupado' }}
+                <!-- Occupancy badge -->
+                <span class="text-xs px-2 py-0.5 rounded-full font-medium"
+                  [class.bg-warm-100]="unit()?.status === 'ocupado'"
+                  [class.text-warm-700]="unit()?.status === 'ocupado'"
+                  [class.bg-blue-50]="unit()?.status !== 'ocupado'"
+                  [class.text-blue-600]="unit()?.status !== 'ocupado'">
+                  {{ unit()?.status === 'ocupado' ? 'Ocupado' : 'Disponible' }}
                 </span>
+                <!-- Listing badges -->
+                @if (unit()?.isForRent) {
+                  <span class="text-xs px-2 py-0.5 rounded-full font-medium bg-blue-100 text-blue-700">En renta</span>
+                }
+                @if (unit()?.isForSale) {
+                  <span class="text-xs px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700">En venta</span>
+                }
               </div>
-              @if (unit()?.status === 'disponible_venta') {
-                <p class="text-lg font-semibold text-primary-600 mt-1">
-                  {{ (unit()?.salePrice ?? 0) | currency:'COP':'symbol-narrow':'1.0-0' }}
-                  <span class="text-sm font-normal text-warm-400">venta</span>
-                </p>
-              } @else {
-                <p class="text-lg font-semibold text-primary-600 mt-1">
-                  {{ unit()?.rentPrice | currency:'COP':'symbol-narrow':'1.0-0' }}/mes
-                </p>
-              }
+
+              <!-- Prices -->
+              <div class="flex items-baseline gap-3 mt-1 flex-wrap">
+                @if (unit()?.tenantRentPrice) {
+                  <p class="text-lg font-semibold text-primary-600">
+                    {{ unit()?.tenantRentPrice | currency:'COP':'symbol-narrow':'1.0-0' }}/mes
+                  </p>
+                }
+                @if (unit()?.isForSale && unit()?.salePrice) {
+                  <p class="text-base font-semibold text-green-600">
+                    {{ unit()?.salePrice | currency:'COP':'symbol-narrow':'1.0-0' }}
+                    <span class="text-xs font-normal text-warm-400">venta</span>
+                  </p>
+                }
+              </div>
             </div>
           </div>
 
@@ -72,21 +84,59 @@ import { ContractSectionComponent } from './contract-section/contract-section.co
 
         <!-- Tenant info -->
         @if (unit()?.status === 'ocupado') {
-          <div class="mt-5 pt-5 border-t border-warm-100 flex items-center gap-3">
-            <div class="w-9 h-9 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
-              <mat-icon class="text-green-600 text-[20px]">person</mat-icon>
+          <div class="mt-5 pt-5 border-t border-warm-100">
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <mat-icon class="text-green-600 text-[20px]">person</mat-icon>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium text-warm-800">{{ unit()?.tenantName ?? 'Inquilino asignado' }}</p>
+                @if (unit()?.tenantPhone) {
+                  <p class="text-xs text-warm-500">{{ unit()!.tenantPhone }}</p>
+                } @else if (unit()?.tenantEmail) {
+                  <p class="text-xs text-warm-400">{{ unit()!.tenantEmail }}</p>
+                }
+              </div>
+              <a [routerLink]="['/properties', propertyId, 'units', unitId, 'edit']"
+                class="text-xs text-primary-600 hover:text-primary-700 font-medium">
+                Editar
+              </a>
             </div>
-            <div>
-              <p class="text-sm font-medium text-warm-800">{{ unit()?.tenantName ?? 'Inquilino asignado' }}</p>
-              <p class="text-xs text-warm-400">{{ unit()?.tenantEmail }}</p>
-            </div>
-            <a [routerLink]="['/properties', propertyId, 'units', unitId, 'edit']"
-              class="ml-auto text-xs text-primary-600 hover:text-primary-700 font-medium">
-              Editar
-            </a>
+            @if (unit()?.tenantPhone || unit()?.tenantEmail) {
+              <div class="mt-3 flex gap-2">
+                @if (unit()?.tenantPhone) {
+                  <a [href]="whatsappTenantLink()" target="_blank" rel="noopener"
+                    class="flex items-center gap-1.5 px-3 py-1.5 bg-green-500 text-white rounded-lg text-xs font-medium hover:bg-green-600 transition-colors">
+                    <mat-icon class="text-[14px]">chat</mat-icon>
+                    WhatsApp
+                  </a>
+                  <a [href]="'tel:' + unit()!.tenantPhone"
+                    class="flex items-center gap-1.5 px-3 py-1.5 border border-warm-200 text-warm-600 rounded-lg text-xs font-medium hover:bg-warm-50 transition-colors">
+                    <mat-icon class="text-[14px]">call</mat-icon>
+                    Llamar
+                  </a>
+                }
+                @if (unit()?.tenantEmail) {
+                  <a [href]="'mailto:' + unit()!.tenantEmail"
+                    class="flex items-center gap-1.5 px-3 py-1.5 border border-warm-200 text-warm-600 rounded-lg text-xs font-medium hover:bg-warm-50 transition-colors">
+                    <mat-icon class="text-[14px]">email</mat-icon>
+                    Email
+                  </a>
+                }
+              </div>
+            }
           </div>
         }
       </div>
+
+      <!-- Photo gallery -->
+      @if (unit()) {
+        <app-unit-photo-gallery
+          [photos]="unit()!.photos ?? []"
+          [unitId]="unitId"
+          [ownerId]="unit()!.ownerId"
+        />
+      }
 
       <!-- Contract section -->
       @if (unit()) {
@@ -133,12 +183,14 @@ import { ContractSectionComponent } from './contract-section/contract-section.co
 export class UnitDetailComponent implements OnInit {
   private unitService = inject(UnitService);
   private paymentService = inject(PaymentService);
+  private propertyService = inject(PropertyService);
   private dialog = inject(MatDialog);
   private route = inject(ActivatedRoute);
 
   propertyId!: string;
   unitId!: string;
   unit = signal<Unit | null>(null);
+  property = signal<Property | null>(null);
 
   payments = toSignal(
     this.route.paramMap.pipe(
@@ -151,6 +203,14 @@ export class UnitDetailComponent implements OnInit {
     this.propertyId = this.route.snapshot.paramMap.get('propertyId')!;
     this.unitId = this.route.snapshot.paramMap.get('unitId')!;
     this.unitService.getById(this.unitId).subscribe(u => this.unit.set(u));
+    this.propertyService.getById(this.propertyId).subscribe(p => this.property.set(p));
+  }
+
+  whatsappTenantLink(): string {
+    const phone = this.unit()?.tenantPhone ?? '';
+    const name = this.unit()?.tenantName ?? 'inquilino';
+    const text = encodeURIComponent(`Hola ${name}, te escribo respecto a tu unidad ${this.unit()?.number}.`);
+    return `https://wa.me/${phone}?text=${text}`;
   }
 
   openPaymentForm() {
@@ -159,7 +219,7 @@ export class UnitDetailComponent implements OnInit {
       data: {
         unitId: this.unitId,
         propertyId: this.propertyId,
-        rentPrice: this.unit()?.rentPrice,
+        rentPrice: this.unit()?.tenantRentPrice ?? this.unit()?.rentPrice ?? null,
       },
     });
   }

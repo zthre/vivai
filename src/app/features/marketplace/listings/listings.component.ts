@@ -96,7 +96,7 @@ const PAGE_SIZE = 12;
         } @else {
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             @for (item of pagedListings(); track listingId(item)) {
-              <app-listing-card [item]="item" />
+              <app-listing-card [item]="item" [filterMode]="filterType()" />
             }
           </div>
 
@@ -145,12 +145,15 @@ export class ListingsComponent {
     const items = this.allListings() ?? [];
     const filter = this.filterType();
 
+    const isForRent = (i: ListingItem) => i.kind === 'unit' ? i.unit.isForRent : !!i.property.isForRent;
+    const isForSale = (i: ListingItem) => i.kind === 'unit' ? i.unit.isForSale : !!i.property.isForSale;
+
     const filtered =
       filter === 'todos'
         ? items
         : filter === 'renta'
-          ? items.filter(i => listingStatus(i) === 'disponible_renta')
-          : items.filter(i => listingStatus(i) === 'disponible_venta');
+          ? items.filter(i => isForRent(i))
+          : items.filter(i => isForSale(i));
 
     return [...filtered].sort((a, b) =>
       this.sortOrder() === 'asc'

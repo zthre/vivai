@@ -49,12 +49,16 @@ const MONTH_NAMES = [
                     {{ propertyName(p.propertyId) }}
                   </td>
                   <td class="px-5 py-3">
-                    <a
-                      [routerLink]="['/properties', p.propertyId, 'units', p.unitId]"
-                      class="text-primary-600 hover:text-primary-700 font-medium"
-                    >
-                      {{ unitNumber(p.unitId) }}
-                    </a>
+                    @if (p.unitId) {
+                      <a
+                        [routerLink]="['/properties', p.propertyId, 'units', p.unitId]"
+                        class="text-primary-600 hover:text-primary-700 font-medium"
+                      >
+                        {{ unitNumber(p.unitId) }}
+                      </a>
+                    } @else {
+                      <span class="text-warm-400 text-xs">—</span>
+                    }
                   </td>
                   <td class="px-5 py-3 text-warm-600">
                     {{ tenantName(p.unitId) }}
@@ -96,12 +100,14 @@ export class PaymentListComponent {
     return this.properties().find(p => p.id === propertyId)?.name ?? propertyId;
   }
 
-  unitNumber(unitId: string): string {
+  unitNumber(unitId: string | null): string {
+    if (!unitId) return '—';
     const unit = this.units().find(u => u.id === unitId);
     return unit ? `Unidad ${unit.number}` : unitId;
   }
 
-  tenantName(unitId: string): string {
+  tenantName(unitId: string | null): string {
+    if (!unitId) return '—';
     return this.units().find(u => u.id === unitId)?.tenantName ?? '—';
   }
 }

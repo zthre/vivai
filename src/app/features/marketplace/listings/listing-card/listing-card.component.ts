@@ -4,6 +4,8 @@ import { RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { ListingItem, listingPrice, listingStatus } from '../../../../core/services/marketplace.service';
 
+type FilterMode = 'todos' | 'renta' | 'venta';
+
 @Component({
   selector: 'app-listing-card',
   standalone: true,
@@ -12,9 +14,9 @@ import { ListingItem, listingPrice, listingStatus } from '../../../../core/servi
     <div class="bg-white rounded-xl border border-warm-200 shadow-sm overflow-hidden flex flex-col hover:shadow-md transition-shadow">
       <!-- Photo -->
       <div class="h-48 bg-warm-100 flex-shrink-0 overflow-hidden">
-        @if (item.property.photos && item.property.photos.length > 0) {
+        @if (photoUrl()) {
           <img
-            [src]="item.property.photos[0].url"
+            [src]="photoUrl()!"
             [alt]="item.property.name"
             class="w-full h-full object-cover"
           >
@@ -28,16 +30,15 @@ import { ListingItem, listingPrice, listingStatus } from '../../../../core/servi
       <!-- Content -->
       <div class="p-4 flex flex-col flex-1 gap-2">
         <!-- Badges -->
-        <div class="flex items-center justify-between">
-          <span
-            class="text-xs font-semibold px-2.5 py-0.5 rounded-full"
-            [class.bg-blue-100]="status() === 'disponible_renta'"
-            [class.text-blue-700]="status() === 'disponible_renta'"
-            [class.bg-green-100]="status() === 'disponible_venta'"
-            [class.text-green-700]="status() === 'disponible_venta'"
-          >
-            {{ status() === 'disponible_renta' ? 'En renta' : 'En venta' }}
-          </span>
+        <div class="flex items-center justify-between gap-2 flex-wrap">
+          <div class="flex gap-1 flex-wrap">
+            @if (isForRent()) {
+              <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-700">En renta</span>
+            }
+            @if (isForSale()) {
+              <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-green-100 text-green-700">En venta</span>
+            }
+          </div>
           <span class="text-xs text-warm-400 capitalize">{{ item.property.type }}</span>
         </div>
 
@@ -51,16 +52,24 @@ import { ListingItem, listingPrice, listingStatus } from '../../../../core/servi
         @if (item.kind === 'unit') {
           <p class="text-xs text-warm-400">Unidad {{ item.unit.number }}</p>
         } @else {
-          <p class="text-xs font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded-full w-fit">Propiedad completa</p>
+          <p class="text-xs font-medium text-warm-600 bg-warm-100 px-2 py-0.5 rounded-full w-fit">Propiedad completa</p>
         }
 
-        <!-- Price -->
-        <p class="text-lg font-bold text-primary-600">
-          {{ price() | currency:'COP':'symbol-narrow':'1.0-0' }}
-          <span class="text-xs font-normal text-warm-400">
-            {{ status() === 'disponible_renta' ? '/mes' : '' }}
-          </span>
-        </p>
+        <!-- Price(s) -->
+        <div class="space-y-0.5">
+          @if (showRentPrice()) {
+            <p class="text-lg font-bold text-primary-600">
+              {{ rentPrice() | currency:'COP':'symbol-narrow':'1.0-0' }}
+              <span class="text-xs font-normal text-warm-400">/mes</span>
+            </p>
+          }
+          @if (showSalePrice()) {
+            <p class="text-base font-bold text-green-600">
+              {{ salePrice() | currency:'COP':'symbol-narrow':'1.0-0' }}
+              <span class="text-xs font-normal text-warm-400"> venta</span>
+            </p>
+          }
+        </div>
 
         <!-- Actions -->
         <div class="mt-auto pt-2 flex flex-col gap-2">
@@ -88,9 +97,43 @@ import { ListingItem, listingPrice, listingStatus } from '../../../../core/servi
 })
 export class ListingCardComponent {
   @Input({ required: true }) item!: ListingItem;
+  @Input() filterMode: FilterMode = 'todos';
 
   price(): number { return listingPrice(this.item); }
   status() { return listingStatus(this.item); }
+
+  photoUrl(): string | null {
+    if (this.item.kind === 'unit' && this.item.unit.photos?.length) {
+      return this.item.unit.photos[0].url;
+    }
+    if (this.item.property.photos?.length) {
+      return this.item.property.photos[0].url;
+    }
+    return null;
+  }
+
+  isForRent(): boolean {
+    return this.item.kind === 'unit' ? this.item.unit.isForRent : !!this.item.property.isForRent;
+  }
+  isForSale(): boolean {
+    return this.item.kind === 'unit' ? this.item.unit.isForSale : !!this.item.property.isForSale;
+  }
+
+  rentPrice(): number {
+    if (this.item.kind === 'unit') return this.item.unit.rentPrice ?? 0;
+    return this.item.property.rentPrice ?? 0;
+  }
+  salePrice(): number {
+    if (this.item.kind === 'unit') return this.item.unit.salePrice ?? 0;
+    return this.item.property.salePrice ?? 0;
+  }
+
+  showRentPrice(): boolean {
+    return this.filterMode !== 'venta' && this.isForRent();
+  }
+  showSalePrice(): boolean {
+    return this.filterMode !== 'renta' && this.isForSale();
+  }
 
   detailLink(): string[] {
     return this.item.kind === 'unit'

@@ -160,7 +160,7 @@ export class FinancesDashboardComponent implements OnInit {
   });
 
   totalExpected = computed(() =>
-    this.filteredOccupiedUnits().reduce((s, u) => s + u.rentPrice, 0)
+    this.filteredOccupiedUnits().reduce((s, u) => s + (u.tenantRentPrice ?? u.rentPrice ?? 0), 0)
   );
   totalCollected = computed(() =>
     this.filteredPayments().reduce((s, p) => s + p.amount, 0)
