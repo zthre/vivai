@@ -4,9 +4,12 @@ import { RouterLink, ActivatedRoute } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { FormsModule } from '@angular/forms';
 import { Subscription } from 'rxjs';
+import { take } from 'rxjs/operators';
 import { AuthService } from '../../../core/auth/auth.service';
 import { TicketService } from '../../../core/services/ticket.service';
+import { PropertyService } from '../../../core/services/property.service';
 import { Ticket } from '../../../core/models/ticket.model';
+import { Property } from '../../../core/models/property.model';
 import { Timestamp } from '@angular/fire/firestore';
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -106,8 +109,8 @@ const STATUS_COLORS: Record<string, string> = {
           </div>
         </div>
 
-        <!-- Status change (admin only) -->
-        @if (isOwner()) {
+        <!-- Status change (owner/colaborador with write) -->
+        @if (isOwner() && canWriteTickets()) {
           <div class="bg-white rounded-xl border border-warm-200 p-5 space-y-3">
             <p class="text-sm font-medium text-warm-700">Cambiar estado</p>
             <select
@@ -160,15 +163,27 @@ export class TicketDetailComponent implements OnInit, OnDestroy {
   private route = inject(ActivatedRoute);
   private authService = inject(AuthService);
   private ticketService = inject(TicketService);
+  private propertyService = inject(PropertyService);
 
   loading = signal(true);
   ticket = signal<Ticket | null>(null);
+  property = signal<Property | null>(null);
   saving = signal(false);
   saveSuccess = signal(false);
   newStatus: Ticket['status'] = 'pendiente';
   private sub?: Subscription;
 
   isOwner = computed(() => this.authService.userRole() !== 'tenant');
+
+  canWriteTickets = computed(() => {
+    const uid = this.authService.uid();
+    if (!uid) return false;
+    if (this.authService.activeRole() !== 'colaborador') return true;
+    const prop = this.property();
+    if (!prop) return false;
+    const perms = prop.collaboratorPermissions?.[uid];
+    return !perms || perms.tickets === 'write';
+  });
 
   categoryLabel(cat: string) { return CATEGORY_LABELS[cat] ?? cat; }
   categoryColor(cat: string) { return CATEGORY_COLORS[cat] ?? 'bg-warm-100 text-warm-700'; }
@@ -187,7 +202,10 @@ export class TicketDetailComponent implements OnInit, OnDestroy {
     const id = this.route.snapshot.paramMap.get('id')!;
     this.sub = this.ticketService.getById$(id).subscribe(t => {
       this.ticket.set(t);
-      if (t) this.newStatus = t.status;
+      if (t) {
+        this.newStatus = t.status;
+        this.propertyService.getById(t.propertyId).pipe(take(1)).subscribe(p => this.property.set(p));
+      }
       this.loading.set(false);
     });
   }

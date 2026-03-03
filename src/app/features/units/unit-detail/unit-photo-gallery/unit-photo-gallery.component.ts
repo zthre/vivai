@@ -30,23 +30,25 @@ const MAX_SIZE_MB = 5;
         <h2 class="font-semibold text-warm-900">
           Fotos de la unidad ({{ photos().length }}/{{ maxPhotos }})
         </h2>
-        <button
-          (click)="triggerFileInput()"
-          [disabled]="!canAddMore()"
-          [matTooltip]="!canAddMore() && !isUploading() ? 'Límite de 10 fotos alcanzado' : ''"
-          class="flex items-center gap-2 px-3 py-1.5 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <mat-icon class="text-[16px]">add_photo_alternate</mat-icon>
-          Agregar fotos
-        </button>
-        <input
-          #fileInput
-          type="file"
-          accept="image/*"
-          multiple
-          class="hidden"
-          (change)="onFilesSelected($event)"
-        >
+        @if (canWrite()) {
+          <button
+            (click)="triggerFileInput()"
+            [disabled]="!canAddMore()"
+            [matTooltip]="!canAddMore() && !isUploading() ? 'Límite de 10 fotos alcanzado' : ''"
+            class="flex items-center gap-2 px-3 py-1.5 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <mat-icon class="text-[16px]">add_photo_alternate</mat-icon>
+            Agregar fotos
+          </button>
+          <input
+            #fileInput
+            type="file"
+            accept="image/*"
+            multiple
+            class="hidden"
+            (change)="onFilesSelected($event)"
+          >
+        }
       </div>
 
       @if (uploadQueue().length > 0) {
@@ -73,15 +75,17 @@ const MAX_SIZE_MB = 5;
               <span class="absolute top-2 left-2 text-xs font-semibold px-2 py-0.5 bg-primary-500 text-white rounded-full">
                 Principal
               </span>
-              <button
-                (click)="confirmDelete(photos()[0])"
-                class="absolute top-2 right-2 w-7 h-7 bg-black/60 text-white rounded-full
-                       flex items-center justify-center transition-opacity
-                       sm:opacity-0 sm:group-hover:opacity-100 opacity-100"
-                title="Eliminar foto"
-              >
-                <mat-icon class="text-[14px]">close</mat-icon>
-              </button>
+              @if (canWrite()) {
+                <button
+                  (click)="confirmDelete(photos()[0])"
+                  class="absolute top-2 right-2 w-7 h-7 bg-black/60 text-white rounded-full
+                         flex items-center justify-center transition-opacity
+                         sm:opacity-0 sm:group-hover:opacity-100 opacity-100"
+                  title="Eliminar foto"
+                >
+                  <mat-icon class="text-[14px]">close</mat-icon>
+                </button>
+              }
             </div>
           }
 
@@ -95,25 +99,27 @@ const MAX_SIZE_MB = 5;
                     [alt]="photo.filename"
                     class="w-full h-full object-cover rounded-lg"
                   >
-                  <button
-                    (click)="setPrimary(photo)"
-                    matTooltip="Marcar como principal"
-                    class="absolute top-1 left-1 w-6 h-6 bg-black/60 text-white rounded-full
-                           flex items-center justify-center transition-opacity
-                           sm:opacity-0 sm:group-hover:opacity-100 opacity-100"
-                    title="Marcar como principal"
-                  >
-                    <mat-icon class="text-[12px]">star</mat-icon>
-                  </button>
-                  <button
-                    (click)="confirmDelete(photo)"
-                    class="absolute top-1 right-1 w-6 h-6 bg-black/60 text-white rounded-full
-                           flex items-center justify-center transition-opacity
-                           sm:opacity-0 sm:group-hover:opacity-100 opacity-100"
-                    title="Eliminar foto"
-                  >
-                    <mat-icon class="text-[12px]">close</mat-icon>
-                  </button>
+                  @if (canWrite()) {
+                    <button
+                      (click)="setPrimary(photo)"
+                      matTooltip="Marcar como principal"
+                      class="absolute top-1 left-1 w-6 h-6 bg-black/60 text-white rounded-full
+                             flex items-center justify-center transition-opacity
+                             sm:opacity-0 sm:group-hover:opacity-100 opacity-100"
+                      title="Marcar como principal"
+                    >
+                      <mat-icon class="text-[12px]">star</mat-icon>
+                    </button>
+                    <button
+                      (click)="confirmDelete(photo)"
+                      class="absolute top-1 right-1 w-6 h-6 bg-black/60 text-white rounded-full
+                             flex items-center justify-center transition-opacity
+                             sm:opacity-0 sm:group-hover:opacity-100 opacity-100"
+                      title="Eliminar foto"
+                    >
+                      <mat-icon class="text-[12px]">close</mat-icon>
+                    </button>
+                  }
                 </div>
               }
             </div>
@@ -127,6 +133,7 @@ export class UnitPhotoGalleryComponent {
   photos = input.required<PhotoItem[]>();
   unitId = input.required<string>();
   ownerId = input.required<string>();
+  canWrite = input<boolean>(true);
 
   private unitService = inject(UnitService);
   private storageService = inject(StorageService);

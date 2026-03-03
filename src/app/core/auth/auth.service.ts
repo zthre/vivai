@@ -46,6 +46,7 @@ export class AuthService {
 
   readonly userRoles = this._userRoles.asReadonly();
   readonly activeRole = this._activeRole.asReadonly();
+  readonly collaboratingPropertyIds = this._collaboratingPropertyIds.asReadonly();
   // Backwards compat with existing code using userRole() and tenantUnitId()
   readonly userRole = computed(() => this._activeRole());
   readonly tenantUnitId = computed(() => this._tenantUnitIds()[0] ?? null);
@@ -120,14 +121,22 @@ export class AuthService {
         }
       }
 
-      // Restore active role from localStorage (only if valid)
+      // Restore active role from localStorage (only if valid and makes sense)
       const saved = localStorage.getItem(ACTIVE_ROLE_KEY) as UserRole | null;
-      if (saved && roles.includes(saved)) {
-        this._activeRole.set(saved);
-      } else if (roles.length > 0) {
-        // Default: prefer 'owner' if available, else first role
-        const defaultRole = roles.includes('owner') ? 'owner' : roles[0];
-        this._activeRole.set(defaultRole);
+      const finalCollabIds = this._collaboratingPropertyIds();
+      const isValidSaved = saved && roles.includes(saved) &&
+        (saved !== 'colaborador' || finalCollabIds.length > 0);
+
+      if (isValidSaved) {
+        this._activeRole.set(saved!);
+      } else {
+        // Default: prefer 'owner' if available, then 'colaborador' (if has properties), then 'tenant'
+        const defaultRole = roles.includes('owner')
+          ? 'owner'
+          : (roles.includes('colaborador') && finalCollabIds.length > 0)
+          ? 'colaborador'
+          : roles[0];
+        this._activeRole.set(defaultRole ?? null);
       }
     });
   }

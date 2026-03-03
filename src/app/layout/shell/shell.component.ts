@@ -40,11 +40,12 @@ interface NavItem {
           </div>
         </div>
 
-        <!-- Role selector (only when user has multiple roles) -->
-        @if (hasMultipleRoles()) {
-          <div class="px-2 py-2 border-b border-warm-700">
+        <!-- Role selector (only when user has multiple effective roles) -->
+        @if (effectiveRoles().length > 1) {
+          <div class="px-2 py-2 border-b border-warm-700 relative">
+            <!-- Trigger button -->
             <button
-              (click)="cycleRole()"
+              (click)="roleDropdownOpen.set(!roleDropdownOpen())"
               class="flex items-center gap-2 w-full px-3 py-2 rounded-lg bg-warm-800 text-warm-200 hover:bg-warm-700 transition-colors"
               [matTooltip]="!sidebarOpen() ? roleLabel(activeRole()) : ''"
               matTooltipPosition="right"
@@ -52,9 +53,36 @@ interface NavItem {
               <mat-icon class="text-[18px] flex-shrink-0">{{ roleIcon(activeRole()) }}</mat-icon>
               @if (sidebarOpen()) {
                 <span class="text-xs font-medium flex-1 text-left">{{ roleLabel(activeRole()) }}</span>
-                <mat-icon class="text-[16px]">unfold_more</mat-icon>
+                <mat-icon class="text-[16px]">{{ roleDropdownOpen() ? 'expand_less' : 'expand_more' }}</mat-icon>
               }
             </button>
+
+            <!-- Dropdown panel -->
+            @if (roleDropdownOpen() && sidebarOpen()) {
+              <!-- Backdrop -->
+              <div class="fixed inset-0 z-40" (click)="roleDropdownOpen.set(false)"></div>
+              <div class="absolute left-2 right-2 top-full mt-1 bg-warm-800 border border-warm-600 rounded-lg shadow-xl z-50 overflow-hidden">
+                @for (role of effectiveRoles(); track role) {
+                  <button
+                    (click)="selectRole(role)"
+                    class="flex items-center gap-3 w-full px-3 py-2.5 text-left hover:bg-warm-700 transition-colors"
+                    [class.bg-warm-700]="role === activeRole()"
+                  >
+                    <mat-icon class="text-[18px] flex-shrink-0"
+                      [class.text-primary-400]="role === activeRole()"
+                      [class.text-warm-400]="role !== activeRole()"
+                    >{{ roleIcon(role) }}</mat-icon>
+                    <span class="text-sm flex-1"
+                      [class.text-white]="role === activeRole()"
+                      [class.text-warm-300]="role !== activeRole()"
+                    >{{ roleLabel(role) }}</span>
+                    @if (role === activeRole()) {
+                      <mat-icon class="text-[16px] text-primary-400">check</mat-icon>
+                    }
+                  </button>
+                }
+              </div>
+            }
           </div>
         }
 
@@ -107,7 +135,8 @@ interface NavItem {
               }
               <div class="min-w-0">
                 <p class="text-sm font-medium text-white truncate">{{ user()?.displayName }}</p>
-                <p class="text-xs text-warm-400 truncate">{{ user()?.email }}</p>
+                <!-- Show role label instead of email -->
+                <p class="text-xs text-warm-400 truncate">{{ roleLabel(activeRole()) }}</p>
               </div>
             </div>
           }
@@ -151,12 +180,20 @@ export class ShellComponent {
   private ticketService = inject(TicketService);
 
   sidebarOpen = signal(true);
+  roleDropdownOpen = signal(false);
+
   user = this.authService.currentUser;
   activeRole = this.authService.activeRole;
   userRoles = this.authService.userRoles;
 
   userInitial = () => this.user()?.displayName?.[0]?.toUpperCase() ?? 'U';
-  hasMultipleRoles = computed(() => this.userRoles().length > 1);
+
+  // Only show 'colaborador' if user actually has collaborating properties
+  effectiveRoles = computed(() =>
+    this.userRoles().filter(r =>
+      r !== 'colaborador' || this.authService.collaboratingPropertyIds().length > 0
+    )
+  );
 
   pendingTicketsCount = toSignal(
     toObservable(this.authService.uid).pipe(
@@ -188,13 +225,9 @@ export class ShellComponent {
     this.activeRole() === 'tenant' ? this.tenantNavItems : this.ownerNavItems
   );
 
-  cycleRole(): void {
-    const roles = this.userRoles();
-    if (roles.length <= 1) return;
-    const current = this.activeRole();
-    const idx = roles.indexOf(current!);
-    const nextRole = roles[(idx + 1) % roles.length];
-    this.authService.setActiveRole(nextRole);
+  selectRole(role: UserRole): void {
+    this.authService.setActiveRole(role);
+    this.roleDropdownOpen.set(false);
   }
 
   roleLabel(role: UserRole | null): string {

@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
@@ -6,6 +6,7 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { PropertyService } from '../../../core/services/property.service';
+import { AuthService } from '../../../core/auth/auth.service';
 import { Property } from '../../../core/models/property.model';
 import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialog/confirm-dialog.component';
 import { PaymentFormComponent } from '../../payments/payment-form/payment-form.component';
@@ -22,13 +23,15 @@ import { PaymentFormComponent } from '../../payments/payment-form/payment-form.c
           <h1 class="text-2xl font-bold text-warm-900">Inmuebles</h1>
           <p class="text-warm-500 text-sm mt-1">{{ properties().length }} propiedad(es) registrada(s)</p>
         </div>
-        <a
-          routerLink="/properties/new"
-          class="flex items-center gap-2 px-4 py-2.5 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium shadow-sm"
-        >
-          <mat-icon class="text-[18px]">add</mat-icon>
-          Nuevo inmueble
-        </a>
+        @if (isOwner()) {
+          <a
+            routerLink="/properties/new"
+            class="flex items-center gap-2 px-4 py-2.5 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium shadow-sm"
+          >
+            <mat-icon class="text-[18px]">add</mat-icon>
+            Nuevo inmueble
+          </a>
+        }
       </div>
 
       <!-- Empty state -->
@@ -36,14 +39,18 @@ import { PaymentFormComponent } from '../../payments/payment-form/payment-form.c
         <div class="bg-white rounded-xl border border-warm-200 shadow-sm p-12 text-center">
           <mat-icon class="text-warm-300 text-[56px]">apartment</mat-icon>
           <h3 class="text-warm-700 font-semibold mt-3">Sin inmuebles aún</h3>
-          <p class="text-warm-400 text-sm mt-1 mb-5">Registra tu primer inmueble para comenzar</p>
-          <a
-            routerLink="/properties/new"
-            class="inline-flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium"
-          >
-            <mat-icon class="text-[18px]">add</mat-icon>
-            Agregar inmueble
-          </a>
+          @if (isOwner()) {
+            <p class="text-warm-400 text-sm mt-1 mb-5">Registra tu primer inmueble para comenzar</p>
+            <a
+              routerLink="/properties/new"
+              class="inline-flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium"
+            >
+              <mat-icon class="text-[18px]">add</mat-icon>
+              Agregar inmueble
+            </a>
+          } @else {
+            <p class="text-warm-400 text-sm mt-1">Aún no tienes inmuebles asignados como colaborador</p>
+          }
         </div>
       }
 
@@ -109,7 +116,7 @@ import { PaymentFormComponent } from '../../payments/payment-form/payment-form.c
                   Ver detalle
                   <mat-icon class="text-[16px]">arrow_forward</mat-icon>
                 </a>
-                @if (property.unitCount === 0) {
+                @if (property.unitCount === 0 && canWriteInmuebles(property)) {
                   <button
                     (click)="openPaymentForm(property)"
                     class="text-sm text-green-600 hover:text-green-700 font-medium flex items-center gap-1"
@@ -119,20 +126,24 @@ import { PaymentFormComponent } from '../../payments/payment-form/payment-form.c
                   </button>
                 }
               </div>
-              <div class="flex items-center gap-1">
-                <a
-                  [routerLink]="['/properties', property.id, 'edit']"
-                  class="p-1.5 text-warm-400 hover:text-warm-700 hover:bg-warm-100 rounded-lg transition-colors"
-                >
-                  <mat-icon class="text-[18px]">edit</mat-icon>
-                </a>
-                <button
-                  (click)="confirmDelete(property)"
-                  class="p-1.5 text-warm-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                >
-                  <mat-icon class="text-[18px]">delete</mat-icon>
-                </button>
-              </div>
+              @if (canWriteInmuebles(property)) {
+                <div class="flex items-center gap-1">
+                  <a
+                    [routerLink]="['/properties', property.id, 'edit']"
+                    class="p-1.5 text-warm-400 hover:text-warm-700 hover:bg-warm-100 rounded-lg transition-colors"
+                  >
+                    <mat-icon class="text-[18px]">edit</mat-icon>
+                  </a>
+                  @if (isOwnerOf(property)) {
+                    <button
+                      (click)="confirmDelete(property)"
+                      class="p-1.5 text-warm-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    >
+                      <mat-icon class="text-[18px]">delete</mat-icon>
+                    </button>
+                  }
+                </div>
+              }
             </div>
           </div>
         }
@@ -142,10 +153,28 @@ import { PaymentFormComponent } from '../../payments/payment-form/payment-form.c
 })
 export class PropertiesListComponent {
   private propertyService = inject(PropertyService);
+  private authService = inject(AuthService);
   private dialog = inject(MatDialog);
   private snackBar = inject(MatSnackBar);
 
   properties = toSignal(this.propertyService.getAll(), { initialValue: [] });
+
+  /** Only owners can create new properties */
+  isOwner = computed(() => this.authService.activeRole() === 'owner');
+
+  /** True if user is the direct owner of this property */
+  isOwnerOf(property: Property): boolean {
+    return property.ownerId === this.authService.uid();
+  }
+
+  /** True if user can perform write actions on this property's units/management */
+  canWriteInmuebles(property: Property): boolean {
+    const uid = this.authService.uid();
+    if (!uid) return false;
+    if (property.ownerId === uid) return true;
+    const perms = property.collaboratorPermissions?.[uid];
+    return !perms || perms.inmuebles === 'write';
+  }
 
   iconForType(type: string): string {
     const icons: Record<string, string> = {

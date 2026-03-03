@@ -19,7 +19,7 @@ import {
   arrayRemove,
 } from '@angular/fire/firestore';
 import { Observable, combineLatest, map } from 'rxjs';
-import { Property, PhotoItem } from '../models/property.model';
+import { Property, PhotoItem, ColaboradorPermission } from '../models/property.model';
 import { AuthService } from '../auth/auth.service';
 
 @Injectable({ providedIn: 'root' })
@@ -115,8 +115,15 @@ export class PropertyService {
       const userDoc = usersSnap.docs[0];
       const targetUid = userDoc.id;
 
+      const defaultPermission: ColaboradorPermission = {
+        inmuebles: 'write',
+        finances: 'write',
+        tickets: 'write',
+      };
+
       await updateDoc(doc(this.firestore, `properties/${propertyId}`), {
         collaboratorUids: arrayUnion(targetUid),
+        [`collaboratorPermissions.${targetUid}`]: defaultPermission,
         updatedAt: serverTimestamp(),
       });
 
@@ -158,6 +165,17 @@ export class PropertyService {
   async removePendingColaborador(propertyId: string, email: string): Promise<void> {
     await updateDoc(doc(this.firestore, `properties/${propertyId}`), {
       pendingCollaboratorEmails: arrayRemove(email),
+      updatedAt: serverTimestamp(),
+    });
+  }
+
+  async updateColaboradorPermissions(
+    propertyId: string,
+    uid: string,
+    permissions: ColaboradorPermission
+  ): Promise<void> {
+    await updateDoc(doc(this.firestore, `properties/${propertyId}`), {
+      [`collaboratorPermissions.${uid}`]: permissions,
       updatedAt: serverTimestamp(),
     });
   }

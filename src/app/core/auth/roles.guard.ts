@@ -33,9 +33,12 @@ export function rolesGuard(allowedRoles: UserRole[]): CanActivateFn {
             const hasAccess = allowedRoles.some(r => roles.includes(r));
             if (hasAccess) return true;
 
-            // Redirect based on user's first role
-            const firstRole = roles[0];
-            if (firstRole === 'tenant') return router.createUrlTree(['/tenant']);
+            // Redirect based on user's most privileged role that isn't the one that failed
+            // Prefer dashboard (owner/colaborador) over /tenant
+            if (roles.includes('owner') || roles.includes('colaborador')) {
+              return router.createUrlTree(['/dashboard']);
+            }
+            if (roles.includes('tenant')) return router.createUrlTree(['/tenant']);
             return router.createUrlTree(['/dashboard']);
           })
         );

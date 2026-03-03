@@ -1,4 +1,4 @@
-import { Component, inject, signal, OnInit } from '@angular/core';
+import { Component, inject, signal, computed, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink, ActivatedRoute } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
@@ -13,6 +13,7 @@ import { Property } from '../../../core/models/property.model';
 import { PaymentFormComponent } from '../../payments/payment-form/payment-form.component';
 import { ContractSectionComponent } from './contract-section/contract-section.component';
 import { UnitPhotoGalleryComponent } from './unit-photo-gallery/unit-photo-gallery.component';
+import { AuthService } from '../../../core/auth/auth.service';
 
 @Component({
   selector: 'app-unit-detail',
@@ -73,13 +74,15 @@ import { UnitPhotoGalleryComponent } from './unit-photo-gallery/unit-photo-galle
             </div>
           </div>
 
-          <button
-            (click)="openPaymentForm()"
-            class="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium shadow-sm"
-          >
-            <mat-icon class="text-[18px]">add</mat-icon>
-            Registrar pago
-          </button>
+          @if (canWriteInmuebles()) {
+            <button
+              (click)="openPaymentForm()"
+              class="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium shadow-sm"
+            >
+              <mat-icon class="text-[18px]">add</mat-icon>
+              Registrar pago
+            </button>
+          }
         </div>
 
         <!-- Tenant info -->
@@ -97,10 +100,12 @@ import { UnitPhotoGalleryComponent } from './unit-photo-gallery/unit-photo-galle
                   <p class="text-xs text-warm-400">{{ unit()!.tenantEmail }}</p>
                 }
               </div>
-              <a [routerLink]="['/properties', propertyId, 'units', unitId, 'edit']"
-                class="text-xs text-primary-600 hover:text-primary-700 font-medium">
-                Editar
-              </a>
+              @if (canWriteInmuebles()) {
+                <a [routerLink]="['/properties', propertyId, 'units', unitId, 'edit']"
+                  class="text-xs text-primary-600 hover:text-primary-700 font-medium">
+                  Editar
+                </a>
+              }
             </div>
             @if (unit()?.tenantPhone || unit()?.tenantEmail) {
               <div class="mt-3 flex gap-2">
@@ -135,6 +140,7 @@ import { UnitPhotoGalleryComponent } from './unit-photo-gallery/unit-photo-galle
           [photos]="unit()!.photos ?? []"
           [unitId]="unitId"
           [ownerId]="unit()!.ownerId"
+          [canWrite]="canWriteInmuebles()"
         />
       }
 
@@ -144,6 +150,7 @@ import { UnitPhotoGalleryComponent } from './unit-photo-gallery/unit-photo-galle
           [contract]="unit()!.contract"
           [unitId]="unitId"
           [ownerId]="unit()!.ownerId"
+          [canWrite]="canWriteInmuebles()"
         />
       }
 
@@ -184,6 +191,7 @@ export class UnitDetailComponent implements OnInit {
   private unitService = inject(UnitService);
   private paymentService = inject(PaymentService);
   private propertyService = inject(PropertyService);
+  private authService = inject(AuthService);
   private dialog = inject(MatDialog);
   private route = inject(ActivatedRoute);
 
@@ -191,6 +199,15 @@ export class UnitDetailComponent implements OnInit {
   unitId!: string;
   unit = signal<Unit | null>(null);
   property = signal<Property | null>(null);
+
+  canWriteInmuebles = computed(() => {
+    const uid = this.authService.uid();
+    const prop = this.property();
+    if (!uid || !prop) return false;
+    if (prop.ownerId === uid) return true;
+    const perms = prop.collaboratorPermissions?.[uid];
+    return !perms || perms.inmuebles === 'write';
+  });
 
   payments = toSignal(
     this.route.paramMap.pipe(

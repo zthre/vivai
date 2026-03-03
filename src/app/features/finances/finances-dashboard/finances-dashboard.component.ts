@@ -1,6 +1,7 @@
 import { Component, inject, signal, computed, effect, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, ActivatedRoute } from '@angular/router';
+import { AuthService } from '../../../core/auth/auth.service';
 import { MatIconModule } from '@angular/material/icon';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { toSignal, toObservable } from '@angular/core/rxjs-interop';
@@ -99,6 +100,7 @@ function fromMonthParam(param: string): Date | null {
         <app-expense-list
           [expenses]="filteredExpenses()"
           [month]="selectedMonth()"
+          [canWrite]="canWriteFinances()"
           (addExpense)="openExpenseForm()"
           (editExpense)="openExpenseForm($event)"
           (deleteExpense)="confirmDelete($event)"
@@ -112,6 +114,7 @@ export class FinancesDashboardComponent implements OnInit {
   private unitService = inject(UnitService);
   private paymentService = inject(PaymentService);
   private expenseService = inject(ExpenseService);
+  private authService = inject(AuthService);
   private dialog = inject(MatDialog);
   private router = inject(Router);
   private route = inject(ActivatedRoute);
@@ -172,6 +175,18 @@ export class FinancesDashboardComponent implements OnInit {
   balanceVariant = computed((): KpiVariant => {
     const b = this.netBalance();
     return b > 0 ? 'positive' : b < 0 ? 'negative' : 'neutral';
+  });
+
+  canWriteFinances = computed(() => {
+    const uid = this.authService.uid();
+    if (!uid) return false;
+    if (this.authService.activeRole() !== 'colaborador') return true; // owners always write
+    const pid = this.selectedPropertyId();
+    if (!pid) return false; // colaborador with no property selected → read-only
+    const prop = this.properties().find(p => p.id === pid);
+    if (!prop) return false;
+    const perms = prop.collaboratorPermissions?.[uid];
+    return !perms || perms.finances === 'write';
   });
 
   constructor() {

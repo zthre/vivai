@@ -1,5 +1,11 @@
 import { Timestamp } from '@angular/fire/firestore';
 
+export interface ColaboradorPermission {
+  inmuebles: 'read' | 'write';
+  finances: 'read' | 'write';
+  tickets: 'read' | 'write';
+}
+
 export interface PhotoItem {
   url: string;
   storagePath: string;
@@ -31,6 +37,7 @@ export interface Property {
   publicDescription?: string | null;
   collaboratorUids?: string[];
   pendingCollaboratorEmails?: string[];
+  collaboratorPermissions?: { [uid: string]: ColaboradorPermission };
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 }

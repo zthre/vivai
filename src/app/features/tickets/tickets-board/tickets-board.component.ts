@@ -191,10 +191,22 @@ export class TicketsBoardComponent implements OnInit {
 
   ngOnInit() {}
 
+  canWriteTicketsFor(propertyId: string): boolean {
+    const uid = this.authService.uid();
+    if (!uid) return false;
+    const prop = this.properties().find(p => p.id === propertyId);
+    if (!prop) return false;
+    if (prop.ownerId === uid) return true;
+    const perms = prop.collaboratorPermissions?.[uid];
+    return !perms || perms.tickets === 'write';
+  }
+
   async onDrop(event: CdkDragDrop<Ticket[]>, newStatus: Ticket['status']) {
     if (event.previousContainer === event.container) {
       moveItemInArray(event.container.data, event.previousIndex, event.currentIndex);
     } else {
+      const ticket = event.previousContainer.data[event.previousIndex];
+      if (!this.canWriteTicketsFor(ticket.propertyId)) return;
       this.dragging = true;
       transferArrayItem(
         event.previousContainer.data,
@@ -202,7 +214,6 @@ export class TicketsBoardComponent implements OnInit {
         event.previousIndex,
         event.currentIndex
       );
-      const ticket = event.container.data[event.currentIndex];
       try {
         await this.ticketService.updateStatus(ticket.id!, newStatus, this.authService.uid()!);
       } finally {

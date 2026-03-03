@@ -32,13 +32,15 @@ const CATEGORY_CLASSES: Record<ExpenseCategory, string> = {
         <h2 class="font-semibold text-warm-900">Gastos del mes</h2>
         <div class="flex items-center gap-2">
           <span class="text-xs text-warm-400">{{ expenses().length }} registros</span>
-          <button
-            (click)="addExpense.emit()"
-            class="flex items-center gap-1.5 px-3 py-1.5 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-xs font-medium"
-          >
-            <mat-icon class="text-[16px]">add</mat-icon>
-            Registrar Gasto
-          </button>
+          @if (canWrite()) {
+            <button
+              (click)="addExpense.emit()"
+              class="flex items-center gap-1.5 px-3 py-1.5 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-xs font-medium"
+            >
+              <mat-icon class="text-[16px]">add</mat-icon>
+              Registrar Gasto
+            </button>
+          }
         </div>
       </div>
 
@@ -46,12 +48,14 @@ const CATEGORY_CLASSES: Record<ExpenseCategory, string> = {
         <div class="px-5 py-10 text-center">
           <mat-icon class="text-warm-300 text-[40px]">receipt_long</mat-icon>
           <p class="text-warm-400 text-sm mt-2">No hay gastos en {{ monthLabel() }}</p>
-          <button
-            (click)="addExpense.emit()"
-            class="mt-4 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium"
-          >
-            Registrar primer gasto
-          </button>
+          @if (canWrite()) {
+            <button
+              (click)="addExpense.emit()"
+              class="mt-4 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium"
+            >
+              Registrar primer gasto
+            </button>
+          }
         </div>
       } @else {
         <div class="overflow-x-auto">
@@ -63,7 +67,7 @@ const CATEGORY_CLASSES: Record<ExpenseCategory, string> = {
                 <th class="px-5 py-3 font-medium">Descripción</th>
                 <th class="px-5 py-3 font-medium">Inmueble</th>
                 <th class="px-5 py-3 font-medium text-right">Monto</th>
-                <th class="px-5 py-3 font-medium"></th>
+                @if (canWrite()) { <th class="px-5 py-3 font-medium"></th> }
               </tr>
             </thead>
             <tbody class="divide-y divide-warm-50">
@@ -92,24 +96,26 @@ const CATEGORY_CLASSES: Record<ExpenseCategory, string> = {
                   <td class="px-5 py-3 text-right font-semibold text-warm-900">
                     {{ e.amount | currency:'COP':'symbol-narrow':'1.0-0' }}
                   </td>
-                  <td class="px-5 py-3">
-                    <div class="flex items-center gap-1 justify-end">
-                      <button
-                        (click)="editExpense.emit(e)"
-                        class="p-1.5 rounded-lg text-warm-400 hover:text-primary-600 hover:bg-primary-50 transition-colors"
-                        title="Editar"
-                      >
-                        <mat-icon class="text-[16px]">edit</mat-icon>
-                      </button>
-                      <button
-                        (click)="deleteExpense.emit(e)"
-                        class="p-1.5 rounded-lg text-warm-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                        title="Eliminar"
-                      >
-                        <mat-icon class="text-[16px]">delete</mat-icon>
-                      </button>
-                    </div>
-                  </td>
+                  @if (canWrite()) {
+                    <td class="px-5 py-3">
+                      <div class="flex items-center gap-1 justify-end">
+                        <button
+                          (click)="editExpense.emit(e)"
+                          class="p-1.5 rounded-lg text-warm-400 hover:text-primary-600 hover:bg-primary-50 transition-colors"
+                          title="Editar"
+                        >
+                          <mat-icon class="text-[16px]">edit</mat-icon>
+                        </button>
+                        <button
+                          (click)="deleteExpense.emit(e)"
+                          class="p-1.5 rounded-lg text-warm-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                          title="Eliminar"
+                        >
+                          <mat-icon class="text-[16px]">delete</mat-icon>
+                        </button>
+                      </div>
+                    </td>
+                  }
                 </tr>
               }
             </tbody>
@@ -119,7 +125,7 @@ const CATEGORY_CLASSES: Record<ExpenseCategory, string> = {
                 <td class="px-5 py-3 text-right font-bold text-warm-900">
                   {{ total() | currency:'COP':'symbol-narrow':'1.0-0' }}
                 </td>
-                <td></td>
+                @if (canWrite()) { <td></td> }
               </tr>
             </tfoot>
           </table>
@@ -131,6 +137,7 @@ const CATEGORY_CLASSES: Record<ExpenseCategory, string> = {
 export class ExpenseListComponent {
   expenses = input.required<Expense[]>();
   month = input.required<Date>();
+  canWrite = input<boolean>(true);
   addExpense = output<void>();
   editExpense = output<Expense>();
   deleteExpense = output<Expense>();

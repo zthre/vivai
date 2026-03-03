@@ -18,7 +18,7 @@ const MAX_SIZE_MB = 20;
     <div class="bg-white rounded-xl border border-warm-200 shadow-sm">
       <div class="flex items-center justify-between px-5 py-4 border-b border-warm-100">
         <h2 class="font-semibold text-warm-900">Contrato de arriendo</h2>
-        @if (!contract()) {
+        @if (!contract() && canWrite()) {
           <button
             (click)="triggerFileInput()"
             [disabled]="uploading()"
@@ -52,13 +52,15 @@ const MAX_SIZE_MB = 20;
         <div class="px-5 py-10 text-center">
           <mat-icon class="text-warm-300 text-[48px]">description</mat-icon>
           <p class="text-warm-400 text-sm mt-2">Sin contrato cargado</p>
-          <button
-            (click)="triggerFileInput()"
-            class="mt-4 flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium mx-auto"
-          >
-            <mat-icon class="text-[18px]">upload_file</mat-icon>
-            Subir Contrato PDF
-          </button>
+          @if (canWrite()) {
+            <button
+              (click)="triggerFileInput()"
+              class="mt-4 flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium mx-auto"
+            >
+              <mat-icon class="text-[18px]">upload_file</mat-icon>
+              Subir Contrato PDF
+            </button>
+          }
         </div>
       }
 
@@ -86,20 +88,22 @@ const MAX_SIZE_MB = 20;
                 <mat-icon class="text-[14px]">open_in_new</mat-icon>
                 Ver
               </a>
-              <button
-                (click)="triggerFileInput()"
-                class="flex items-center gap-1 px-3 py-1.5 border border-primary-200 text-primary-600 rounded-lg text-xs font-medium hover:bg-primary-50 transition-colors"
-              >
-                <mat-icon class="text-[14px]">swap_horiz</mat-icon>
-                Reemplazar
-              </button>
-              <button
-                (click)="confirmDelete()"
-                class="p-1.5 text-warm-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                title="Eliminar contrato"
-              >
-                <mat-icon class="text-[18px]">delete</mat-icon>
-              </button>
+              @if (canWrite()) {
+                <button
+                  (click)="triggerFileInput()"
+                  class="flex items-center gap-1 px-3 py-1.5 border border-primary-200 text-primary-600 rounded-lg text-xs font-medium hover:bg-primary-50 transition-colors"
+                >
+                  <mat-icon class="text-[14px]">swap_horiz</mat-icon>
+                  Reemplazar
+                </button>
+                <button
+                  (click)="confirmDelete()"
+                  class="p-1.5 text-warm-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  title="Eliminar contrato"
+                >
+                  <mat-icon class="text-[18px]">delete</mat-icon>
+                </button>
+              }
             </div>
           </div>
         </div>
@@ -111,6 +115,7 @@ export class ContractSectionComponent {
   contract = input<ContractFile | null | undefined>(null);
   unitId = input.required<string>();
   ownerId = input.required<string>();
+  canWrite = input<boolean>(true);
 
   private unitService = inject(UnitService);
   private storageService = inject(StorageService);

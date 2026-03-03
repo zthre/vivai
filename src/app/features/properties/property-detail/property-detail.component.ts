@@ -1,4 +1,4 @@
-import { Component, inject, signal, OnInit } from '@angular/core';
+import { Component, inject, signal, computed, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink, ActivatedRoute } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
@@ -73,26 +73,28 @@ import { AuthService } from '../../../core/auth/auth.service';
             </div>
           </div>
           <div class="flex items-center gap-2">
-            <a [routerLink]="['/properties', propertyId, 'edit']"
-              class="p-1.5 text-warm-400 hover:text-warm-700 hover:bg-warm-100 rounded-lg transition-colors">
-              <mat-icon class="text-[20px]">edit</mat-icon>
-            </a>
-            @if (units().length === 0) {
-              <button
-                (click)="openPaymentForm()"
-                class="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium shadow-sm"
+            @if (canWriteInmuebles()) {
+              <a [routerLink]="['/properties', propertyId, 'edit']"
+                class="p-1.5 text-warm-400 hover:text-warm-700 hover:bg-warm-100 rounded-lg transition-colors">
+                <mat-icon class="text-[20px]">edit</mat-icon>
+              </a>
+              @if (units().length === 0) {
+                <button
+                  (click)="openPaymentForm()"
+                  class="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium shadow-sm"
+                >
+                  <mat-icon class="text-[18px]">add</mat-icon>
+                  Registrar pago
+                </button>
+              }
+              <a
+                [routerLink]="['/properties', propertyId, 'units', 'new']"
+                class="flex items-center gap-2 px-4 py-2.5 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium shadow-sm"
               >
                 <mat-icon class="text-[18px]">add</mat-icon>
-                Registrar pago
-              </button>
+                Nueva unidad
+              </a>
             }
-            <a
-              [routerLink]="['/properties', propertyId, 'units', 'new']"
-              class="flex items-center gap-2 px-4 py-2.5 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium shadow-sm"
-            >
-              <mat-icon class="text-[18px]">add</mat-icon>
-              Nueva unidad
-            </a>
           </div>
         </div>
 
@@ -145,6 +147,7 @@ import { AuthService } from '../../../core/auth/auth.service';
           [photos]="property()?.photos ?? []"
           [propertyId]="propertyId"
           [ownerId]="property()!.ownerId"
+          [canWrite]="canWriteInmuebles()"
         />
       }
 
@@ -161,14 +164,16 @@ import { AuthService } from '../../../core/auth/auth.service';
         <div class="bg-white rounded-xl border border-warm-200 shadow-sm p-12 text-center">
           <mat-icon class="text-warm-300 text-[56px]">meeting_room</mat-icon>
           <h3 class="text-warm-700 font-semibold mt-3">Sin unidades aún</h3>
-          <p class="text-warm-400 text-sm mt-1 mb-5">Agrega la primera unidad a este inmueble</p>
-          <a
-            [routerLink]="['/properties', propertyId, 'units', 'new']"
-            class="inline-flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium"
-          >
-            <mat-icon class="text-[18px]">add</mat-icon>
-            Agregar unidad
-          </a>
+          @if (canWriteInmuebles()) {
+            <p class="text-warm-400 text-sm mt-1 mb-5">Agrega la primera unidad a este inmueble</p>
+            <a
+              [routerLink]="['/properties', propertyId, 'units', 'new']"
+              class="inline-flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium"
+            >
+              <mat-icon class="text-[18px]">add</mat-icon>
+              Agregar unidad
+            </a>
+          }
         </div>
       }
 
@@ -234,7 +239,7 @@ import { AuthService } from '../../../core/auth/auth.service';
                   Ver detalle
                   <mat-icon class="text-[16px]">arrow_forward</mat-icon>
                 </a>
-                @if (unit.status === 'ocupado') {
+                @if (unit.status === 'ocupado' && canWriteInmuebles()) {
                   <button
                     (click)="openUnitPaymentForm(unit)"
                     class="text-sm text-green-600 hover:text-green-700 font-medium flex items-center gap-1"
@@ -244,20 +249,22 @@ import { AuthService } from '../../../core/auth/auth.service';
                   </button>
                 }
               </div>
-              <div class="flex items-center gap-1">
-                <a
-                  [routerLink]="['/properties', propertyId, 'units', unit.id, 'edit']"
-                  class="p-1.5 text-warm-400 hover:text-warm-700 hover:bg-warm-100 rounded-lg transition-colors"
-                >
-                  <mat-icon class="text-[18px]">edit</mat-icon>
-                </a>
-                <button
-                  (click)="confirmDeleteUnit(unit)"
-                  class="p-1.5 text-warm-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                >
-                  <mat-icon class="text-[18px]">delete</mat-icon>
-                </button>
-              </div>
+              @if (canWriteInmuebles()) {
+                <div class="flex items-center gap-1">
+                  <a
+                    [routerLink]="['/properties', propertyId, 'units', unit.id, 'edit']"
+                    class="p-1.5 text-warm-400 hover:text-warm-700 hover:bg-warm-100 rounded-lg transition-colors"
+                  >
+                    <mat-icon class="text-[18px]">edit</mat-icon>
+                  </a>
+                  <button
+                    (click)="confirmDeleteUnit(unit)"
+                    class="p-1.5 text-warm-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  >
+                    <mat-icon class="text-[18px]">delete</mat-icon>
+                  </button>
+                </div>
+              }
             </div>
           </div>
         }
@@ -308,6 +315,15 @@ export class PropertyDetailComponent implements OnInit {
 
   propertyId!: string;
   property = signal<Property | null>(null);
+
+  canWriteInmuebles = computed(() => {
+    const uid = this.authService.uid();
+    const prop = this.property();
+    if (!uid || !prop) return false;
+    if (prop.ownerId === uid) return true;
+    const perms = prop.collaboratorPermissions?.[uid];
+    return !perms || perms.inmuebles === 'write';
+  });
   units = toSignal(
     this.route.paramMap.pipe(
       switchMap(params => this.unitService.getByProperty(params.get('id')!))

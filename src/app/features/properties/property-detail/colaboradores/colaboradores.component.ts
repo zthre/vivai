@@ -2,31 +2,32 @@ import { Component, Input, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import {
-  Firestore,
-  doc,
-  getDoc,
-  collectionData,
-  collection,
-  query,
-  where,
-} from '@angular/fire/firestore';
+import { Firestore, doc, getDoc } from '@angular/fire/firestore';
 import { PropertyService } from '../../../../core/services/property.service';
 import { AuthService } from '../../../../core/auth/auth.service';
-import { Property } from '../../../../core/models/property.model';
+import { Property, ColaboradorPermission } from '../../../../core/models/property.model';
+import { PermisoColaboradorDialogComponent } from './permiso-colaborador-dialog.component';
 
 interface ColaboradorInfo {
   uid: string;
   displayName: string | null;
   email: string | null;
   photoURL: string | null;
+  permissions: ColaboradorPermission;
 }
+
+const DEFAULT_PERMISSION: ColaboradorPermission = {
+  inmuebles: 'write',
+  finances: 'write',
+  tickets: 'write',
+};
 
 @Component({
   selector: 'app-colaboradores',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule, MatSnackBarModule],
+  imports: [CommonModule, FormsModule, MatIconModule, MatDialogModule, MatSnackBarModule],
   template: `
     <div class="bg-white rounded-xl border border-warm-200 shadow-sm">
       <div class="px-5 py-4 border-b border-warm-100 flex items-center gap-2">
@@ -38,31 +39,47 @@ interface ColaboradorInfo {
 
         <!-- Active colaborators -->
         @if (colaboradores().length > 0) {
-          <div class="space-y-2">
+          <div class="space-y-3">
             @for (c of colaboradores(); track c.uid) {
-              <div class="flex items-center gap-3 p-3 rounded-lg bg-warm-50">
-                @if (c.photoURL) {
-                  <img [src]="c.photoURL" class="w-8 h-8 rounded-full flex-shrink-0" alt="avatar">
-                } @else {
-                  <div class="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center flex-shrink-0">
-                    <span class="text-primary-700 text-xs font-bold">{{ initial(c.displayName) }}</span>
+              <div class="rounded-lg border border-warm-200 overflow-hidden">
+                <!-- Header row -->
+                <div class="flex items-center gap-3 p-3 bg-warm-50">
+                  @if (c.photoURL) {
+                    <img [src]="c.photoURL" class="w-8 h-8 rounded-full flex-shrink-0" alt="avatar">
+                  } @else {
+                    <div class="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center flex-shrink-0">
+                      <span class="text-primary-700 text-xs font-bold">{{ initial(c.displayName) }}</span>
+                    </div>
+                  }
+                  <div class="flex-1 min-w-0">
+                    <p class="text-sm font-medium text-warm-800 truncate">{{ c.displayName || c.email }}</p>
+                    @if (c.displayName) {
+                      <p class="text-xs text-warm-400 truncate">{{ c.email }}</p>
+                    }
                   </div>
-                }
-                <div class="flex-1 min-w-0">
-                  <p class="text-sm font-medium text-warm-800 truncate">{{ c.displayName || c.email }}</p>
-                  @if (c.displayName) {
-                    <p class="text-xs text-warm-400 truncate">{{ c.email }}</p>
+                  @if (isOwner()) {
+                    <button
+                      (click)="removeColaborador(c.uid)"
+                      [disabled]="loading()"
+                      class="p-1.5 text-warm-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                      title="Quitar colaborador"
+                    >
+                      <mat-icon class="text-[18px]">person_remove</mat-icon>
+                    </button>
                   }
                 </div>
+
+                <!-- Permissions button (owner only) -->
                 @if (isOwner()) {
-                  <button
-                    (click)="removeColaborador(c.uid)"
-                    [disabled]="loading()"
-                    class="p-1.5 text-warm-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-                    title="Quitar colaborador"
-                  >
-                    <mat-icon class="text-[18px]">person_remove</mat-icon>
-                  </button>
+                  <div class="px-3 py-2 border-t border-warm-100 bg-white">
+                    <button
+                      (click)="openPermisos(c)"
+                      class="flex items-center gap-1.5 w-full px-3 py-2 text-xs font-medium text-warm-600 rounded-lg hover:bg-warm-50 transition-colors"
+                    >
+                      <mat-icon class="text-[16px]">tune</mat-icon>
+                      Gestionar permisos
+                    </button>
+                  </div>
                 }
               </div>
             }
@@ -140,6 +157,7 @@ export class ColaboradoresComponent implements OnInit {
   private authService = inject(AuthService);
   private firestore = inject(Firestore);
   private snackBar = inject(MatSnackBar);
+  private dialog = inject(MatDialog);
 
   colaboradores = signal<ColaboradorInfo[]>([]);
   pendingEmails = signal<string[]>([]);
@@ -168,6 +186,8 @@ export class ColaboradoresComponent implements OnInit {
       return;
     }
 
+    const storedPerms = this.property.collaboratorPermissions ?? {};
+
     Promise.all(
       uids.map(async uid => {
         const snap = await getDoc(doc(this.firestore, `users/${uid}`));
@@ -177,9 +197,29 @@ export class ColaboradoresComponent implements OnInit {
           displayName: data?.['displayName'] ?? null,
           email: data?.['email'] ?? null,
           photoURL: data?.['photoURL'] ?? null,
+          permissions: { ...DEFAULT_PERMISSION, ...(storedPerms[uid] ?? {}) },
         } as ColaboradorInfo;
       })
     ).then(list => this.colaboradores.set(list));
+  }
+
+  openPermisos(c: ColaboradorInfo) {
+    const ref = this.dialog.open(PermisoColaboradorDialogComponent, {
+      data: {
+        propertyId: this.propertyId,
+        propertyName: this.property?.name ?? '',
+        collaborator: c,
+      },
+      width: '420px',
+      maxWidth: '95vw',
+    });
+    ref.afterClosed().subscribe((updatedPerms: ColaboradorPermission | undefined) => {
+      if (updatedPerms) {
+        this.colaboradores.update(list =>
+          list.map(item => item.uid === c.uid ? { ...item, permissions: updatedPerms } : item)
+        );
+      }
+    });
   }
 
   async invite() {
@@ -195,12 +235,11 @@ export class ColaboradoresComponent implements OnInit {
       } else {
         this.snackBar.open('Invitación enviada — se activará cuando el usuario se registre.', 'OK', { duration: 4500 });
       }
-      // Reload the property to get updated collaboratorUids/pendingEmails
       this.propertyService.getById(this.propertyId).subscribe(p => {
         this.property = p;
         this.loadColaboradores();
       });
-    } catch (err) {
+    } catch {
       this.snackBar.open('Error al invitar. Verifica el correo e intenta de nuevo.', 'OK', { duration: 3500 });
     } finally {
       this.loading.set(false);
