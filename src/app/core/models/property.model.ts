@@ -1,9 +1,16 @@
 import { Timestamp } from '@angular/fire/firestore';
 
 export interface ColaboradorPermission {
-  inmuebles: 'read' | 'write';
-  finances: 'read' | 'write';
-  tickets: 'read' | 'write';
+  /** Crear, editar y eliminar unidades */
+  inmueblesUnidades?: boolean;
+  /** Registrar pagos */
+  inmueblesPagos?: boolean;
+  /** Fotos y contratos */
+  inmueblesMedia?: boolean;
+  /** Registrar y editar gastos */
+  gastos?: boolean;
+  /** Cambiar estado de tickets */
+  tickets?: boolean;
 }
 
 export interface PhotoItem {

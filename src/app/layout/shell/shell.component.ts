@@ -211,6 +211,15 @@ export class ShellComponent {
     { label: 'Dashboard', icon: 'dashboard', route: '/dashboard' },
     { label: 'Inmuebles', icon: 'apartment', route: '/properties' },
     { label: 'Finanzas', icon: 'bar_chart', route: '/finances' },
+    { label: 'Colaboradores', icon: 'group', route: '/colaboradores' },
+    { label: 'Marketplace', icon: 'storefront', route: '/inmuebles' },
+    { label: 'Tickets', icon: 'build_circle', route: '/tickets', badge: () => this.pendingTicketsCount() },
+  ];
+
+  private colaboradorNavItems: NavItem[] = [
+    { label: 'Dashboard', icon: 'dashboard', route: '/dashboard' },
+    { label: 'Inmuebles', icon: 'apartment', route: '/properties' },
+    { label: 'Finanzas', icon: 'bar_chart', route: '/finances' },
     { label: 'Marketplace', icon: 'storefront', route: '/inmuebles' },
     { label: 'Tickets', icon: 'build_circle', route: '/tickets', badge: () => this.pendingTicketsCount() },
   ];
@@ -221,9 +230,11 @@ export class ShellComponent {
     { label: 'Soporte', icon: 'build_circle', route: '/tenant/tickets' },
   ];
 
-  navItems = computed(() =>
-    this.activeRole() === 'tenant' ? this.tenantNavItems : this.ownerNavItems
-  );
+  navItems = computed(() => {
+    if (this.activeRole() === 'tenant') return this.tenantNavItems;
+    if (this.activeRole() === 'colaborador') return this.colaboradorNavItems;
+    return this.ownerNavItems;
+  });
 
   selectRole(role: UserRole): void {
     this.authService.setActiveRole(role);

@@ -182,7 +182,7 @@ export class TicketDetailComponent implements OnInit, OnDestroy {
     const prop = this.property();
     if (!prop) return false;
     const perms = prop.collaboratorPermissions?.[uid];
-    return !perms || perms.tickets === 'write';
+    return !perms || perms.tickets !== false;
   });
 
   categoryLabel(cat: string) { return CATEGORY_LABELS[cat] ?? cat; }

@@ -116,7 +116,7 @@ import { PaymentFormComponent } from '../../payments/payment-form/payment-form.c
                   Ver detalle
                   <mat-icon class="text-[16px]">arrow_forward</mat-icon>
                 </a>
-                @if (property.unitCount === 0 && canWriteInmuebles(property)) {
+                @if (property.unitCount === 0 && canWritePagos(property)) {
                   <button
                     (click)="openPaymentForm(property)"
                     class="text-sm text-green-600 hover:text-green-700 font-medium flex items-center gap-1"
@@ -126,7 +126,7 @@ import { PaymentFormComponent } from '../../payments/payment-form/payment-form.c
                   </button>
                 }
               </div>
-              @if (canWriteInmuebles(property)) {
+              @if (canWriteUnidades(property)) {
                 <div class="flex items-center gap-1">
                   <a
                     [routerLink]="['/properties', property.id, 'edit']"
@@ -167,13 +167,20 @@ export class PropertiesListComponent {
     return property.ownerId === this.authService.uid();
   }
 
-  /** True if user can perform write actions on this property's units/management */
-  canWriteInmuebles(property: Property): boolean {
+  canWriteUnidades(property: Property): boolean {
     const uid = this.authService.uid();
     if (!uid) return false;
     if (property.ownerId === uid) return true;
     const perms = property.collaboratorPermissions?.[uid];
-    return !perms || perms.inmuebles === 'write';
+    return !perms || perms.inmueblesUnidades !== false;
+  }
+
+  canWritePagos(property: Property): boolean {
+    const uid = this.authService.uid();
+    if (!uid) return false;
+    if (property.ownerId === uid) return true;
+    const perms = property.collaboratorPermissions?.[uid];
+    return !perms || perms.inmueblesPagos !== false;
   }
 
   iconForType(type: string): string {

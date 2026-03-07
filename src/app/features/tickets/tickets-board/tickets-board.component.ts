@@ -198,7 +198,7 @@ export class TicketsBoardComponent implements OnInit {
     if (!prop) return false;
     if (prop.ownerId === uid) return true;
     const perms = prop.collaboratorPermissions?.[uid];
-    return !perms || perms.tickets === 'write';
+    return !perms || perms.tickets !== false;
   }
 
   async onDrop(event: CdkDragDrop<Ticket[]>, newStatus: Ticket['status']) {

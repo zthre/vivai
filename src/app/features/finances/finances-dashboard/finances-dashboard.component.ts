@@ -180,13 +180,19 @@ export class FinancesDashboardComponent implements OnInit {
   canWriteFinances = computed(() => {
     const uid = this.authService.uid();
     if (!uid) return false;
-    if (this.authService.activeRole() !== 'colaborador') return true; // owners always write
+    if (this.authService.activeRole() !== 'colaborador') return true;
     const pid = this.selectedPropertyId();
-    if (!pid) return false; // colaborador with no property selected → read-only
-    const prop = this.properties().find(p => p.id === pid);
-    if (!prop) return false;
-    const perms = prop.collaboratorPermissions?.[uid];
-    return !perms || perms.finances === 'write';
+    if (pid) {
+      const prop = this.properties().find(p => p.id === pid);
+      if (!prop) return false;
+      const perms = prop.collaboratorPermissions?.[uid];
+      return !perms || perms.gastos !== false;
+    }
+    // No specific property selected — allow if user has gastos permission on any property
+    return this.properties().some(p => {
+      const perms = p.collaboratorPermissions?.[uid];
+      return !perms || perms.gastos !== false;
+    });
   });
 
   constructor() {

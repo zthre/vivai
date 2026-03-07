@@ -78,6 +78,14 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'colaboradores',
+        canActivate: [rolesGuard(['owner'])],
+        loadComponent: () =>
+          import('./features/colaboradores/colaboradores-page.component').then(
+            m => m.ColaboradoresPageComponent
+          ),
+      },
+      {
         path: 'finances',
         canActivate: [ownerGuard],
         loadComponent: () =>

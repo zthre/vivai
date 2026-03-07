@@ -116,9 +116,11 @@ export class PropertyService {
       const targetUid = userDoc.id;
 
       const defaultPermission: ColaboradorPermission = {
-        inmuebles: 'write',
-        finances: 'write',
-        tickets: 'write',
+        inmueblesUnidades: true,
+        inmueblesPagos: true,
+        inmueblesMedia: true,
+        gastos: true,
+        tickets: true,
       };
 
       await updateDoc(doc(this.firestore, `properties/${propertyId}`), {
@@ -178,5 +180,126 @@ export class PropertyService {
       [`collaboratorPermissions.${uid}`]: permissions,
       updatedAt: serverTimestamp(),
     });
+  }
+
+  /** Update permissions for a collaborator on ALL of the current owner's properties at once. */
+  async updateGlobalCollaboradorPermissions(
+    collaboratorUid: string,
+    permissions: ColaboradorPermission
+  ): Promise<void> {
+    const ownerUid = this.auth.uid()!;
+    const snap = await getDocs(
+      query(collection(this.firestore, 'properties'), where('ownerId', '==', ownerUid))
+    );
+    await Promise.all(
+      snap.docs.map(d =>
+        updateDoc(doc(this.firestore, `properties/${d.id}`), {
+          [`collaboratorPermissions.${collaboratorUid}`]: permissions,
+          updatedAt: serverTimestamp(),
+        })
+      )
+    );
+  }
+
+  /** Invite a collaborator globally — adds them to ALL of the current owner's properties. */
+  async addGlobalColaborador(email: string): Promise<'assigned' | 'pending'> {
+    const ownerUid = this.auth.uid()!;
+    const propsSnap = await getDocs(
+      query(collection(this.firestore, 'properties'), where('ownerId', '==', ownerUid))
+    );
+
+    const defaultPermission: ColaboradorPermission = {
+      inmueblesUnidades: true,
+      inmueblesPagos: true,
+      inmueblesMedia: true,
+      gastos: true,
+      tickets: true,
+    };
+
+    const usersSnap = await getDocs(
+      query(collection(this.firestore, 'users'), where('email', '==', email), limit(1))
+    );
+
+    if (!usersSnap.empty) {
+      const userDoc = usersSnap.docs[0];
+      const targetUid = userDoc.id;
+
+      await Promise.all(
+        propsSnap.docs.map(d =>
+          updateDoc(doc(this.firestore, `properties/${d.id}`), {
+            collaboratorUids: arrayUnion(targetUid),
+            [`collaboratorPermissions.${targetUid}`]: defaultPermission,
+            updatedAt: serverTimestamp(),
+          })
+        )
+      );
+
+      const userData = userDoc.data();
+      const existingRoles: string[] = Array.isArray(userData['roles'])
+        ? userData['roles']
+        : userData['role'] ? [userData['role']] : ['owner'];
+      const updatedRoles = existingRoles.includes('colaborador')
+        ? existingRoles
+        : [...existingRoles, 'colaborador'];
+
+      await updateDoc(doc(this.firestore, `users/${targetUid}`), {
+        roles: updatedRoles,
+        updatedAt: serverTimestamp(),
+      });
+      for (const d of propsSnap.docs) {
+        await updateDoc(doc(this.firestore, `users/${targetUid}`), {
+          collaboratingPropertyIds: arrayUnion(d.id),
+        });
+      }
+      return 'assigned';
+    }
+
+    // Pending: add email to all owned properties
+    await Promise.all(
+      propsSnap.docs.map(d =>
+        updateDoc(doc(this.firestore, `properties/${d.id}`), {
+          pendingCollaboratorEmails: arrayUnion(email),
+          updatedAt: serverTimestamp(),
+        })
+      )
+    );
+    return 'pending';
+  }
+
+  /** Remove a collaborator from ALL of the current owner's properties. */
+  async removeGlobalColaborador(collaboratorUid: string): Promise<void> {
+    const ownerUid = this.auth.uid()!;
+    const snap = await getDocs(
+      query(collection(this.firestore, 'properties'), where('ownerId', '==', ownerUid))
+    );
+    await Promise.all(
+      snap.docs.map(d =>
+        updateDoc(doc(this.firestore, `properties/${d.id}`), {
+          collaboratorUids: arrayRemove(collaboratorUid),
+          updatedAt: serverTimestamp(),
+        })
+      )
+    );
+    for (const d of snap.docs) {
+      await updateDoc(doc(this.firestore, `users/${collaboratorUid}`), {
+        collaboratingPropertyIds: arrayRemove(d.id),
+      });
+    }
+  }
+
+  /** Cancel a pending invitation globally — removes email from ALL owned properties. */
+  async removePendingGlobalColaborador(email: string): Promise<void> {
+    const ownerUid = this.auth.uid()!;
+    const snap = await getDocs(
+      query(collection(this.firestore, 'properties'), where('ownerId', '==', ownerUid))
+    );
+    await Promise.all(
+      snap.docs.map(d =>
+        updateDoc(doc(this.firestore, `properties/${d.id}`), {
+          pendingCollaboratorEmails: arrayRemove(email),
+          updatedAt: serverTimestamp(),
+        })
+      )
+    );
   }
 }

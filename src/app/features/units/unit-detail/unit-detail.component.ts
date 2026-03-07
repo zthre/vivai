@@ -74,7 +74,7 @@ import { AuthService } from '../../../core/auth/auth.service';
             </div>
           </div>
 
-          @if (canWriteInmuebles()) {
+          @if (canWritePagos()) {
             <button
               (click)="openPaymentForm()"
               class="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium shadow-sm"
@@ -100,7 +100,7 @@ import { AuthService } from '../../../core/auth/auth.service';
                   <p class="text-xs text-warm-400">{{ unit()!.tenantEmail }}</p>
                 }
               </div>
-              @if (canWriteInmuebles()) {
+              @if (canWriteUnidades()) {
                 <a [routerLink]="['/properties', propertyId, 'units', unitId, 'edit']"
                   class="text-xs text-primary-600 hover:text-primary-700 font-medium">
                   Editar
@@ -140,7 +140,7 @@ import { AuthService } from '../../../core/auth/auth.service';
           [photos]="unit()!.photos ?? []"
           [unitId]="unitId"
           [ownerId]="unit()!.ownerId"
-          [canWrite]="canWriteInmuebles()"
+          [canWrite]="canWriteMedia()"
         />
       }
 
@@ -150,7 +150,7 @@ import { AuthService } from '../../../core/auth/auth.service';
           [contract]="unit()!.contract"
           [unitId]="unitId"
           [ownerId]="unit()!.ownerId"
-          [canWrite]="canWriteInmuebles()"
+          [canWrite]="canWriteMedia()"
         />
       }
 
@@ -200,13 +200,31 @@ export class UnitDetailComponent implements OnInit {
   unit = signal<Unit | null>(null);
   property = signal<Property | null>(null);
 
-  canWriteInmuebles = computed(() => {
+  canWriteUnidades = computed(() => {
     const uid = this.authService.uid();
     const prop = this.property();
     if (!uid || !prop) return false;
     if (prop.ownerId === uid) return true;
     const perms = prop.collaboratorPermissions?.[uid];
-    return !perms || perms.inmuebles === 'write';
+    return !perms || perms.inmueblesUnidades !== false;
+  });
+
+  canWritePagos = computed(() => {
+    const uid = this.authService.uid();
+    const prop = this.property();
+    if (!uid || !prop) return false;
+    if (prop.ownerId === uid) return true;
+    const perms = prop.collaboratorPermissions?.[uid];
+    return !perms || perms.inmueblesPagos !== false;
+  });
+
+  canWriteMedia = computed(() => {
+    const uid = this.authService.uid();
+    const prop = this.property();
+    if (!uid || !prop) return false;
+    if (prop.ownerId === uid) return true;
+    const perms = prop.collaboratorPermissions?.[uid];
+    return !perms || perms.inmueblesMedia !== false;
   });
 
   payments = toSignal(

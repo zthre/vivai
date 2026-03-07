@@ -19,9 +19,11 @@ interface ColaboradorInfo {
 }
 
 const DEFAULT_PERMISSION: ColaboradorPermission = {
-  inmuebles: 'write',
-  finances: 'write',
-  tickets: 'write',
+  inmueblesUnidades: true,
+  inmueblesPagos: true,
+  inmueblesMedia: true,
+  gastos: true,
+  tickets: true,
 };
 
 @Component({
@@ -205,11 +207,7 @@ export class ColaboradoresComponent implements OnInit {
 
   openPermisos(c: ColaboradorInfo) {
     const ref = this.dialog.open(PermisoColaboradorDialogComponent, {
-      data: {
-        propertyId: this.propertyId,
-        propertyName: this.property?.name ?? '',
-        collaborator: c,
-      },
+      data: { collaborator: c },
       width: '420px',
       maxWidth: '95vw',
     });
