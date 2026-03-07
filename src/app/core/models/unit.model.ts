@@ -32,6 +32,10 @@ export interface Unit {
   publicDescription?: string | null;
   photos?: PhotoItem[];
   contract?: ContractFile | null;
+  /** Day of month when payment is due (1-28) — used for automated reminders */
+  paymentDueDay?: number | null;
+  /** Whether automated payment reminders are enabled for this unit */
+  notificationsEnabled?: boolean;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 }

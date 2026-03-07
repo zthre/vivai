@@ -45,6 +45,9 @@ export interface Property {
   collaboratorUids?: string[];
   pendingCollaboratorEmails?: string[];
   collaboratorPermissions?: { [uid: string]: ColaboradorPermission };
+  /** Purchase price for ROI calculation */
+  purchasePrice?: number | null;
+  purchaseDate?: Timestamp | null;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 }

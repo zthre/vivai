@@ -142,6 +142,32 @@ import { PropertyService } from '../../../core/services/property.service';
           }
         </div>
 
+        <!-- ── Notificaciones ── -->
+        <div class="pt-2 border-t border-warm-200 space-y-4">
+          <div>
+            <p class="text-xs font-semibold text-warm-500 uppercase tracking-wide">Notificaciones automáticas</p>
+            <p class="text-xs text-warm-400 mt-1">Recordatorios de pago enviados por email al inquilino</p>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-warm-700 mb-1.5">Día de vencimiento del pago</label>
+            <input formControlName="paymentDueDay" type="number" min="1" max="28" placeholder="Ej: 5"
+              class="w-full px-3 py-2.5 border border-warm-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+            <p class="text-xs text-warm-400 mt-1">Día del mes en que vence el pago (1-28)</p>
+          </div>
+
+          <label class="flex items-start gap-3 cursor-pointer p-3 border rounded-lg transition-all"
+            [class.border-primary-400]="form.get('notificationsEnabled')?.value"
+            [class.bg-primary-50]="form.get('notificationsEnabled')?.value"
+            [class.border-warm-200]="!form.get('notificationsEnabled')?.value">
+            <input type="checkbox" formControlName="notificationsEnabled" class="w-4 h-4 accent-primary-500 cursor-pointer mt-0.5 flex-shrink-0">
+            <div>
+              <span class="text-sm font-medium text-warm-700">Activar recordatorios de pago</span>
+              <p class="text-xs text-warm-400 mt-0.5">Se envía email al inquilino cuando el pago está por vencer</p>
+            </div>
+          </label>
+        </div>
+
         <!-- Actions -->
         <div class="flex gap-3 pt-2">
           <a [routerLink]="['/properties', propertyId]"
@@ -187,6 +213,9 @@ export class UnitFormComponent implements OnInit {
     isForSale: [false],
     salePrice: [null as number | null],
     publicDescription: [null as string | null],
+    // Notifications (v0.8.0)
+    paymentDueDay: [null as number | null],
+    notificationsEnabled: [true],
   });
 
   isFormValid(): boolean {
@@ -211,6 +240,8 @@ export class UnitFormComponent implements OnInit {
           isOccupied: u.status === 'ocupado',
           isForRent,
           isForSale,
+          paymentDueDay: u.paymentDueDay ?? null,
+          notificationsEnabled: u.notificationsEnabled !== false,
         } as any);
       });
     }
@@ -238,6 +269,8 @@ export class UnitFormComponent implements OnInit {
         salePrice: isForSale ? (v.salePrice || null) : null,
         isListed: isForRent || isForSale,
         publicDescription: (isForRent || isForSale) ? (v.publicDescription || null) : null,
+        paymentDueDay: v.paymentDueDay || null,
+        notificationsEnabled: !!v.notificationsEnabled,
       };
 
       if (this.isEdit() && this.unitId) {

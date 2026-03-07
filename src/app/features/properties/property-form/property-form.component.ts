@@ -5,6 +5,7 @@ import { Router, ActivatedRoute, RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { PropertyService } from '../../../core/services/property.service';
+import { Timestamp } from '@angular/fire/firestore';
 
 type PropertyType = 'apartamento' | 'casa' | 'local' | 'bodega';
 
@@ -195,6 +196,27 @@ type PropertyType = 'apartamento' | 'casa' | 'local' | 'bodega';
           }
         </div>
 
+        <!-- ── Inversión ── -->
+        <div class="pt-2 border-t border-warm-200 space-y-4">
+          <div>
+            <p class="text-xs font-semibold text-warm-500 uppercase tracking-wide">Inversión</p>
+            <p class="text-xs text-warm-400 mt-1">Datos opcionales para calcular el retorno de inversión (ROI)</p>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-warm-700 mb-1.5">Precio de compra</label>
+            <div class="relative">
+              <span class="absolute left-3 top-1/2 -translate-y-1/2 text-warm-400 text-sm">$</span>
+              <input formControlName="purchasePrice" type="number" placeholder="Ej: 350000000"
+                class="w-full pl-7 pr-3 py-2.5 border border-warm-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+            </div>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-warm-700 mb-1.5">Fecha de compra</label>
+            <input formControlName="purchaseDate" type="date"
+              class="w-full px-3 py-2.5 border border-warm-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+          </div>
+        </div>
+
         <!-- Actions -->
         <div class="flex gap-3 pt-2">
           <a routerLink="/properties"
@@ -249,6 +271,9 @@ export class PropertyFormComponent implements OnInit {
     isForSale: [false],
     salePrice: [null as number | null],
     publicDescription: [null as string | null],
+    // Investment (v1.0.0)
+    purchasePrice: [null as number | null],
+    purchaseDate: [null as string | null],
   });
 
   isFormValid(): boolean {
@@ -265,7 +290,10 @@ export class PropertyFormComponent implements OnInit {
       this.isEdit.set(true);
       this.propertyService.getById(this.propertyId).subscribe(p => {
         if (p) {
-          this.form.patchValue({ ...p, isOccupied: p.status === 'ocupado' } as any);
+          const purchaseDateStr = p.purchaseDate
+            ? (p.purchaseDate as Timestamp).toDate().toISOString().split('T')[0]
+            : null;
+          this.form.patchValue({ ...p, isOccupied: p.status === 'ocupado', purchaseDate: purchaseDateStr } as any);
         }
       });
     }
@@ -300,6 +328,10 @@ export class PropertyFormComponent implements OnInit {
         isForSale,
         salePrice: isForSale ? (v.salePrice || null) : null,
         publicDescription: (isForRent || isForSale) ? (v.publicDescription || null) : null,
+        purchasePrice: v.purchasePrice || null,
+        purchaseDate: v.purchaseDate
+          ? Timestamp.fromDate(new Date(v.purchaseDate))
+          : null,
       };
 
       if (this.isEdit() && this.propertyId) {

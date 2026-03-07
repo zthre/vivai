@@ -106,5 +106,33 @@ service cloud.firestore {
       );
       allow delete: if false;
     }
+
+    // Notifications: owner reads their own; written only by Cloud Functions (Admin SDK).
+    match /notifications/{notifId} {
+      allow read: if request.auth != null && request.auth.uid == resource.data.ownerId;
+      allow write: if false; // Cloud Functions (Admin SDK) only
+    }
+
+    // PaymentLinks: owner reads/creates; tenant reads links for their unit.
+    match /paymentLinks/{linkId} {
+      allow read: if request.auth != null && (
+        request.auth.uid == resource.data.ownerId
+        || request.auth.uid == get(/databases/$(database)/documents/units/$(resource.data.unitId)).data.tenantUid
+      );
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.ownerId;
+      allow update: if false; // Cloud Functions (Admin SDK) only
+      allow delete: if false;
+    }
+
+    // MonthlySnapshots: owner reads their own; written only by Cloud Functions.
+    match /monthlySnapshots/{snapshotId} {
+      allow read: if request.auth != null && request.auth.uid == resource.data.ownerId;
+      allow write: if false; // Cloud Functions (Admin SDK) only
+    }
+
+    // Mail: write-only from Cloud Functions (Admin SDK). No client access needed.
+    match /mail/{mailId} {
+      allow read, write: if false;
+    }
   }
 }

@@ -118,7 +118,7 @@ interface NavItem {
         <!-- Version -->
         @if (sidebarOpen()) {
           <div class="px-4 pb-2">
-            <span class="text-xs text-warm-600 font-mono">v0.7.0</span>
+            <span class="text-xs text-warm-600 font-mono">v1.0.0</span>
           </div>
         }
 
@@ -165,6 +165,8 @@ interface NavItem {
           >
             <mat-icon>{{ sidebarOpen() ? 'menu_open' : 'menu' }}</mat-icon>
           </button>
+
+          <div class="flex-1"></div>
         </header>
 
         <!-- Page content -->
@@ -211,6 +213,8 @@ export class ShellComponent {
     { label: 'Dashboard', icon: 'dashboard', route: '/dashboard' },
     { label: 'Inmuebles', icon: 'apartment', route: '/properties' },
     { label: 'Finanzas', icon: 'bar_chart', route: '/finances' },
+    { label: 'Analytics', icon: 'insights', route: '/analytics' },
+    { label: 'Recordatorios', icon: 'chat', route: '/reminders' },
     { label: 'Colaboradores', icon: 'group', route: '/colaboradores' },
     { label: 'Marketplace', icon: 'storefront', route: '/inmuebles' },
     { label: 'Tickets', icon: 'build_circle', route: '/tickets', badge: () => this.pendingTicketsCount() },

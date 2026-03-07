@@ -78,12 +78,40 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'reminders',
+        canActivate: [ownerGuard],
+        loadComponent: () =>
+          import('./features/reminders/reminders.component').then(m => m.RemindersComponent),
+      },
+      {
         path: 'colaboradores',
         canActivate: [rolesGuard(['owner'])],
         loadComponent: () =>
           import('./features/colaboradores/colaboradores-page.component').then(
             m => m.ColaboradoresPageComponent
           ),
+      },
+      {
+        path: 'notifications',
+        canActivate: [ownerGuard],
+        loadComponent: () =>
+          import('./features/notifications/notifications-list.component').then(
+            m => m.NotificationsListComponent
+          ),
+      },
+      {
+        path: 'settings/notifications',
+        canActivate: [rolesGuard(['owner'])],
+        loadComponent: () =>
+          import('./features/notifications/notification-settings.component').then(
+            m => m.NotificationSettingsComponent
+          ),
+      },
+      {
+        path: 'analytics',
+        canActivate: [rolesGuard(['owner'])],
+        loadChildren: () =>
+          import('./features/analytics/analytics.routes').then(m => m.ANALYTICS_ROUTES),
       },
       {
         path: 'finances',

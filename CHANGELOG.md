@@ -4,7 +4,50 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ---
 
-## [v0.8.0] — Permisos Globales de Colaborador
+## [v1.0.0] — Inteligencia de Negocio y Reportes
+
+### Nuevo
+- Dashboard de Analytics (`/analytics`): 4 KPI cards anuales, gráfica de ocupación mensual (barras CSS), gráfica de ingresos vs gastos (SVG líneas), tabla de rentabilidad por inmueble con ROI%, calculadora de retorno de inversión (ROI).
+- Filtros de Analytics: por año y por propiedad; botón "Regenerar" snapshots manualmente.
+- Exportación de reportes (`/analytics/reports`): CSV client-side (sin dependencias) + Excel `.xlsx` via Cloud Function. Filtros por rango de meses y propiedad.
+- `purchasePrice` y `purchaseDate` en modelo `Property`; sección "Inversión" en `PropertyFormComponent` para habilitar cálculo de ROI.
+- `MonthlySnapshot` model + `SnapshotService` que consulta colección `monthlySnapshots`.
+- Shell: enlace "Analytics" en navegación del owner.
+- Cloud Functions: `generateMonthlySnapshot` (cron primer día de cada mes), `generateMonthlySnapshotManual` (callable para regeneración manual), `exportReport` (callable, devuelve URL firmada de Storage).
+- `provideFunctions` añadido a `app.config.ts`.
+
+---
+
+## [v0.9.0] — Automatización de Pagos (Gateway)
+
+### Nuevo
+- `Payment.source?: 'manual' | 'gateway'`, `gatewayTransactionId`, `paymentLinkId` en modelo.
+- `PaymentLink` model para colección `paymentLinks` (status: active/paid/expired, Stripe session ID, URL).
+- `/properties/:id/units/:unitId/payment-link` → `PaymentLinkGeneratorComponent`: owner genera link de Stripe, copia y comparte.
+- `/tenant/pay` → `PaymentStatusComponent`: inquilino ve link activo del mes y paga con tarjeta.
+- `/tenant/pay/success` → `PaymentSuccessComponent`: polling en tiempo real hasta confirmar webhook.
+- Tenant nav: enlace "Pagar arriendo".
+- Cloud Functions: `createPaymentLink` (callable, crea Checkout Session en Stripe), `stripeWebhook` (HTTP, valida firma, escribe payment + envía recibo), `expirePaymentLinks` (cron diario).
+- Requiere: cuenta Stripe, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `APP_URL`.
+
+---
+
+## [v0.8.0] — Notificaciones Automáticas
+
+### Nuevo
+- `Unit.paymentDueDay?: number | null` y `notificationsEnabled?: boolean` — configuración por unidad.
+- `UnitFormComponent`: sección "Notificaciones automáticas" con día de vencimiento y toggle.
+- `AppNotification` model + `NotificationService` (read, getRecent, getUnreadCount, markAllRead).
+- Shell header: campana con badge de no leídas en tiempo real, dropdown con últimas 5 notificaciones, link a historial completo.
+- `/notifications` → `NotificationsListComponent`: historial con filtros por propiedad y mes, marcar todo como leído.
+- `/settings/notifications` → `NotificationSettingsComponent`: toggles por unidad para activar/desactivar recordatorios.
+- Shell nav owner: enlace "Notificaciones".
+- Cloud Functions: `scheduledPaymentReminder` (cron diario 9 AM, detecta vencimientos y mora), `onTicketStatusChange` (trigger Firestore, notifica inquilino al cambiar estado de ticket).
+- Email transaccional via Firebase Extension "Trigger Email" + SMTP (SendGrid/Gmail).
+
+---
+
+## [v0.8.0-collab] — Permisos Globales de Colaborador
 
 ### Nuevo
 - Página `/colaboradores` (`ColaboradoresPageComponent`) para gestión centralizada de colaboradores — solo accesible para owners.
