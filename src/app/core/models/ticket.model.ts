@@ -8,8 +8,6 @@ export interface StatusChange {
 
 export interface Ticket {
   id?: string;
-  unitId: string;
-  unitNumber: string;
   propertyId: string;
   propertyName: string;
   ownerId: string;

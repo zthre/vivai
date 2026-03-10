@@ -87,11 +87,16 @@ import { PaymentFormComponent } from '../../payments/payment-form/payment-form.c
                 </div>
               </div>
 
-              <!-- Unit count + listing badges -->
+              <!-- Status + tenant + listing badges -->
               <div class="mt-4 flex items-center justify-between gap-2">
                 <div class="flex items-center gap-2 text-sm text-warm-500">
-                  <mat-icon class="text-[16px]">meeting_room</mat-icon>
-                  <span>{{ property.unitCount }} unidad(es)</span>
+                  @if (property.status === 'ocupado') {
+                    <mat-icon class="text-[16px]">person</mat-icon>
+                    <span>{{ property.tenantName || 'Ocupado' }}</span>
+                  } @else {
+                    <mat-icon class="text-[16px]">home</mat-icon>
+                    <span>Disponible</span>
+                  }
                 </div>
                 @if (property.isPublic && (property.isForRent || property.isForSale)) {
                   <div class="flex gap-1">
@@ -116,7 +121,7 @@ import { PaymentFormComponent } from '../../payments/payment-form/payment-form.c
                   Ver detalle
                   <mat-icon class="text-[16px]">arrow_forward</mat-icon>
                 </a>
-                @if (property.unitCount === 0 && canWritePagos(property)) {
+                @if (property.status === 'ocupado' && canWritePagos(property)) {
                   <button
                     (click)="openPaymentForm(property)"
                     class="text-sm text-green-600 hover:text-green-700 font-medium flex items-center gap-1"
@@ -126,7 +131,7 @@ import { PaymentFormComponent } from '../../payments/payment-form/payment-form.c
                   </button>
                 }
               </div>
-              @if (canWriteUnidades(property)) {
+              @if (canWrite(property)) {
                 <div class="flex items-center gap-1">
                   <a
                     [routerLink]="['/properties', property.id, 'edit']"
@@ -167,7 +172,7 @@ export class PropertiesListComponent {
     return property.ownerId === this.authService.uid();
   }
 
-  canWriteUnidades(property: Property): boolean {
+  canWrite(property: Property): boolean {
     const uid = this.authService.uid();
     if (!uid) return false;
     if (property.ownerId === uid) return true;
@@ -197,7 +202,6 @@ export class PropertiesListComponent {
     this.dialog.open(PaymentFormComponent, {
       width: '420px',
       data: {
-        unitId: null,
         propertyId: property.id,
         rentPrice: property.tenantRentPrice ?? property.rentPrice ?? null,
         label: property.name,
@@ -206,15 +210,6 @@ export class PropertiesListComponent {
   }
 
   confirmDelete(property: Property) {
-    if ((property.unitCount ?? 0) > 0) {
-      this.snackBar.open(
-        'No puedes eliminar un inmueble con unidades registradas.',
-        'Cerrar',
-        { duration: 4000, panelClass: ['error-snack'] }
-      );
-      return;
-    }
-
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       data: {
         title: 'Eliminar inmueble',

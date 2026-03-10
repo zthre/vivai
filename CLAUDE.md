@@ -44,7 +44,7 @@ Material theme (in `src/styles.scss`) uses orange primary + brown accent.
 - `userRoles: Signal<UserRole[]>` — array, supports multi-role
 - `activeRole: Signal<UserRole | null>` — the currently selected role, persisted to `localStorage('vivai_active_role')`
 - `setActiveRole(role)` — switches active role
-- `userRole` / `tenantUnitId` — backwards-compat aliases
+- `userRole` / `tenantPropertyId` — backwards-compat aliases
 
 Roles: `'owner' | 'tenant' | 'colaborador'`. Old documents may have singular `role` field — auth service migrates on login.
 
@@ -60,14 +60,13 @@ All docs owned by a user have `ownerId = uid`. Key collections:
 
 | Collection | Key fields |
 |---|---|
-| `users` | `roles[]`, `unitIds[]`, `collaboratingPropertyIds[]` |
-| `properties` | `ownerId`, `collaboratorUids[]`, `pendingCollaboratorEmails[]`, `collaboratorPermissions: {uid: ColaboradorPermission}`, `purchasePrice?`, `purchaseDate?` |
-| `units` | `ownerId`, `propertyId`, `status: 'ocupado'\|'disponible'`, `isForRent`, `isForSale`, `isListed`, `tenantUid?`, `paymentDueDay?`, `notificationsEnabled?` |
-| `payments` | `ownerId`, `unitId`, `propertyId`, `date: Timestamp`, `source?: 'manual'\|'gateway'` |
+| `users` | `roles[]`, `propertyIds[]`, `collaboratingPropertyIds[]` |
+| `properties` | `ownerId`, `collaboratorUids[]`, `pendingCollaboratorEmails[]`, `collaboratorPermissions: {uid: ColaboradorPermission}`, `status: 'ocupado'\|'disponible'`, `isForRent`, `isForSale`, `isListed`, `tenantUid?`, `paymentDueDay?`, `notificationsEnabled?`, `purchasePrice?`, `purchaseDate?` |
+| `payments` | `ownerId`, `propertyId`, `date: Timestamp`, `source?: 'manual'\|'gateway'` |
 | `expenses` | `ownerId`, `propertyId`, `date: Timestamp`, `category: 'reparacion'\|'impuesto'\|'servicio'\|'otro'` |
-| `tickets` | `ownerId`, `tenantUid`, `propertyId`, `unitId`, `status` |
+| `tickets` | `ownerId`, `tenantUid`, `propertyId`, `status` |
 | `notifications` | `ownerId`, `type: 'payment_reminder'\|'payment_overdue'\|'ticket_update'`, `viewedByOwner` |
-| `paymentLinks` | `unitId`, `month: 'YYYY-MM'`, `status: 'active'\|'paid'\|'expired'`, `externalId` (Stripe session) |
+| `paymentLinks` | `propertyId`, `month: 'YYYY-MM'`, `status: 'active'\|'paid'\|'expired'`, `externalId` (Stripe session) |
 | `monthlySnapshots` | `ownerId`, `propertyId`, `month: 'YYYY-MM'`, aggregated financials |
 | `mail` | Written by Cloud Functions; consumed by Firebase "Trigger Email" extension |
 
@@ -77,7 +76,7 @@ Firestore rules are in `firestore.rules` — **must be manually pasted in Fireba
 
 `ColaboradorPermission` (on `property.collaboratorPermissions[uid]`):
 ```typescript
-{ inmueblesUnidades?, inmueblesPagos?, inmueblesMedia?, gastos?, tickets? }
+{ inmueblesPagos?, inmueblesMedia?, gastos?, tickets? }
 ```
 `undefined` field = `true` (backwards compat). Check pattern: `!perms || perms.field !== false`.
 
@@ -102,15 +101,14 @@ filteredData = computed(() => pid ? data().filter(d => d.propertyId === pid) : d
 src/app/
   core/
     auth/           auth.service.ts, auth.guard.ts, owner.guard.ts, tenant.guard.ts, roles.guard.ts
-    models/         property, unit, payment, expense, ticket, user-profile,
+    models/         property, payment, expense, ticket, user-profile,
                     notification, payment-link, monthly-snapshot
-    services/       property, unit, payment, expense, ticket, storage,
+    services/       property, payment, expense, ticket, storage,
                     marketplace, notification, snapshot
   features/
     auth/login/
     dashboard/
     properties/     properties-list, property-detail, property-form
-    units/          unit-detail, unit-form
     payments/       payment-form, payment-link-generator
     finances/       finances-dashboard (+ sub-components: month-selector, kpi-card, payment-list, expense-list, expense-form)
     analytics/      analytics-dashboard, reports
@@ -151,8 +149,8 @@ Required env vars for functions: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `
 
 - **`effect()` with signal writes** requires `{ allowSignalWrites: true }` option.
 - **Template literals** in inline TypeScript templates: use `&#36;{{ }}` instead of `${{ }}` to avoid interpolation conflicts.
-- **Marketplace Firestore query** uses `where('isListed', '==', true)` — old units need re-save to appear.
+- **Marketplace Firestore query** uses `where('isListed', '==', true)` — old properties need re-save to appear.
 - **`PropertyService.getAll()`** does `combineLatest` of owned + collaborated properties, deduplicating by id.
 - **`rolesGuard`** reads Firestore directly (not just the AuthService signal) to avoid race conditions on first load.
 - **Compound Firestore queries** with `ownerId + array-contains` require a composite index — avoid them in global collaborator methods; use single-field `ownerId` filter instead.
-- **`canWrite` input pattern** on child components (`photo-gallery`, `unit-photo-gallery`, `contract-section`, `expense-list`): `canWrite = input<boolean>(true)` to propagate permission down.
+- **`canWrite` input pattern** on child components (`photo-gallery`, `contract-section`, `expense-list`): `canWrite = input<boolean>(true)` to propagate permission down.

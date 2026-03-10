@@ -3,7 +3,6 @@ import { CommonModule } from '@angular/common';
 import { RouterLink, ActivatedRoute } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MarketplaceService } from '../../../core/services/marketplace.service';
-import { Unit } from '../../../core/models/unit.model';
 import { Property } from '../../../core/models/property.model';
 
 @Component({
@@ -34,7 +33,7 @@ import { Property } from '../../../core/models/property.model';
           Volver al listado
         </a>
 
-        @if (!unit() || !property()) {
+        @if (!property()) {
           <div class="space-y-4">
             <div class="h-72 bg-white rounded-xl border border-warm-200 animate-pulse"></div>
             <div class="h-40 bg-white rounded-xl border border-warm-200 animate-pulse"></div>
@@ -57,10 +56,10 @@ import { Property } from '../../../core/models/property.model';
           <!-- Info card -->
           <div class="bg-white rounded-xl border border-warm-200 shadow-sm p-6 space-y-4">
             <div class="flex items-center gap-2 flex-wrap">
-              @if (unit()!.isForRent) {
+              @if (property()!.isForRent) {
                 <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-700">En renta</span>
               }
-              @if (unit()!.isForSale) {
+              @if (property()!.isForSale) {
                 <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-green-100 text-green-700">En venta</span>
               }
               <span class="text-xs text-warm-400 capitalize">{{ property()!.type }}</span>
@@ -72,35 +71,34 @@ import { Property } from '../../../core/models/property.model';
                 <mat-icon class="text-[16px]">location_on</mat-icon>
                 {{ property()!.address }}
               </p>
-              <p class="text-sm text-warm-400 mt-0.5">Unidad {{ unit()!.number }}</p>
             </div>
 
             <!-- Price -->
             <div class="pt-2 border-t border-warm-100 space-y-3">
-              @if (unit()!.isForRent && unit()!.rentPrice) {
+              @if (property()!.isForRent && property()!.rentPrice) {
                 <div>
                   <p class="text-xs text-warm-400 mb-0.5">Precio de renta</p>
                   <p class="text-3xl font-bold text-primary-600">
-                    {{ unit()!.rentPrice! | currency:'COP':'symbol-narrow':'1.0-0' }}
+                    {{ property()!.rentPrice! | currency:'COP':'symbol-narrow':'1.0-0' }}
                     <span class="text-base font-normal text-warm-400">/mes</span>
                   </p>
                 </div>
               }
-              @if (unit()!.isForSale && unit()!.salePrice) {
+              @if (property()!.isForSale && property()!.salePrice) {
                 <div>
                   <p class="text-xs text-warm-400 mb-0.5">Precio de venta</p>
                   <p class="text-3xl font-bold text-green-600">
-                    {{ unit()!.salePrice! | currency:'COP':'symbol-narrow':'1.0-0' }}
+                    {{ property()!.salePrice! | currency:'COP':'symbol-narrow':'1.0-0' }}
                   </p>
                 </div>
               }
             </div>
 
-            @if (unit()!.publicDescription) {
+            @if (property()!.publicDescription) {
               <div class="pt-2 border-t border-warm-100">
                 <h2 class="text-sm font-semibold text-warm-700 mb-2">Descripción</h2>
                 <p class="text-sm text-warm-600 leading-relaxed whitespace-pre-line">
-                  {{ unit()!.publicDescription }}
+                  {{ property()!.publicDescription }}
                 </p>
               </div>
             }
@@ -124,28 +122,25 @@ export class ListingDetailComponent implements OnInit {
   private marketplaceService = inject(MarketplaceService);
   private route = inject(ActivatedRoute);
 
-  unit = signal<Unit | null>(null);
   property = signal<Property | null>(null);
 
   ngOnInit() {
-    const unitId = this.route.snapshot.paramMap.get('unitId')!;
-    this.marketplaceService.getUnitById(unitId).subscribe(u => {
-      if (u) {
-        this.unit.set(u);
-        this.marketplaceService.getPropertyById(u.propertyId).subscribe(p => this.property.set(p));
+    const propertyId = this.route.snapshot.paramMap.get('propertyId')!;
+    this.marketplaceService.getPropertyById(propertyId).subscribe(p => {
+      if (p) {
+        this.property.set(p);
       }
     });
   }
 
   photos(): { url: string; storagePath: string; filename: string }[] {
-    if (this.unit()?.photos?.length) return this.unit()!.photos!;
     return this.property()?.photos ?? [];
   }
 
   whatsappLink(): string {
     const phone = this.property()?.whatsappPhone ?? '';
     const text = encodeURIComponent(
-      `Hola, me interesa la unidad ${this.unit()?.number} en ${this.property()?.name} ( ${this.property()?.address} )`
+      `Hola, me interesa ${this.property()?.name} ( ${this.property()?.address} )`
     );
     return `https://wa.me/${phone}?text=${text}`;
   }

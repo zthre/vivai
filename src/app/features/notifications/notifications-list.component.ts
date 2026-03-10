@@ -94,7 +94,6 @@ import { AppNotification, NotificationType } from '../../core/models/notificatio
                 <p class="text-sm font-medium text-warm-900">{{ typeLabel(n.type) }}</p>
                 <p class="text-xs text-warm-500 mt-0.5">
                   {{ n.metadata?.propertyName ?? n.propertyId }}
-                  @if (n.metadata?.unitNumber) { — Unidad {{ n.metadata?.unitNumber }} }
                   @if (n.metadata?.amount) {
                     · {{ n.metadata?.amount | currency:'COP':'symbol-narrow':'1.0-0' }}
                   }

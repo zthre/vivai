@@ -19,7 +19,7 @@ import {
   arrayRemove,
 } from '@angular/fire/firestore';
 import { Observable, combineLatest, map } from 'rxjs';
-import { Property, PhotoItem, ColaboradorPermission } from '../models/property.model';
+import { Property, PhotoItem, ColaboradorPermission, ContractFile } from '../models/property.model';
 import { AuthService } from '../auth/auth.service';
 
 @Injectable({ providedIn: 'root' })
@@ -52,6 +52,13 @@ export class PropertyService {
     );
   }
 
+  getAllOccupied(): Observable<Property[]> {
+    const uid = this.auth.uid()!;
+    const ref = collection(this.firestore, 'properties');
+    const q = query(ref, where('ownerId', '==', uid), where('status', '==', 'ocupado'));
+    return collectionData(q, { idField: 'id' }) as Observable<Property[]>;
+  }
+
   getById(id: string): Observable<Property> {
     const ref = doc(this.firestore, `properties/${id}`);
     return docData(ref, { idField: 'id' }) as Observable<Property>;
@@ -63,7 +70,6 @@ export class PropertyService {
     const docRef = await addDoc(ref, {
       ...data,
       ownerId: uid,
-      unitCount: 0,
       collaboratorUids: [],
       pendingCollaboratorEmails: [],
       createdAt: serverTimestamp(),
@@ -94,11 +100,9 @@ export class PropertyService {
     await updateDoc(ref, { photos: remainingPhotos });
   }
 
-  async incrementUnitCount(id: string, delta: number): Promise<void> {
-    const ref = doc(this.firestore, `properties/${id}`);
-    const prop = await getDoc(ref);
-    const current = (prop.data() as Property)?.unitCount ?? 0;
-    await updateDoc(ref, { unitCount: current + delta, updatedAt: serverTimestamp() });
+  async setContract(propertyId: string, contract: ContractFile | null): Promise<void> {
+    const ref = doc(this.firestore, `properties/${propertyId}`);
+    await updateDoc(ref, { contract: contract ?? null, updatedAt: serverTimestamp() });
   }
 
   /**

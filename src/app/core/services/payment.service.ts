@@ -11,7 +11,6 @@ import {
   limit,
 } from '@angular/fire/firestore';
 import { Observable } from 'rxjs';
-import { map } from 'rxjs/operators';
 import { Payment } from '../models/payment.model';
 import { AuthService } from '../auth/auth.service';
 import { Timestamp } from '@angular/fire/firestore';
@@ -34,12 +33,6 @@ export class PaymentService {
     return collectionData(q, { idField: 'id' }) as Observable<Payment[]>;
   }
 
-  getByUnit(unitId: string): Observable<Payment[]> {
-    const ref = collection(this.firestore, 'payments');
-    const q = query(ref, where('unitId', '==', unitId), orderBy('date', 'desc'));
-    return collectionData(q, { idField: 'id' }) as Observable<Payment[]>;
-  }
-
   getRecent(limitCount = 5): Observable<Payment[]> {
     const uid = this.auth.uid()!;
     const ref = collection(this.firestore, 'payments');
@@ -54,23 +47,15 @@ export class PaymentService {
 
   getByProperty(propertyId: string): Observable<Payment[]> {
     const ref = collection(this.firestore, 'payments');
-    // No orderBy here — composite index (propertyId + unitId + date) may not exist.
-    // Sort client-side to avoid silent query failure.
     const q = query(
       ref,
       where('propertyId', '==', propertyId),
-      where('unitId', '==', null)
+      orderBy('date', 'desc')
     );
-    return (collectionData(q, { idField: 'id' }) as Observable<Payment[]>).pipe(
-      map(payments => payments.sort((a, b) => {
-        const aMs = (a.date as any)?.toMillis?.() ?? 0;
-        const bMs = (b.date as any)?.toMillis?.() ?? 0;
-        return bMs - aMs;
-      }))
-    );
+    return collectionData(q, { idField: 'id' }) as Observable<Payment[]>;
   }
 
-  async create(data: { unitId: string | null; propertyId: string; amount: number; date: Date; notes: string | null }): Promise<void> {
+  async create(data: { propertyId: string; amount: number; date: Date; notes: string | null }): Promise<void> {
     const uid = this.auth.uid()!;
     const ref = collection(this.firestore, 'payments');
     await addDoc(ref, {

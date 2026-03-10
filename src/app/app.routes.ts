@@ -58,23 +58,11 @@ export const routes: Routes = [
           ),
       },
       {
-        path: 'properties/:propertyId/units/new',
+        path: 'properties/:id/payment-link',
         canActivate: [ownerGuard],
         loadComponent: () =>
-          import('./features/units/unit-form/unit-form.component').then(m => m.UnitFormComponent),
-      },
-      {
-        path: 'properties/:propertyId/units/:unitId/edit',
-        canActivate: [ownerGuard],
-        loadComponent: () =>
-          import('./features/units/unit-form/unit-form.component').then(m => m.UnitFormComponent),
-      },
-      {
-        path: 'properties/:propertyId/units/:unitId',
-        canActivate: [ownerGuard],
-        loadComponent: () =>
-          import('./features/units/unit-detail/unit-detail.component').then(
-            m => m.UnitDetailComponent
+          import('./features/payments/payment-link-generator.component').then(
+            m => m.PaymentLinkGeneratorComponent
           ),
       },
       {

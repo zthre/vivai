@@ -1,6 +1,6 @@
 /**
  * v0.9.0 — Create Payment Link
- * Callable function: creates a Stripe Checkout Session for a unit's rent payment.
+ * Callable function: creates a Stripe Checkout Session for a property's rent payment.
  * Returns { url, linkId }.
  *
  * Required env vars (set via Firebase Functions config or .env.local):
@@ -19,8 +19,8 @@ const db = admin.firestore();
 export const createPaymentLink = onCall(async request => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required');
 
-  const { unitId, month } = request.data as { unitId: string; month: string };
-  if (!unitId || !month) throw new HttpsError('invalid-argument', 'unitId and month are required');
+  const { propertyId, month } = request.data as { propertyId: string; month: string };
+  if (!propertyId || !month) throw new HttpsError('invalid-argument', 'propertyId and month are required');
 
   const stripeKey = process.env['STRIPE_SECRET_KEY'];
   const appUrl = process.env['APP_URL'] ?? 'http://localhost:4200';
@@ -29,22 +29,20 @@ export const createPaymentLink = onCall(async request => {
   // Check for existing active link
   const existingSnap = await db
     .collection('paymentLinks')
-    .where('unitId', '==', unitId)
+    .where('propertyId', '==', propertyId)
     .where('month', '==', month)
     .where('status', '==', 'active')
     .limit(1)
     .get();
   if (!existingSnap.empty) throw new HttpsError('already-exists', 'An active payment link already exists for this month');
 
-  const unitSnap = await db.collection('units').doc(unitId).get();
-  if (!unitSnap.exists) throw new HttpsError('not-found', 'Unit not found');
-  const unit = unitSnap.data()!;
+  const propSnap = await db.collection('properties').doc(propertyId).get();
+  if (!propSnap.exists) throw new HttpsError('not-found', 'Property not found');
+  const property = propSnap.data()!;
 
-  const propSnap = await db.collection('properties').doc(unit['propertyId']).get();
-  const propertyName = propSnap.data()?.['name'] ?? 'Propiedad';
-
-  const amount: number = unit['tenantRentPrice'] ?? 0;
-  if (!amount) throw new HttpsError('invalid-argument', 'Unit has no rent price configured');
+  const propertyName = property['name'] ?? 'Propiedad';
+  const amount: number = property['tenantRentPrice'] ?? 0;
+  if (!amount) throw new HttpsError('invalid-argument', 'Property has no rent price configured');
 
   const stripe = new Stripe(stripeKey, { apiVersion: '2023-10-16' });
 
@@ -53,7 +51,7 @@ export const createPaymentLink = onCall(async request => {
     line_items: [{
       price_data: {
         currency: 'cop',
-        product_data: { name: `Arriendo ${propertyName} — Unidad ${unit['number']} — ${month}` },
+        product_data: { name: `Arriendo ${propertyName} — ${month}` },
         unit_amount: amount * 100, // Stripe uses cents
       },
       quantity: 1,
@@ -61,18 +59,16 @@ export const createPaymentLink = onCall(async request => {
     mode: 'payment',
     success_url: `${appUrl}/tenant/pay/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${appUrl}/tenant/pay`,
-    customer_email: unit['tenantEmail'] ?? undefined,
+    customer_email: property['tenantEmail'] ?? undefined,
   });
 
   const expiresAt = Timestamp.fromDate(new Date(Date.now() + 3 * 24 * 60 * 60 * 1000));
 
   const linkRef = await db.collection('paymentLinks').add({
-    unitId,
-    unitNumber: unit['number'],
-    propertyId: unit['propertyId'],
+    propertyId,
     propertyName,
-    ownerId: unit['ownerId'],
-    tenantEmail: unit['tenantEmail'] ?? null,
+    ownerId: property['ownerId'],
+    tenantEmail: property['tenantEmail'] ?? null,
     amount,
     month,
     status: 'active',

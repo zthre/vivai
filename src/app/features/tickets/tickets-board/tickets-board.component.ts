@@ -113,7 +113,7 @@ const STATUS_COLORS: Record<string, string> = {
               <div class="min-w-0 flex-1">
                 <p class="font-medium text-warm-900 truncate">{{ ticket.title }}</p>
                 <p class="text-xs text-warm-500 mt-0.5">
-                  {{ ticket.propertyName }} · Unidad {{ ticket.unitNumber }}
+                  {{ ticket.propertyName }}
                 </p>
                 <p class="text-xs text-warm-400 mt-0.5">{{ formatDate(ticket.createdAt) }}</p>
               </div>

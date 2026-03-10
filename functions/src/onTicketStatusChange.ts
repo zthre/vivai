@@ -25,14 +25,15 @@ export const onTicketStatusChange = onDocumentUpdated('tickets/{ticketId}', asyn
   if (!before || !after) return;
   if (before['status'] === after['status']) return; // No status change
 
-  const unitId: string = after['unitId'];
-  if (!unitId) return;
+  const propertyId: string = after['propertyId'];
+  if (!propertyId) return;
 
-  const unitSnap = await db.collection('units').doc(unitId).get();
-  const tenantEmail: string | undefined = unitSnap.data()?.['tenantEmail'];
+  const propSnap = await db.collection('properties').doc(propertyId).get();
+  const property = propSnap.data();
+  const tenantEmail: string | undefined = property?.['tenantEmail'];
   if (!tenantEmail) return;
 
-  const propertyName = after['propertyName'] ?? 'tu inmueble';
+  const propertyName = property?.['name'] ?? 'tu inmueble';
   const ticketTitle = after['title'] ?? 'Tu solicitud';
   const newStatusLabel = STATUS_LABELS[after['status']] ?? after['status'];
 
@@ -55,8 +56,7 @@ export const onTicketStatusChange = onDocumentUpdated('tickets/{ticketId}', asyn
 
   // Notification log
   batch.set(db.collection('notifications').doc(), {
-    unitId,
-    propertyId: after['propertyId'] ?? '',
+    propertyId,
     tenantEmail,
     ownerId: after['ownerId'] ?? '',
     type: 'ticket_update',
@@ -68,7 +68,6 @@ export const onTicketStatusChange = onDocumentUpdated('tickets/{ticketId}', asyn
       ticketTitle,
       ticketStatus: after['status'],
       propertyName,
-      unitNumber: unitSnap.data()?.['number'] ?? null,
     },
   });
 

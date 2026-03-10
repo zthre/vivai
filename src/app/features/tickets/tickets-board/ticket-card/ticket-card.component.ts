@@ -51,7 +51,7 @@ const CATEGORY_COLORS: Record<string, string> = {
       <div class="space-y-0.5">
         <p class="text-xs text-warm-500 flex items-center gap-1">
           <mat-icon class="text-[14px]">apartment</mat-icon>
-          {{ ticket.propertyName }} · Unidad {{ ticket.unitNumber }}
+          {{ ticket.propertyName }}
         </p>
         @if (ticket.tenantName) {
           <p class="text-xs text-warm-400 flex items-center gap-1">

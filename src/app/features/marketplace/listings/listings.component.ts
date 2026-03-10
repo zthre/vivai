@@ -3,13 +3,8 @@ import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { MarketplaceService, ListingItem, listingPrice, listingStatus } from '../../../core/services/marketplace.service';
-
-function listingId(item: ListingItem): string {
-  return item.kind === 'unit'
-    ? `u-${item.unit.id}`
-    : `p-${item.property.id}`;
-}
+import { MarketplaceService, listingPrice } from '../../../core/services/marketplace.service';
+import { Property } from '../../../core/models/property.model';
 import { ListingCardComponent } from './listing-card/listing-card.component';
 
 type FilterType = 'todos' | 'renta' | 'venta';
@@ -90,13 +85,13 @@ const PAGE_SIZE = 12;
           <!-- Empty state -->
           <div class="flex flex-col items-center justify-center py-24 text-center">
             <mat-icon class="text-warm-300 text-[56px]">search_off</mat-icon>
-            <p class="text-warm-500 mt-3 text-base">No hay unidades disponibles en este momento.</p>
+            <p class="text-warm-500 mt-3 text-base">No hay inmuebles disponibles en este momento.</p>
             <p class="text-warm-400 text-sm mt-1">Vuelve pronto para nuevas opciones.</p>
           </div>
         } @else {
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            @for (item of pagedListings(); track listingId(item)) {
-              <app-listing-card [item]="item" [filterMode]="filterType()" />
+            @for (property of pagedListings(); track property.id) {
+              <app-listing-card [property]="property" [filterMode]="filterType()" />
             }
           </div>
 
@@ -141,19 +136,16 @@ export class ListingsComponent {
     { value: 'venta' as FilterType, label: 'En venta' },
   ];
 
-  filteredAndSorted = computed<ListingItem[]>(() => {
+  filteredAndSorted = computed<Property[]>(() => {
     const items = this.allListings() ?? [];
     const filter = this.filterType();
-
-    const isForRent = (i: ListingItem) => i.kind === 'unit' ? i.unit.isForRent : !!i.property.isForRent;
-    const isForSale = (i: ListingItem) => i.kind === 'unit' ? i.unit.isForSale : !!i.property.isForSale;
 
     const filtered =
       filter === 'todos'
         ? items
         : filter === 'renta'
-          ? items.filter(i => isForRent(i))
-          : items.filter(i => isForSale(i));
+          ? items.filter(p => p.isForRent)
+          : items.filter(p => p.isForSale);
 
     return [...filtered].sort((a, b) =>
       this.sortOrder() === 'asc'
@@ -164,7 +156,7 @@ export class ListingsComponent {
 
   totalPages = computed(() => Math.ceil(this.filteredAndSorted().length / PAGE_SIZE));
 
-  pagedListings = computed<ListingItem[]>(() => {
+  pagedListings = computed<Property[]>(() => {
     const page = this.currentPage();
     const start = (page - 1) * PAGE_SIZE;
     return this.filteredAndSorted().slice(start, start + PAGE_SIZE);
@@ -187,6 +179,4 @@ export class ListingsComponent {
   nextPage() {
     if (this.currentPage() < this.totalPages()) this.currentPage.update(p => p + 1);
   }
-
-  listingId(item: ListingItem): string { return listingId(item); }
 }

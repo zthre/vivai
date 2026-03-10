@@ -4,7 +4,6 @@ export type NotificationType = 'payment_reminder' | 'payment_overdue' | 'ticket_
 
 export interface AppNotification {
   id?: string;
-  unitId: string;
   propertyId: string;
   tenantEmail: string;
   ownerId: string;
@@ -18,7 +17,6 @@ export interface AppNotification {
     daysUntilDue?: number;
     ticketTitle?: string;
     ticketStatus?: string;
-    unitNumber?: string;
     propertyName?: string;
   };
 }

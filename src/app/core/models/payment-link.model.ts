@@ -2,8 +2,6 @@ import { Timestamp } from '@angular/fire/firestore';
 
 export interface PaymentLink {
   id?: string;
-  unitId: string;
-  unitNumber: string;
   propertyId: string;
   propertyName: string;
   ownerId: string;

@@ -8,7 +8,6 @@ import { toSignal, toObservable } from '@angular/core/rxjs-interop';
 import { switchMap, map, of } from 'rxjs';
 import { AuthService } from '../../../core/auth/auth.service';
 import { PaymentService } from '../../../core/services/payment.service';
-import { Unit } from '../../../core/models/unit.model';
 import { Property } from '../../../core/models/property.model';
 
 function startOfMonth(d: Date): Date {
@@ -42,7 +41,7 @@ function endOfMonth(d: Date): Date {
           <h1 class="text-2xl font-bold text-warm-900">Tu arriendo</h1>
         </div>
 
-        <!-- Property + unit card -->
+        <!-- Property card -->
         @if (property(); as prop) {
           <div class="bg-white rounded-xl border border-warm-200 p-5 space-y-2">
             <p class="font-semibold text-warm-900 text-lg">{{ prop.name }}</p>
@@ -50,11 +49,6 @@ function endOfMonth(d: Date): Date {
               <mat-icon class="text-[16px]">location_on</mat-icon>
               {{ prop.address }}
             </p>
-            @if (unit(); as u) {
-              <span class="inline-block text-xs px-2 py-0.5 bg-warm-100 text-warm-600 rounded-full">
-                Unidad {{ u.number }}
-              </span>
-            }
           </div>
         }
 
@@ -108,9 +102,9 @@ function endOfMonth(d: Date): Date {
         <!-- Contract -->
         <div class="bg-white rounded-xl border border-warm-200 p-5">
           <p class="text-sm font-medium text-warm-600 mb-3">Contrato de arriendo</p>
-          @if (unit()?.contract?.url) {
+          @if (property()?.contract?.url) {
             <a
-              [href]="unit()!.contract!.url"
+              [href]="property()!.contract!.url"
               target="_blank"
               rel="noopener"
               class="inline-flex items-center gap-2 px-4 py-2 bg-primary-50 text-primary-700 rounded-lg text-sm font-medium hover:bg-primary-100 transition-colors"
@@ -155,19 +149,18 @@ export class MyLeaseComponent implements OnInit {
   private firestore = inject(Firestore);
   private paymentService = inject(PaymentService);
 
-  unit = signal<Unit | null>(null);
   property = signal<Property | null>(null);
   loading = signal(true);
   error = signal<string | null>(null);
 
-  private unitIdSig = signal<string | null>(null);
+  private propertyIdSig = signal<string | null>(null);
 
   currentMonthStart = startOfMonth(new Date());
   currentMonthEnd = endOfMonth(new Date());
 
   currentMonthPayments = toSignal(
-    toObservable(this.unitIdSig).pipe(
-      switchMap(id => (id ? this.paymentService.getByUnit(id) : of([]))),
+    toObservable(this.propertyIdSig).pipe(
+      switchMap(id => (id ? this.paymentService.getByProperty(id) : of([]))),
       map(payments =>
         payments.filter(p => {
           const d = (p.date as Timestamp).toDate();
@@ -179,7 +172,7 @@ export class MyLeaseComponent implements OnInit {
   );
 
   totalPaid = computed(() => this.currentMonthPayments().reduce((sum, p) => sum + p.amount, 0));
-  rentPrice = computed(() => this.unit()?.tenantRentPrice ?? 0);
+  rentPrice = computed(() => this.property()?.tenantRentPrice ?? 0);
 
   paymentStatus = computed((): 'al_dia' | 'parcial' | 'pendiente' | 'sin_precio' => {
     const total = this.totalPaid();
@@ -206,26 +199,22 @@ export class MyLeaseComponent implements OnInit {
       }
 
       const userSnap = await getDoc(doc(this.firestore, `users/${firebaseUser.uid}`));
-      const unitId = userSnap.data()?.['unitId'] as string | undefined;
-      if (!unitId) {
-        this.error.set('No tienes una unidad asignada. Contacta a tu arrendador.');
+      const userData = userSnap.data();
+      const propertyIds = (userData?.['propertyIds'] ?? userData?.['unitIds']) as string[] | undefined;
+      const propertyId = propertyIds?.[0];
+      if (!propertyId) {
+        this.error.set('No tienes un inmueble asignado. Contacta a tu arrendador.');
         return;
       }
 
-      const unitSnap = await getDoc(doc(this.firestore, `units/${unitId}`));
-      if (!unitSnap.exists()) {
-        this.error.set('No se encontró tu unidad.');
+      const propSnap = await getDoc(doc(this.firestore, `properties/${propertyId}`));
+      if (!propSnap.exists()) {
+        this.error.set('No se encontró tu inmueble.');
         return;
       }
 
-      const unit = { id: unitSnap.id, ...unitSnap.data() } as Unit;
-      this.unit.set(unit);
-      this.unitIdSig.set(unitId);
-
-      const propSnap = await getDoc(doc(this.firestore, `properties/${unit.propertyId}`));
-      if (propSnap.exists()) {
-        this.property.set({ id: propSnap.id, ...propSnap.data() } as Property);
-      }
+      this.property.set({ id: propSnap.id, ...propSnap.data() } as Property);
+      this.propertyIdSig.set(propertyId);
     } catch {
       this.error.set('Error al cargar tu información.');
     } finally {

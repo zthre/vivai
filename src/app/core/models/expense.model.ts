@@ -7,8 +7,6 @@ export interface Expense {
   ownerId: string;
   propertyId: string;
   propertyName: string;
-  unitId: string | null;
-  unitNumber: string | null;
   category: ExpenseCategory;
   description: string;
   amount: number;
@@ -21,8 +19,6 @@ export interface Expense {
 export interface ExpenseCreate {
   propertyId: string;
   propertyName: string;
-  unitId: string | null;
-  unitNumber: string | null;
   category: ExpenseCategory;
   description: string;
   amount: number;

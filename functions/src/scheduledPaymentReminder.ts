@@ -1,7 +1,7 @@
 /**
  * v0.8.0 — Scheduled Payment Reminder
  * Runs daily at 9:00 AM UTC-5 (America/Bogota).
- * Checks occupied units with notificationsEnabled=true and paymentDueDay set.
+ * Checks occupied properties with notificationsEnabled=true and paymentDueDay set.
  * If the due date falls within the next 5 days and no payment exists for this month,
  * sends a reminder email via the 'mail' collection (Firebase Trigger Email extension).
  * If the due date has already passed and no payment exists, sends an overdue alert.
@@ -25,17 +25,17 @@ export const scheduledPaymentReminder = onSchedule(
     const today = new Date();
     const month = currentMonthKey();
 
-    // Get all occupied units with notifications enabled
-    const unitsSnap = await db
-      .collection('units')
+    // Get all occupied properties with notifications enabled
+    const propsSnap = await db
+      .collection('properties')
       .where('status', '==', 'ocupado')
       .where('notificationsEnabled', '==', true)
       .get();
 
-    for (const unitDoc of unitsSnap.docs) {
-      const unit = unitDoc.data();
-      const paymentDueDay: number | undefined = unit['paymentDueDay'];
-      const tenantEmail: string | undefined = unit['tenantEmail'];
+    for (const propDoc of propsSnap.docs) {
+      const property = propDoc.data();
+      const paymentDueDay: number | undefined = property['paymentDueDay'];
+      const tenantEmail: string | undefined = property['tenantEmail'];
 
       if (!paymentDueDay || !tenantEmail) continue;
 
@@ -44,7 +44,7 @@ export const scheduledPaymentReminder = onSchedule(
       const monthEnd = Timestamp.fromDate(new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59));
       const paymentsSnap = await db
         .collection('payments')
-        .where('unitId', '==', unitDoc.id)
+        .where('propertyId', '==', propDoc.id)
         .where('date', '>=', monthStart)
         .where('date', '<=', monthEnd)
         .limit(1)
@@ -57,8 +57,7 @@ export const scheduledPaymentReminder = onSchedule(
       const diffMs = dueDate.getTime() - today.getTime();
       const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 
-      const propertySnap = await db.collection('properties').doc(unit['propertyId']).get();
-      const propertyName = propertySnap.data()?.['name'] ?? 'tu inmueble';
+      const propertyName = property['name'] ?? 'tu inmueble';
 
       let notificationType: 'payment_reminder' | 'payment_overdue';
       let subject: string;
@@ -71,7 +70,7 @@ export const scheduledPaymentReminder = onSchedule(
         html = `
           <p>Hola,</p>
           <p>Tu pago de arriendo de <strong>${propertyName}</strong> para el mes de <strong>${month}</strong> está vencido.</p>
-          <p><strong>Monto:</strong> $${unit['tenantRentPrice']?.toLocaleString('es-CO') ?? '—'}</p>
+          <p><strong>Monto:</strong> $${property['tenantRentPrice']?.toLocaleString('es-CO') ?? '—'}</p>
           <p>Por favor contacta a tu administrador para regularizar el pago.</p>
         `;
       } else if (diffDays <= 5) {
@@ -81,7 +80,7 @@ export const scheduledPaymentReminder = onSchedule(
         html = `
           <p>Hola,</p>
           <p>Tu pago de arriendo de <strong>${propertyName}</strong> vence el <strong>día ${paymentDueDay}</strong> de este mes.</p>
-          <p><strong>Monto:</strong> $${unit['tenantRentPrice']?.toLocaleString('es-CO') ?? '—'}</p>
+          <p><strong>Monto:</strong> $${property['tenantRentPrice']?.toLocaleString('es-CO') ?? '—'}</p>
           <p>Este es un recordatorio automático.</p>
         `;
       } else {
@@ -101,19 +100,17 @@ export const scheduledPaymentReminder = onSchedule(
       // Log notification
       const notifRef = db.collection('notifications').doc();
       batch.set(notifRef, {
-        unitId: unitDoc.id,
-        propertyId: unit['propertyId'],
+        propertyId: propDoc.id,
         tenantEmail,
-        ownerId: unit['ownerId'],
+        ownerId: property['ownerId'],
         type: notificationType,
         channel: 'email',
         status: 'sent',
         sentAt: Timestamp.now(),
         viewedByOwner: false,
         metadata: {
-          amount: unit['tenantRentPrice'] ?? null,
+          amount: property['tenantRentPrice'] ?? null,
           daysUntilDue: diffDays,
-          unitNumber: unit['number'],
           propertyName,
         },
       });

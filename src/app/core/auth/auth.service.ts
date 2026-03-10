@@ -17,7 +17,6 @@ import {
   collection,
   query,
   where,
-  limit,
   serverTimestamp,
   arrayUnion,
 } from '@angular/fire/firestore';
@@ -41,22 +40,21 @@ export class AuthService {
 
   private _userRoles = signal<UserRole[]>([]);
   private _activeRole = signal<UserRole | null>(null);
-  private _tenantUnitIds = signal<string[]>([]);
+  private _tenantPropertyIds = signal<string[]>([]);
   private _collaboratingPropertyIds = signal<string[]>([]);
 
   readonly userRoles = this._userRoles.asReadonly();
   readonly activeRole = this._activeRole.asReadonly();
   readonly collaboratingPropertyIds = this._collaboratingPropertyIds.asReadonly();
-  // Backwards compat with existing code using userRole() and tenantUnitId()
   readonly userRole = computed(() => this._activeRole());
-  readonly tenantUnitId = computed(() => this._tenantUnitIds()[0] ?? null);
+  readonly tenantPropertyId = computed(() => this._tenantPropertyIds()[0] ?? null);
 
   constructor() {
     user(this.auth).subscribe(async firebaseUser => {
       if (!firebaseUser) {
         this._userRoles.set([]);
         this._activeRole.set(null);
-        this._tenantUnitIds.set([]);
+        this._tenantPropertyIds.set([]);
         this._collaboratingPropertyIds.set([]);
         return;
       }
@@ -73,7 +71,9 @@ export class AuthService {
         roles = [data['role'] as UserRole];
       }
 
-      const unitIds: string[] = Array.isArray(data['unitIds'])
+      const propertyIds: string[] = Array.isArray(data['propertyIds'])
+        ? data['propertyIds']
+        : Array.isArray(data['unitIds'])
         ? data['unitIds']
         : data['unitId'] ? [data['unitId']] : [];
 
@@ -82,7 +82,7 @@ export class AuthService {
         : [];
 
       this._userRoles.set(roles);
-      this._tenantUnitIds.set(unitIds);
+      this._tenantPropertyIds.set(propertyIds);
       this._collaboratingPropertyIds.set(collaboratingPropertyIds);
 
       // Check for pending colaborator assignments
@@ -96,7 +96,6 @@ export class AuthService {
         if (!pendingProps.empty) {
           for (const propDoc of pendingProps.docs) {
             const propId = propDoc.id;
-            // Assign this user as colaborador on the property
             await updateDoc(doc(this.firestore, `properties/${propId}`), {
               collaboratorUids: arrayUnion(firebaseUser.uid),
               pendingCollaboratorEmails: (propDoc.data()['pendingCollaboratorEmails'] as string[]).filter(
@@ -104,7 +103,6 @@ export class AuthService {
               ),
             });
           }
-          // Update user roles
           if (!roles.includes('colaborador')) {
             roles = [...roles, 'colaborador'];
           }
@@ -130,7 +128,6 @@ export class AuthService {
       if (isValidSaved) {
         this._activeRole.set(saved!);
       } else {
-        // Default: prefer 'owner' if available, then 'colaborador' (if has properties), then 'tenant'
         const defaultRole = roles.includes('owner')
           ? 'owner'
           : (roles.includes('colaborador') && finalCollabIds.length > 0)
@@ -178,11 +175,11 @@ export class AuthService {
     // Existing user with new multi-role format
     if (existingData?.['roles'] && Array.isArray(existingData['roles'])) {
       const roles = existingData['roles'] as UserRole[];
-      const unitIds: string[] = existingData['unitIds'] ?? [];
+      const propertyIds: string[] = existingData['propertyIds'] ?? existingData['unitIds'] ?? [];
       const collaboratingPropertyIds: string[] = existingData['collaboratingPropertyIds'] ?? [];
 
       this._userRoles.set(roles);
-      this._tenantUnitIds.set(unitIds);
+      this._tenantPropertyIds.set(propertyIds);
       this._collaboratingPropertyIds.set(collaboratingPropertyIds);
 
       await setDoc(userRef, profileBase, { merge: true });
@@ -200,17 +197,17 @@ export class AuthService {
       const oldRole = existingData['role'] as 'owner' | 'tenant';
       const oldUnitId = existingData['unitId'] as string | null;
       const roles: UserRole[] = [oldRole];
-      const unitIds = oldUnitId ? [oldUnitId] : [];
+      const propertyIds = oldUnitId ? [oldUnitId] : [];
 
       await setDoc(userRef, {
         ...profileBase,
         roles,
-        unitIds,
+        propertyIds,
         collaboratingPropertyIds: [],
       }, { merge: true });
 
       this._userRoles.set(roles);
-      this._tenantUnitIds.set(unitIds);
+      this._tenantPropertyIds.set(propertyIds);
       this._collaboratingPropertyIds.set([]);
       this._activeRole.set(oldRole);
       return oldRole;
@@ -219,20 +216,20 @@ export class AuthService {
     // New user: detect roles from Firestore data
     const email = firebaseUser.email;
     const detectedRoles: UserRole[] = [];
-    let unitIds: string[] = [];
+    let propertyIds: string[] = [];
     let collaboratingPropertyIds: string[] = [];
 
     if (email) {
-      // Check if tenant by email match in units
-      const unitsSnap = await getDocs(
-        query(collection(this.firestore, 'units'), where('tenantEmail', '==', email))
+      // Check if tenant by email match in properties
+      const propsSnap = await getDocs(
+        query(collection(this.firestore, 'properties'), where('tenantEmail', '==', email))
       );
-      if (!unitsSnap.empty) {
+      if (!propsSnap.empty) {
         detectedRoles.push('tenant');
-        unitIds = unitsSnap.docs.map(d => d.id);
-        // Link tenantUid on all matched units
-        for (const unitDoc of unitsSnap.docs) {
-          await updateDoc(doc(this.firestore, `units/${unitDoc.id}`), {
+        propertyIds = propsSnap.docs.map(d => d.id);
+        // Link tenantUid on all matched properties
+        for (const propDoc of propsSnap.docs) {
+          await updateDoc(doc(this.firestore, `properties/${propDoc.id}`), {
             tenantUid: firebaseUser.uid,
             updatedAt: serverTimestamp(),
           });
@@ -268,16 +265,15 @@ export class AuthService {
     await setDoc(userRef, {
       ...profileBase,
       roles: detectedRoles,
-      unitIds,
+      propertyIds,
       collaboratingPropertyIds,
       createdAt: serverTimestamp(),
     }, { merge: true });
 
     this._userRoles.set(detectedRoles);
-    this._tenantUnitIds.set(unitIds);
+    this._tenantPropertyIds.set(propertyIds);
     this._collaboratingPropertyIds.set(collaboratingPropertyIds);
 
-    // Set active role: prefer owner, else tenant, else first
     const activeRole = detectedRoles.includes('owner')
       ? 'owner'
       : detectedRoles.includes('tenant')

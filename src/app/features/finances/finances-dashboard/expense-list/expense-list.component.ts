@@ -89,9 +89,6 @@ const CATEGORY_CLASSES: Record<ExpenseCategory, string> = {
                   </td>
                   <td class="px-5 py-3 text-warm-600 truncate max-w-[120px]">
                     {{ e.propertyName }}
-                    @if (e.unitNumber) {
-                      <span class="text-warm-400"> · U{{ e.unitNumber }}</span>
-                    }
                   </td>
                   <td class="px-5 py-3 text-right font-semibold text-warm-900">
                     {{ e.amount | currency:'COP':'symbol-narrow':'1.0-0' }}

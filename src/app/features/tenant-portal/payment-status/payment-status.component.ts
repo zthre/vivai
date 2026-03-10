@@ -76,8 +76,7 @@ function monthLabel(): string {
         <div class="bg-white rounded-xl border border-warm-200 shadow-sm p-6 space-y-5">
           <div class="flex items-center justify-between">
             <div>
-              <p class="text-sm text-warm-500">{{ activeLink()?.propertyName }}</p>
-              <p class="font-semibold text-warm-900">Unidad {{ activeLink()?.unitNumber }}</p>
+              <p class="font-semibold text-warm-900">{{ activeLink()?.propertyName }}</p>
             </div>
             <p class="text-2xl font-bold text-primary-600">
               {{ activeLink()?.amount | currency:'COP':'symbol-narrow':'1.0-0' }}
@@ -118,14 +117,14 @@ export class PaymentStatusComponent implements OnInit {
   monthLabelStr = monthLabel();
 
   ngOnInit() {
-    const unitId = this.authService.tenantUnitId();
-    if (!unitId) {
+    const propertyId = this.authService.tenantPropertyId();
+    if (!propertyId) {
       this.loading.set(false);
       return;
     }
     const q = query(
       collection(this.firestore, 'paymentLinks'),
-      where('unitId', '==', unitId),
+      where('propertyId', '==', propertyId),
       where('month', '==', currentMonthKey())
     );
     collectionData(q, { idField: 'id' }).subscribe((links: any[]) => {

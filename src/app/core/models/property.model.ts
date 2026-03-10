@@ -1,7 +1,7 @@
 import { Timestamp } from '@angular/fire/firestore';
 
 export interface ColaboradorPermission {
-  /** Crear, editar y eliminar unidades */
+  /** Editar inmueble */
   inmueblesUnidades?: boolean;
   /** Registrar pagos */
   inmueblesPagos?: boolean;
@@ -20,34 +20,58 @@ export interface PhotoItem {
   uploadedAt: Timestamp;
 }
 
+export interface ContractFile {
+  url: string;
+  storagePath: string;
+  filename: string;
+  sizeBytes: number;
+  uploadedAt: Timestamp;
+}
+
 export interface Property {
   id?: string;
   ownerId: string;
   name: string;
   address: string;
   type: 'apartamento' | 'casa' | 'local' | 'bodega';
-  unitCount: number;
   photos?: PhotoItem[];
-  /** Occupancy — only relevant for properties used as a single unit (no sub-units) */
-  status?: 'disponible' | 'ocupado';
+
+  // Estado y marketplace
+  status: 'disponible' | 'ocupado';
+  isForRent: boolean;
+  isForSale: boolean;
+  isListed: boolean;
+  rentPrice?: number | null;
+  salePrice?: number | null;
+  publicDescription?: string | null;
+
+  // Inquilino
   tenantName?: string | null;
   tenantPhone?: string | null;
   tenantEmail?: string | null;
-  /** What the current tenant pays per month — used for payment suggestions and financial tracking */
+  tenantUid?: string | null;
   tenantRentPrice?: number | null;
+
+  // Contrato
+  contract?: ContractFile | null;
+
+  // Notificaciones
+  paymentDueDay?: number | null;
+  notificationsEnabled?: boolean;
+
+  // Marketplace / público
   isPublic?: boolean;
   whatsappPhone?: string | null;
-  isForRent?: boolean;
-  rentPrice?: number | null;
-  isForSale?: boolean;
-  salePrice?: number | null;
-  publicDescription?: string | null;
+
+  // Colaboradores
   collaboratorUids?: string[];
   pendingCollaboratorEmails?: string[];
   collaboratorPermissions?: { [uid: string]: ColaboradorPermission };
-  /** Purchase price for ROI calculation */
+
+  // Inversión
   purchasePrice?: number | null;
   purchaseDate?: Timestamp | null;
+
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 }

@@ -16,7 +16,6 @@ import {
 } from '@angular/fire/firestore';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { switchMap, of } from 'rxjs';
-import { UnitService } from '../../core/services/unit.service';
 import { PropertyService } from '../../core/services/property.service';
 import { AuthService } from '../../core/auth/auth.service';
 import { PaymentLink } from '../../core/models/payment-link.model';
@@ -36,7 +35,7 @@ function currentMonthKey(): string {
       <!-- Header -->
       <div class="flex items-center gap-3">
         <a
-          [routerLink]="['/properties', propertyId, 'units', unitId]"
+          [routerLink]="['/properties', propertyId]"
           class="p-1.5 text-warm-400 hover:text-warm-700 hover:bg-warm-100 rounded-lg transition-colors"
         >
           <mat-icon>arrow_back</mat-icon>
@@ -53,19 +52,19 @@ function currentMonthKey(): string {
         </div>
       } @else {
 
-        <!-- Unit info -->
-        @if (unit()) {
+        <!-- Property info -->
+        @if (property()) {
           <div class="bg-white rounded-xl border border-warm-200 shadow-sm p-5 space-y-2">
-            <p class="text-xs font-semibold text-warm-500 uppercase tracking-wide">Unidad</p>
+            <p class="text-xs font-semibold text-warm-500 uppercase tracking-wide">Inmueble</p>
             <div class="flex items-center justify-between">
               <div>
-                <p class="font-semibold text-warm-900">{{ property()?.name }} — Unidad {{ unit()?.number }}</p>
-                @if (unit()?.tenantName) {
-                  <p class="text-sm text-warm-500">{{ unit()?.tenantName }}</p>
+                <p class="font-semibold text-warm-900">{{ property()?.name }}</p>
+                @if (property()?.tenantName) {
+                  <p class="text-sm text-warm-500">{{ property()?.tenantName }}</p>
                 }
               </div>
               <p class="text-lg font-bold text-primary-600">
-                {{ unit()?.tenantRentPrice | currency:'COP':'symbol-narrow':'1.0-0' }}/mes
+                {{ property()?.tenantRentPrice | currency:'COP':'symbol-narrow':'1.0-0' }}/mes
               </p>
             </div>
             <p class="text-xs text-warm-400">Mes: {{ monthLabel() }}</p>
@@ -111,27 +110,27 @@ function currentMonthKey(): string {
           <div class="bg-white rounded-xl border border-warm-200 shadow-sm p-5 space-y-4">
             <p class="text-sm text-warm-600">
               Se generará un link de pago de Stripe por
-              <strong>{{ unit()?.tenantRentPrice | currency:'COP':'symbol-narrow':'1.0-0' }}</strong>
+              <strong>{{ property()?.tenantRentPrice | currency:'COP':'symbol-narrow':'1.0-0' }}</strong>
               para el mes de {{ monthLabel() }}.
             </p>
 
-            @if (!unit()?.tenantRentPrice) {
+            @if (!property()?.tenantRentPrice) {
               <div class="flex items-center gap-2 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
                 <mat-icon class="text-yellow-600 text-[18px]">warning</mat-icon>
-                <p class="text-sm text-yellow-700">La unidad no tiene precio de renta configurado.</p>
+                <p class="text-sm text-yellow-700">El inmueble no tiene precio de renta configurado.</p>
               </div>
             }
 
-            @if (!unit()?.tenantEmail) {
+            @if (!property()?.tenantEmail) {
               <div class="flex items-center gap-2 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
                 <mat-icon class="text-yellow-600 text-[18px]">warning</mat-icon>
-                <p class="text-sm text-yellow-700">La unidad no tiene email de inquilino para enviar el recibo.</p>
+                <p class="text-sm text-yellow-700">El inmueble no tiene email de inquilino para enviar el recibo.</p>
               </div>
             }
 
             <button
               (click)="generateLink()"
-              [disabled]="generating() || !unit()?.tenantRentPrice"
+              [disabled]="generating() || !property()?.tenantRentPrice"
               class="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
               @if (generating()) {
@@ -162,20 +161,17 @@ function currentMonthKey(): string {
 export class PaymentLinkGeneratorComponent implements OnInit {
   private functions = inject(Functions);
   private firestore = inject(Firestore);
-  private unitService = inject(UnitService);
   private propertyService = inject(PropertyService);
   private authService = inject(AuthService);
   private snackBar = inject(MatSnackBar);
   private route = inject(ActivatedRoute);
 
   propertyId!: string;
-  unitId!: string;
 
   loading = signal(true);
   generating = signal(false);
   activeLink = signal<PaymentLink | null>(null);
 
-  unit = signal<any>(null);
   property = signal<any>(null);
 
   monthLabel(): string {
@@ -184,10 +180,8 @@ export class PaymentLinkGeneratorComponent implements OnInit {
   }
 
   ngOnInit() {
-    this.propertyId = this.route.snapshot.paramMap.get('propertyId')!;
-    this.unitId = this.route.snapshot.paramMap.get('unitId')!;
+    this.propertyId = this.route.snapshot.paramMap.get('id')!;
 
-    this.unitService.getById(this.unitId).subscribe(u => this.unit.set(u));
     this.propertyService.getById(this.propertyId).subscribe(p => this.property.set(p));
     void this.loadActiveLink();
   }
@@ -196,7 +190,7 @@ export class PaymentLinkGeneratorComponent implements OnInit {
     this.loading.set(true);
     const q = query(
       collection(this.firestore, 'paymentLinks'),
-      where('unitId', '==', this.unitId),
+      where('propertyId', '==', this.propertyId),
       where('month', '==', currentMonthKey()),
       where('status', 'in', ['active', 'paid'])
     );
@@ -211,11 +205,11 @@ export class PaymentLinkGeneratorComponent implements OnInit {
     if (this.generating()) return;
     this.generating.set(true);
     try {
-      const fn = httpsCallable<{ unitId: string; month: string }, { url: string; linkId: string }>(
+      const fn = httpsCallable<{ propertyId: string; month: string }, { url: string; linkId: string }>(
         this.functions,
         'createPaymentLink'
       );
-      const result = await fn({ unitId: this.unitId, month: currentMonthKey() });
+      const result = await fn({ propertyId: this.propertyId, month: currentMonthKey() });
       await this.loadActiveLink();
       this.snackBar.open('Link generado. Cópialo y compártelo con el inquilino.', 'OK', { duration: 4000 });
     } catch (err: any) {

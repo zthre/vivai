@@ -1,4 +1,4 @@
-import { Component, inject, signal, OnInit, computed } from '@angular/core';
+import { Component, inject, signal, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatDialogRef, MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
@@ -6,7 +6,6 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatSelectModule } from '@angular/material/select';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { PropertyService } from '../../../../core/services/property.service';
-import { UnitService } from '../../../../core/services/unit.service';
 import { ExpenseService } from '../../../../core/services/expense.service';
 import { Expense, ExpenseCategory } from '../../../../core/models/expense.model';
 
@@ -101,7 +100,6 @@ function formatDate(d: Date): string {
           <select
             name="propertyId"
             [(ngModel)]="form.propertyId"
-            (ngModelChange)="onPropertyChange($event)"
             required
             class="w-full px-3 py-2 border border-warm-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-300 bg-white"
           >
@@ -111,23 +109,6 @@ function formatDate(d: Date): string {
             }
           </select>
         </div>
-
-        <!-- Unit (optional) -->
-        @if (form.propertyId && unitsForProperty().length > 0) {
-          <div>
-            <label class="block text-xs font-medium text-warm-600 mb-1">Unidad (opcional)</label>
-            <select
-              name="unitId"
-              [(ngModel)]="form.unitId"
-              class="w-full px-3 py-2 border border-warm-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-300 bg-white"
-            >
-              <option [value]="null">Sin unidad específica</option>
-              @for (u of unitsForProperty(); track u.id) {
-                <option [value]="u.id">Unidad {{ u.number }}</option>
-              }
-            </select>
-          </div>
-        }
 
         <!-- Notes -->
         <div>
@@ -169,11 +150,9 @@ export class ExpenseFormComponent implements OnInit {
   private dialogRef = inject(MatDialogRef<ExpenseFormComponent>);
   private data: ExpenseFormData = inject(MAT_DIALOG_DATA);
   private propertyService = inject(PropertyService);
-  private unitService = inject(UnitService);
   private expenseService = inject(ExpenseService);
 
   properties = toSignal(this.propertyService.getAll(), { initialValue: [] });
-  private allUnits = toSignal(this.unitService.getAllOccupied(), { initialValue: [] });
 
   saving = signal(false);
   isEdit = signal(false);
@@ -184,14 +163,8 @@ export class ExpenseFormComponent implements OnInit {
     category: '' as ExpenseCategory | '',
     description: '',
     propertyId: '',
-    unitId: null as string | null,
     notes: '',
   };
-
-  unitsForProperty = computed(() => {
-    if (!this.form.propertyId) return [];
-    return this.allUnits().filter(u => u.propertyId === this.form.propertyId);
-  });
 
   ngOnInit() {
     if (this.data?.expense) {
@@ -203,15 +176,9 @@ export class ExpenseFormComponent implements OnInit {
         category: e.category,
         description: e.description,
         propertyId: e.propertyId,
-        unitId: e.unitId,
         notes: e.notes ?? '',
       };
     }
-  }
-
-  onPropertyChange(propertyId: string) {
-    this.form.unitId = null;
-    this.form.propertyId = propertyId;
   }
 
   async save() {
@@ -219,9 +186,6 @@ export class ExpenseFormComponent implements OnInit {
     this.saving.set(true);
 
     const selectedProperty = this.properties().find(p => p.id === this.form.propertyId);
-    const selectedUnit = this.form.unitId
-      ? this.allUnits().find(u => u.id === this.form.unitId)
-      : null;
 
     const payload = {
       amount: Number(this.form.amount),
@@ -230,8 +194,6 @@ export class ExpenseFormComponent implements OnInit {
       description: this.form.description,
       propertyId: this.form.propertyId,
       propertyName: selectedProperty?.name ?? '',
-      unitId: this.form.unitId,
-      unitNumber: selectedUnit?.number ?? null,
       notes: this.form.notes || null,
     };
 

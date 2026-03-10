@@ -4,7 +4,7 @@
  * - Callable: owner can trigger manually from analytics dashboard.
  *
  * For each owner's property, queries payments and expenses from the prior month,
- * counts occupied units, and writes a monthlySnapshot document.
+ * checks occupancy status, and writes a monthlySnapshot document.
  */
 
 import * as admin from 'firebase-admin';
@@ -48,11 +48,8 @@ async function buildSnapshots(year: number, month: number, ownerId?: string): Pr
       .get();
     const totalExpenses = expensesSnap.docs.reduce((s, d) => s + (d.data()['amount'] ?? 0), 0);
 
-    // Count occupancy
-    const unitsSnap = await db.collection('units').where('propertyId', '==', pid).get();
-    const totalUnits = unitsSnap.size;
-    const occupiedUnits = unitsSnap.docs.filter(d => d.data()['status'] === 'ocupado').length;
-    const occupancyRate = totalUnits > 0 ? Math.round((occupiedUnits / totalUnits) * 100) : 0;
+    // Check occupancy — property is the rentable unit
+    const isOccupied = prop['status'] === 'ocupado';
 
     const snapshotData = {
       propertyId: pid,
@@ -61,9 +58,7 @@ async function buildSnapshots(year: number, month: number, ownerId?: string): Pr
       totalCollected,
       totalExpenses,
       netBalance: totalCollected - totalExpenses,
-      occupancyRate,
-      occupiedUnits,
-      totalUnits,
+      isOccupied,
       generatedAt: Timestamp.now(),
       generatedBy: 'cron',
     };

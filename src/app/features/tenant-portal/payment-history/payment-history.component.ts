@@ -88,13 +88,15 @@ export class PaymentHistoryComponent implements OnInit, OnDestroy {
       if (!firebaseUser) return;
 
       const userSnap = await getDoc(doc(this.firestore, `users/${firebaseUser.uid}`));
-      const unitId = userSnap.data()?.['unitId'] as string | undefined;
-      if (!unitId) {
+      const userData = userSnap.data();
+      const propertyIds = (userData?.['propertyIds'] ?? userData?.['unitIds']) as string[] | undefined;
+      const propertyId = propertyIds?.[0];
+      if (!propertyId) {
         this.loading.set(false);
         return;
       }
 
-      this.sub = this.paymentService.getByUnit(unitId).subscribe(ps => {
+      this.sub = this.paymentService.getByProperty(propertyId).subscribe(ps => {
         this.payments.set(ps);
         this.loading.set(false);
       });

@@ -7,7 +7,6 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { toSignal, toObservable } from '@angular/core/rxjs-interop';
 import { switchMap } from 'rxjs/operators';
 import { PropertyService } from '../../../core/services/property.service';
-import { UnitService } from '../../../core/services/unit.service';
 import { PaymentService } from '../../../core/services/payment.service';
 import { ExpenseService } from '../../../core/services/expense.service';
 import { Expense } from '../../../core/models/expense.model';
@@ -93,7 +92,6 @@ function fromMonthParam(param: string): Date | null {
         <app-payment-list
           [payments]="filteredPayments()"
           [properties]="properties()"
-          [units]="allUnits()"
           [month]="selectedMonth()"
         />
 
@@ -111,7 +109,6 @@ function fromMonthParam(param: string): Date | null {
 })
 export class FinancesDashboardComponent implements OnInit {
   private propertyService = inject(PropertyService);
-  private unitService = inject(UnitService);
   private paymentService = inject(PaymentService);
   private expenseService = inject(ExpenseService);
   private authService = inject(AuthService);
@@ -123,7 +120,6 @@ export class FinancesDashboardComponent implements OnInit {
   selectedPropertyId = signal<string | null>(null);
 
   properties = toSignal(this.propertyService.getAll(), { initialValue: [] });
-  allUnits = toSignal(this.unitService.getAllOccupied(), { initialValue: [] });
 
   private month$ = toObservable(this.selectedMonth);
 
@@ -155,15 +151,14 @@ export class FinancesDashboardComponent implements OnInit {
       : this.expensesInMonth();
   });
 
-  filteredOccupiedUnits = computed(() => {
+  filteredOccupiedProperties = computed(() => {
     const pid = this.selectedPropertyId();
-    return pid
-      ? this.allUnits().filter(u => u.propertyId === pid)
-      : this.allUnits();
+    const occupied = this.properties().filter(p => p.status === 'ocupado');
+    return pid ? occupied.filter(p => p.id === pid) : occupied;
   });
 
   totalExpected = computed(() =>
-    this.filteredOccupiedUnits().reduce((s, u) => s + (u.tenantRentPrice ?? u.rentPrice ?? 0), 0)
+    this.filteredOccupiedProperties().reduce((s, p) => s + (p.tenantRentPrice ?? p.rentPrice ?? 0), 0)
   );
   totalCollected = computed(() =>
     this.filteredPayments().reduce((s, p) => s + p.amount, 0)

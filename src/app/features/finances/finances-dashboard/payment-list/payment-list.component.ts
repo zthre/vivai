@@ -4,7 +4,6 @@ import { RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { Payment } from '../../../../core/models/payment.model';
 import { Property } from '../../../../core/models/property.model';
-import { Unit } from '../../../../core/models/unit.model';
 
 const MONTH_NAMES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -34,7 +33,6 @@ const MONTH_NAMES = [
               <tr class="text-left text-xs text-warm-400 uppercase tracking-wide border-b border-warm-100">
                 <th class="px-5 py-3 font-medium">Fecha</th>
                 <th class="px-5 py-3 font-medium">Inmueble</th>
-                <th class="px-5 py-3 font-medium">Unidad</th>
                 <th class="px-5 py-3 font-medium">Inquilino</th>
                 <th class="px-5 py-3 font-medium text-right">Monto</th>
               </tr>
@@ -48,20 +46,8 @@ const MONTH_NAMES = [
                   <td class="px-5 py-3 text-warm-800 font-medium">
                     {{ propertyName(p.propertyId) }}
                   </td>
-                  <td class="px-5 py-3">
-                    @if (p.unitId) {
-                      <a
-                        [routerLink]="['/properties', p.propertyId, 'units', p.unitId]"
-                        class="text-primary-600 hover:text-primary-700 font-medium"
-                      >
-                        {{ unitNumber(p.unitId) }}
-                      </a>
-                    } @else {
-                      <span class="text-warm-400 text-xs">—</span>
-                    }
-                  </td>
                   <td class="px-5 py-3 text-warm-600">
-                    {{ tenantName(p.unitId) }}
+                    {{ tenantName(p.propertyId) }}
                   </td>
                   <td class="px-5 py-3 text-right font-semibold text-warm-900">
                     {{ p.amount | currency:'COP':'symbol-narrow':'1.0-0' }}
@@ -71,7 +57,7 @@ const MONTH_NAMES = [
             </tbody>
             <tfoot>
               <tr class="border-t-2 border-warm-200 bg-warm-50">
-                <td colspan="4" class="px-5 py-3 text-sm font-semibold text-warm-700">Total</td>
+                <td colspan="3" class="px-5 py-3 text-sm font-semibold text-warm-700">Total</td>
                 <td class="px-5 py-3 text-right font-bold text-warm-900">
                   {{ total() | currency:'COP':'symbol-narrow':'1.0-0' }}
                 </td>
@@ -86,7 +72,6 @@ const MONTH_NAMES = [
 export class PaymentListComponent {
   payments = input.required<Payment[]>();
   properties = input.required<Property[]>();
-  units = input.required<Unit[]>();
   month = input.required<Date>();
 
   total = computed(() => this.payments().reduce((s, p) => s + p.amount, 0));
@@ -100,14 +85,7 @@ export class PaymentListComponent {
     return this.properties().find(p => p.id === propertyId)?.name ?? propertyId;
   }
 
-  unitNumber(unitId: string | null): string {
-    if (!unitId) return '—';
-    const unit = this.units().find(u => u.id === unitId);
-    return unit ? `Unidad ${unit.number}` : unitId;
-  }
-
-  tenantName(unitId: string | null): string {
-    if (!unitId) return '—';
-    return this.units().find(u => u.id === unitId)?.tenantName ?? '—';
+  tenantName(propertyId: string): string {
+    return this.properties().find(p => p.id === propertyId)?.tenantName ?? '—';
   }
 }

@@ -157,7 +157,7 @@ function monthOptions(count = 24): { value: string; label: string }[] {
       <div class="bg-warm-50 rounded-xl border border-warm-200 p-4">
         <p class="text-xs font-semibold text-warm-600 uppercase tracking-wide mb-2">Columnas del reporte</p>
         <p class="text-xs text-warm-500 font-mono">
-          Fecha | Inmueble | Unidad | Concepto | Categoría | Monto | Fuente
+          Fecha | Inmueble | Concepto | Categoría | Monto | Fuente
         </p>
       </div>
     </div>
@@ -195,10 +195,10 @@ export class ReportsComponent {
     this.downloadUrl.set(null);
     try {
       const rows = await this.fetchRows();
-      const header = 'Fecha,Inmueble,Unidad,Concepto,Categoría,Monto,Fuente\n';
+      const header = 'Fecha,Inmueble,Concepto,Categoría,Monto,Fuente\n';
       const body = rows
         .map(r =>
-          [r.fecha, r.inmueble, r.unidad, r.concepto, r.categoria, r.monto, r.fuente]
+          [r.fecha, r.inmueble, r.concepto, r.categoria, r.monto, r.fuente]
             .map(v => `"${String(v).replace(/"/g, '""')}"`)
             .join(',')
         )
@@ -252,10 +252,6 @@ export class ReportsComponent {
       query(collection(this.firestore, 'properties'), where('ownerId', '==', uid))
     );
     const propMap = new Map<string, string>(propsSnap.docs.map(d => [d.id, (d.data() as any)['name']]));
-    const unitsSnap = await getDocs(
-      query(collection(this.firestore, 'units'), where('ownerId', '==', uid))
-    );
-    const unitMap = new Map<string, string>(unitsSnap.docs.map(d => [d.id, (d.data() as any)['number']]));
 
     const rows: any[] = [];
 
@@ -273,7 +269,6 @@ export class ReportsComponent {
       rows.push({
         fecha: p.date?.toDate().toLocaleDateString('es-CO'),
         inmueble: propMap.get(p.propertyId) ?? p.propertyId,
-        unidad: unitMap.get(p.unitId) ?? (p.unitId ?? '—'),
         concepto: `Pago${p.notes ? ': ' + p.notes : ''}`,
         categoria: 'Ingreso',
         monto: p.amount,
@@ -295,7 +290,6 @@ export class ReportsComponent {
       rows.push({
         fecha: e.date?.toDate().toLocaleDateString('es-CO'),
         inmueble: propMap.get(e.propertyId) ?? e.propertyId,
-        unidad: '—',
         concepto: e.description,
         categoria: e.category,
         monto: -e.amount,

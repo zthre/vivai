@@ -36,10 +36,6 @@ export const exportReport = onCall(async request => {
   const propsSnap = await db.collection('properties').where('ownerId', '==', uid).get();
   const propMap = new Map<string, string>(propsSnap.docs.map(d => [d.id, d.data()['name']]));
 
-  // Load unit numbers
-  const unitsSnap = await db.collection('units').where('ownerId', '==', uid).get();
-  const unitMap = new Map<string, string>(unitsSnap.docs.map(d => [d.id, d.data()['number']]));
-
   const rows: Record<string, unknown>[] = [];
 
   // Payments
@@ -55,7 +51,6 @@ export const exportReport = onCall(async request => {
     rows.push({
       Fecha: (p['date'] as Timestamp).toDate().toLocaleDateString('es-CO'),
       Inmueble: propMap.get(p['propertyId']) ?? p['propertyId'],
-      Unidad: unitMap.get(p['unitId']) ?? (p['unitId'] ?? '—'),
       Concepto: `Pago${p['notes'] ? ': ' + p['notes'] : ''}`,
       Categoría: 'Ingreso',
       Monto: p['amount'],
@@ -76,7 +71,6 @@ export const exportReport = onCall(async request => {
     rows.push({
       Fecha: (e['date'] as Timestamp).toDate().toLocaleDateString('es-CO'),
       Inmueble: propMap.get(e['propertyId']) ?? e['propertyId'],
-      Unidad: '—',
       Concepto: e['description'],
       Categoría: e['category'],
       Monto: -e['amount'],
@@ -98,10 +92,10 @@ export const exportReport = onCall(async request => {
     fileName = `reports/${uid}/reporte-${startMonth}-${endMonth}-${Date.now()}.xlsx`;
     contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
   } else {
-    const header = 'Fecha,Inmueble,Unidad,Concepto,Categoría,Monto,Fuente\n';
+    const header = 'Fecha,Inmueble,Concepto,Categoría,Monto,Fuente\n';
     const body = rows
       .map(r =>
-        ['Fecha', 'Inmueble', 'Unidad', 'Concepto', 'Categoría', 'Monto', 'Fuente']
+        ['Fecha', 'Inmueble', 'Concepto', 'Categoría', 'Monto', 'Fuente']
           .map(k => `"${String(r[k] ?? '').replace(/"/g, '""')}"`)
           .join(',')
       )

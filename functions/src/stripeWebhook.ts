@@ -79,7 +79,6 @@ export const stripeWebhook = onRequest(
     // Create payment document
     const paymentRef = db.collection('payments').doc();
     batch.set(paymentRef, {
-      unitId: link['unitId'],
       propertyId: link['propertyId'],
       ownerId: link['ownerId'],
       amount: link['amount'],
@@ -107,7 +106,6 @@ export const stripeWebhook = onRequest(
             <p>Tu pago de arriendo fue confirmado exitosamente.</p>
             <ul>
               <li><strong>Inmueble:</strong> ${link['propertyName']}</li>
-              <li><strong>Unidad:</strong> ${link['unitNumber']}</li>
               <li><strong>Mes:</strong> ${link['month']}</li>
               <li><strong>Monto:</strong> $${link['amount']?.toLocaleString('es-CO')}</li>
               <li><strong>Fecha:</strong> ${now.toDate().toLocaleDateString('es-CO')}</li>

@@ -11,8 +11,6 @@ export interface MonthlySnapshot {
   netBalance: number;
   /** 0-100 */
   occupancyRate: number;
-  occupiedUnits: number;
-  totalUnits: number;
   generatedAt: Timestamp;
   generatedBy: 'cron' | 'manual';
 }

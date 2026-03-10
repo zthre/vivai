@@ -6,7 +6,7 @@ export interface UserProfile {
   displayName: string | null;
   photoURL: string | null;
   roles: Array<'owner' | 'tenant' | 'colaborador'>;
-  unitIds: string[];
+  propertyIds: string[];
   collaboratingPropertyIds: string[];
   createdAt?: Timestamp;
 }

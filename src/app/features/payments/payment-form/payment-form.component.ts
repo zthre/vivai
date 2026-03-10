@@ -30,7 +30,7 @@ function parseLocalDate(dateStr: string): Date {
         <div>
           <h2 class="text-lg font-bold text-warm-900">Registrar pago</h2>
           <p class="text-sm text-warm-400">
-            {{ data.label ?? (data.unitId ? 'Unidad · ' + data.unitId : 'Inmueble · ' + data.propertyId) }}
+            {{ data.label ?? ('Inmueble · ' + data.propertyId) }}
           </p>
         </div>
         <button (click)="close()" class="p-1.5 text-warm-400 hover:text-warm-700 hover:bg-warm-100 rounded-lg transition-colors">
@@ -105,7 +105,6 @@ export class PaymentFormComponent {
   private fb = inject(FormBuilder);
 
   data: {
-    unitId?: string | null;
     propertyId: string;
     rentPrice?: number | null;
     label?: string;
@@ -125,7 +124,6 @@ export class PaymentFormComponent {
     try {
       const { amount, date, notes } = this.form.value;
       await this.paymentService.create({
-        unitId: this.data.unitId ?? null,
         propertyId: this.data.propertyId,
         amount: amount!,
         date: parseLocalDate(date!),

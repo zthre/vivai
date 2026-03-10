@@ -2,7 +2,7 @@ import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
-import { ListingItem, listingPrice, listingStatus } from '../../../../core/services/marketplace.service';
+import { Property } from '../../../../core/models/property.model';
 
 type FilterMode = 'todos' | 'renta' | 'venta';
 
@@ -17,7 +17,7 @@ type FilterMode = 'todos' | 'renta' | 'venta';
         @if (photoUrl()) {
           <img
             [src]="photoUrl()!"
-            [alt]="item.property.name"
+            [alt]="property.name"
             class="w-full h-full object-cover"
           >
         } @else {
@@ -39,21 +39,14 @@ type FilterMode = 'todos' | 'renta' | 'venta';
               <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-green-100 text-green-700">En venta</span>
             }
           </div>
-          <span class="text-xs text-warm-400 capitalize">{{ item.property.type }}</span>
+          <span class="text-xs text-warm-400 capitalize">{{ property.type }}</span>
         </div>
 
         <!-- Name and address -->
         <div>
-          <h3 class="font-semibold text-warm-900 text-sm leading-snug">{{ item.property.name }}</h3>
-          <p class="text-xs text-warm-500 mt-0.5">{{ item.property.address }}</p>
+          <h3 class="font-semibold text-warm-900 text-sm leading-snug">{{ property.name }}</h3>
+          <p class="text-xs text-warm-500 mt-0.5">{{ property.address }}</p>
         </div>
-
-        <!-- Unit / Propiedad completa -->
-        @if (item.kind === 'unit') {
-          <p class="text-xs text-warm-400">Unidad {{ item.unit.number }}</p>
-        } @else {
-          <p class="text-xs font-medium text-warm-600 bg-warm-100 px-2 py-0.5 rounded-full w-fit">Propiedad completa</p>
-        }
 
         <!-- Price(s) -->
         <div class="space-y-0.5">
@@ -79,7 +72,7 @@ type FilterMode = 'todos' | 'renta' | 'venta';
           >
             Ver detalles
           </a>
-          @if (item.property.whatsappPhone) {
+          @if (property.whatsappPhone) {
             <a
               [href]="whatsappLink()"
               target="_blank"
@@ -96,59 +89,45 @@ type FilterMode = 'todos' | 'renta' | 'venta';
   `,
 })
 export class ListingCardComponent {
-  @Input({ required: true }) item!: ListingItem;
+  @Input({ required: true }) property!: Property;
   @Input() filterMode: FilterMode = 'todos';
 
-  price(): number { return listingPrice(this.item); }
-  status() { return listingStatus(this.item); }
-
   photoUrl(): string | null {
-    if (this.item.kind === 'unit' && this.item.unit.photos?.length) {
-      return this.item.unit.photos[0].url;
-    }
-    if (this.item.property.photos?.length) {
-      return this.item.property.photos[0].url;
-    }
-    return null;
+    return this.property.photos?.[0]?.url ?? null;
   }
 
   isForRent(): boolean {
-    return this.item.kind === 'unit' ? this.item.unit.isForRent : !!this.item.property.isForRent;
+    return !!this.property.isForRent;
   }
+
   isForSale(): boolean {
-    return this.item.kind === 'unit' ? this.item.unit.isForSale : !!this.item.property.isForSale;
+    return !!this.property.isForSale;
   }
 
   rentPrice(): number {
-    if (this.item.kind === 'unit') return this.item.unit.rentPrice ?? 0;
-    return this.item.property.rentPrice ?? 0;
+    return this.property.rentPrice ?? 0;
   }
+
   salePrice(): number {
-    if (this.item.kind === 'unit') return this.item.unit.salePrice ?? 0;
-    return this.item.property.salePrice ?? 0;
+    return this.property.salePrice ?? 0;
   }
 
   showRentPrice(): boolean {
     return this.filterMode !== 'venta' && this.isForRent();
   }
+
   showSalePrice(): boolean {
     return this.filterMode !== 'renta' && this.isForSale();
   }
 
   detailLink(): string[] {
-    return this.item.kind === 'unit'
-      ? ['/inmuebles', 'u', this.item.unit.id!]
-      : ['/inmuebles', 'p', this.item.property.id!];
+    return ['/inmuebles', this.property.id!];
   }
 
   whatsappLink(): string {
-    const phone = this.item.property.whatsappPhone ?? '';
-    const label =
-      this.item.kind === 'unit'
-        ? `la unidad ${this.item.unit.number} en ${this.item.property.name}`
-        : `la propiedad ${this.item.property.name}`;
+    const phone = this.property.whatsappPhone ?? '';
     const text = encodeURIComponent(
-      `Hola, me interesa ${label} ( ${this.item.property.address} )`
+      `Hola, me interesa ${this.property.name} ( ${this.property.address} )`
     );
     return `https://wa.me/${phone}?text=${text}`;
   }

@@ -5,7 +5,6 @@ import { MatIconModule } from '@angular/material/icon';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { PropertyService } from '../../core/services/property.service';
 import { PaymentService } from '../../core/services/payment.service';
-import { UnitService } from '../../core/services/unit.service';
 import { AuthService } from '../../core/auth/auth.service';
 
 @Component({
@@ -36,23 +35,23 @@ import { AuthService } from '../../core/auth/auth.service';
 
         <div class="bg-white rounded-xl p-5 border border-warm-200 shadow-sm">
           <div class="flex items-center justify-between mb-3">
-            <span class="text-sm font-medium text-warm-500">Unidades ocupadas</span>
+            <span class="text-sm font-medium text-warm-500">Inmuebles ocupados</span>
             <div class="w-9 h-9 bg-green-100 rounded-lg flex items-center justify-center">
               <mat-icon class="text-green-600 text-[20px]">people</mat-icon>
             </div>
           </div>
-          <p class="text-3xl font-bold text-warm-900">{{ occupiedUnits() }}</p>
-          <p class="text-xs text-warm-400 mt-1">de {{ totalUnits() }} unidades</p>
+          <p class="text-3xl font-bold text-warm-900">{{ occupiedProperties() }}</p>
+          <p class="text-xs text-warm-400 mt-1">de {{ totalProperties() }} inmuebles</p>
         </div>
 
         <div class="bg-white rounded-xl p-5 border border-warm-200 shadow-sm">
           <div class="flex items-center justify-between mb-3">
-            <span class="text-sm font-medium text-warm-500">Disponibles</span>
+            <span class="text-sm font-medium text-warm-500">Inmuebles disponibles</span>
             <div class="w-9 h-9 bg-orange-100 rounded-lg flex items-center justify-center">
               <mat-icon class="text-orange-600 text-[20px]">door_open</mat-icon>
             </div>
           </div>
-          <p class="text-3xl font-bold text-warm-900">{{ availableUnits() }}</p>
+          <p class="text-3xl font-bold text-warm-900">{{ availableProperties() }}</p>
         </div>
       </div>
 
@@ -106,17 +105,15 @@ import { AuthService } from '../../core/auth/auth.service';
 export class DashboardComponent {
   private propertyService = inject(PropertyService);
   private paymentService = inject(PaymentService);
-  private unitService = inject(UnitService);
   private authService = inject(AuthService);
 
   private properties = toSignal(this.propertyService.getAll(), { initialValue: [] });
-  private allOccupied = toSignal(this.unitService.getAllOccupied(), { initialValue: [] });
+  private allOccupied = toSignal(this.propertyService.getAllOccupied(), { initialValue: [] });
   recentPayments = toSignal(this.paymentService.getRecent(5), { initialValue: [] });
 
   totalProperties = computed(() => this.properties().length);
-  totalUnits = computed(() => this.properties().reduce((acc, p) => acc + (p.unitCount ?? 0), 0));
-  occupiedUnits = computed(() => this.allOccupied().length);
-  availableUnits = computed(() => this.totalUnits() - this.occupiedUnits());
+  occupiedProperties = computed(() => this.allOccupied().length);
+  availableProperties = computed(() => this.totalProperties() - this.occupiedProperties());
 
   firstName = computed(() => {
     const name = this.authService.currentUser()?.displayName ?? '';

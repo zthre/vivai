@@ -53,7 +53,6 @@ export class TicketService {
 
   getPendingCount$(ownerId: string): Observable<number> {
     const ref = collection(this.firestore, 'tickets');
-    // Requires composite index: ownerId (==) + status (==)
     const q = query(ref, where('ownerId', '==', ownerId), where('status', '==', 'pendiente'));
     return (collectionData(q, { idField: 'id' }) as Observable<Ticket[]>).pipe(
       map(t => t.length)
@@ -66,8 +65,6 @@ export class TicketService {
   }
 
   async create(data: {
-    unitId: string;
-    unitNumber: string;
     propertyId: string;
     propertyName: string;
     ownerId: string;

@@ -6,7 +6,6 @@ import { MatIconModule } from '@angular/material/icon';
 import { Auth } from '@angular/fire/auth';
 import { Firestore, doc, getDoc } from '@angular/fire/firestore';
 import { TicketService } from '../../../core/services/ticket.service';
-import { Unit } from '../../../core/models/unit.model';
 import { Property } from '../../../core/models/property.model';
 
 @Component({
@@ -126,7 +125,6 @@ export class TicketFormComponent implements OnInit {
   loadError = signal<string | null>(null);
   submitError = signal<string | null>(null);
 
-  private unit: Unit | null = null;
   private property: Property | null = null;
 
   form = this.fb.group({
@@ -142,35 +140,30 @@ export class TicketFormComponent implements OnInit {
       if (!firebaseUser) { this.loadError.set('No autenticado'); return; }
 
       const userSnap = await getDoc(doc(this.firestore, `users/${firebaseUser.uid}`));
-      const unitId = userSnap.data()?.['unitId'] as string | undefined;
-      if (!unitId) { this.loadError.set('No tienes una unidad asignada.'); return; }
+      const userData = userSnap.data();
+      const propertyIds = (userData?.['propertyIds'] ?? userData?.['unitIds']) as string[] | undefined;
+      const propertyId = propertyIds?.[0];
+      if (!propertyId) { this.loadError.set('No tienes un inmueble asignado.'); return; }
 
-      const unitSnap = await getDoc(doc(this.firestore, `units/${unitId}`));
-      if (!unitSnap.exists()) { this.loadError.set('No se encontró tu unidad.'); return; }
-      this.unit = { id: unitSnap.id, ...unitSnap.data() } as Unit;
-
-      const propSnap = await getDoc(doc(this.firestore, `properties/${this.unit.propertyId}`));
-      if (propSnap.exists()) {
-        this.property = { id: propSnap.id, ...propSnap.data() } as Property;
-      }
+      const propSnap = await getDoc(doc(this.firestore, `properties/${propertyId}`));
+      if (!propSnap.exists()) { this.loadError.set('No se encontró tu inmueble.'); return; }
+      this.property = { id: propSnap.id, ...propSnap.data() } as Property;
     } catch {
       this.loadError.set('Error al cargar tu información.');
     }
   }
 
   async submit() {
-    if (this.form.invalid || !this.unit || !this.property) return;
+    if (this.form.invalid || !this.property) return;
     this.saving.set(true);
     this.submitError.set(null);
     try {
       const { title, category, description } = this.form.value;
       await this.ticketService.create({
-        unitId: this.unit.id!,
-        unitNumber: this.unit.number,
         propertyId: this.property.id!,
         propertyName: this.property.name,
-        ownerId: this.unit.ownerId,
-        tenantName: this.unit.tenantName,
+        ownerId: this.property.ownerId,
+        tenantName: this.property.tenantName ?? null,
         title: title!,
         category: category as any,
         description: description!,
