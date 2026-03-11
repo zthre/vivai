@@ -65,7 +65,7 @@ const CATEGORY_CLASSES: Record<ExpenseCategory, string> = {
                 <th class="px-5 py-3 font-medium">Fecha</th>
                 <th class="px-5 py-3 font-medium">Categoría</th>
                 <th class="px-5 py-3 font-medium">Descripción</th>
-                <th class="px-5 py-3 font-medium">Inmueble</th>
+                <th class="px-5 py-3 font-medium">Propiedad</th>
                 <th class="px-5 py-3 font-medium text-right">Monto</th>
                 @if (canWrite()) { <th class="px-5 py-3 font-medium"></th> }
               </tr>

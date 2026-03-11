@@ -37,7 +37,7 @@ const DEFAULT_PERMISSION: ColaboradorPermission = {
       <!-- Header -->
       <div>
         <h1 class="text-2xl font-bold text-warm-900">Colaboradores</h1>
-        <p class="text-warm-500 text-sm mt-1">Gestión global de accesos y permisos para todos tus inmuebles</p>
+        <p class="text-warm-500 text-sm mt-1">Gestión global de accesos y permisos para todas tus propiedades</p>
       </div>
 
       <!-- Invite form -->
@@ -65,7 +65,7 @@ const DEFAULT_PERMISSION: ColaboradorPermission = {
           </button>
         </div>
         <p class="text-xs text-warm-400 mt-2">
-          Se añadirá a los {{ ownedProperties().length }} inmueble(s) con todos los permisos habilitados
+          Se añadirá a las {{ ownedProperties().length }} propiedad(es) con todos los permisos habilitados
         </p>
       </div>
 
@@ -80,7 +80,7 @@ const DEFAULT_PERMISSION: ColaboradorPermission = {
           <div class="bg-white rounded-xl border border-warm-200 shadow-sm p-12 text-center">
             <mat-icon class="text-warm-300 text-[56px]">group</mat-icon>
             <h3 class="text-warm-700 font-semibold mt-3">Sin colaboradores</h3>
-            <p class="text-warm-400 text-sm mt-1">Invita a personas para que te ayuden a gestionar tus inmuebles</p>
+            <p class="text-warm-400 text-sm mt-1">Invita a personas para que te ayuden a gestionar tus propiedades</p>
           </div>
         }
 
@@ -115,7 +115,7 @@ const DEFAULT_PERMISSION: ColaboradorPermission = {
 
             <!-- Properties with access -->
             <div class="px-4 py-3 bg-warm-50 border-b border-warm-100">
-              <p class="text-[11px] font-semibold text-warm-500 uppercase tracking-wider mb-2">Acceso a inmuebles</p>
+              <p class="text-[11px] font-semibold text-warm-500 uppercase tracking-wider mb-2">Acceso a propiedades</p>
               <div class="flex flex-wrap gap-1.5">
                 @for (prop of propertiesFor(c.uid); track prop.id) {
                   <span class="text-xs px-2.5 py-0.5 bg-white border border-warm-200 rounded-full text-warm-700">
@@ -123,7 +123,7 @@ const DEFAULT_PERMISSION: ColaboradorPermission = {
                   </span>
                 }
                 @if (propertiesFor(c.uid).length === 0) {
-                  <span class="text-xs text-warm-400">Sin inmuebles asignados</span>
+                  <span class="text-xs text-warm-400">Sin propiedades asignadas</span>
                 }
               </div>
             </div>
@@ -251,7 +251,7 @@ export class ColaboradoresPageComponent {
 
   permSummary(perms: ColaboradorPermission): { label: string; enabled: boolean }[] {
     return [
-      { label: 'Unidades', enabled: perms.inmueblesUnidades !== false },
+      { label: 'Propiedades', enabled: perms.inmueblesUnidades !== false },
       { label: 'Pagos', enabled: perms.inmueblesPagos !== false },
       { label: 'Media', enabled: perms.inmueblesMedia !== false },
       { label: 'Gastos', enabled: perms.gastos !== false },
@@ -286,7 +286,7 @@ export class ColaboradoresPageComponent {
       const result = await this.propertyService.addGlobalColaborador(email);
       this.inviteEmail = '';
       if (result === 'assigned') {
-        this.snackBar.open('Colaborador asignado a todos tus inmuebles.', 'OK', { duration: 3500 });
+        this.snackBar.open('Colaborador asignado a todas tus propiedades.', 'OK', { duration: 3500 });
       } else {
         this.snackBar.open('Invitación enviada — se activará cuando el usuario se registre.', 'OK', { duration: 4500 });
       }
@@ -302,7 +302,7 @@ export class ColaboradoresPageComponent {
     this.actionLoading.set(true);
     try {
       await this.propertyService.removeGlobalColaborador(uid);
-      this.snackBar.open('Colaborador removido de todos los inmuebles.', 'OK', { duration: 3000 });
+      this.snackBar.open('Colaborador removido de todas las propiedades.', 'OK', { duration: 3000 });
     } catch {
       this.snackBar.open('Error al remover colaborador.', 'OK', { duration: 3000 });
     } finally {

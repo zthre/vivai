@@ -96,14 +96,14 @@ function formatDate(d: Date): string {
 
         <!-- Property -->
         <div>
-          <label class="block text-xs font-medium text-warm-600 mb-1">Inmueble *</label>
+          <label class="block text-xs font-medium text-warm-600 mb-1">Propiedad *</label>
           <select
             name="propertyId"
             [(ngModel)]="form.propertyId"
             required
             class="w-full px-3 py-2 border border-warm-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-300 bg-white"
           >
-            <option value="" disabled>Selecciona un inmueble</option>
+            <option value="" disabled>Selecciona una propiedad</option>
             @for (p of properties(); track p.id) {
               <option [value]="p.id">{{ p.name }}</option>
             }

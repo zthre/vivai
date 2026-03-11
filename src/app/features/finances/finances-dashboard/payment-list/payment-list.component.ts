@@ -32,7 +32,7 @@ const MONTH_NAMES = [
             <thead>
               <tr class="text-left text-xs text-warm-400 uppercase tracking-wide border-b border-warm-100">
                 <th class="px-5 py-3 font-medium">Fecha</th>
-                <th class="px-5 py-3 font-medium">Inmueble</th>
+                <th class="px-5 py-3 font-medium">Propiedad</th>
                 <th class="px-5 py-3 font-medium">Inquilino</th>
                 <th class="px-5 py-3 font-medium text-right">Monto</th>
               </tr>

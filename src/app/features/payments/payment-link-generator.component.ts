@@ -55,7 +55,7 @@ function currentMonthKey(): string {
         <!-- Property info -->
         @if (property()) {
           <div class="bg-white rounded-xl border border-warm-200 shadow-sm p-5 space-y-2">
-            <p class="text-xs font-semibold text-warm-500 uppercase tracking-wide">Inmueble</p>
+            <p class="text-xs font-semibold text-warm-500 uppercase tracking-wide">Propiedad</p>
             <div class="flex items-center justify-between">
               <div>
                 <p class="font-semibold text-warm-900">{{ property()?.name }}</p>
@@ -117,14 +117,14 @@ function currentMonthKey(): string {
             @if (!property()?.tenantRentPrice) {
               <div class="flex items-center gap-2 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
                 <mat-icon class="text-yellow-600 text-[18px]">warning</mat-icon>
-                <p class="text-sm text-yellow-700">El inmueble no tiene precio de renta configurado.</p>
+                <p class="text-sm text-yellow-700">La propiedad no tiene precio de renta configurado.</p>
               </div>
             }
 
             @if (!property()?.tenantEmail) {
               <div class="flex items-center gap-2 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
                 <mat-icon class="text-yellow-600 text-[18px]">warning</mat-icon>
-                <p class="text-sm text-yellow-700">El inmueble no tiene email de inquilino para enviar el recibo.</p>
+                <p class="text-sm text-yellow-700">La propiedad no tiene email de inquilino para enviar el recibo.</p>
               </div>
             }
 

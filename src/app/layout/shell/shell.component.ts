@@ -118,7 +118,7 @@ interface NavItem {
         <!-- Version -->
         @if (sidebarOpen()) {
           <div class="px-4 pb-2">
-            <span class="text-xs text-warm-600 font-mono">v1.0.0</span>
+            <span class="text-xs text-warm-600 font-mono">v1.0.1</span>
           </div>
         }
 
@@ -211,20 +211,20 @@ export class ShellComponent {
 
   private ownerNavItems: NavItem[] = [
     { label: 'Dashboard', icon: 'dashboard', route: '/dashboard' },
-    { label: 'Inmuebles', icon: 'apartment', route: '/properties' },
+    { label: 'Propiedades', icon: 'apartment', route: '/properties' },
     { label: 'Finanzas', icon: 'bar_chart', route: '/finances' },
     { label: 'Analytics', icon: 'insights', route: '/analytics' },
     { label: 'Recordatorios', icon: 'chat', route: '/reminders' },
     { label: 'Colaboradores', icon: 'group', route: '/colaboradores' },
-    { label: 'Marketplace', icon: 'storefront', route: '/inmuebles' },
+    { label: 'Marketplace', icon: 'storefront', route: '/' },
     { label: 'Tickets', icon: 'build_circle', route: '/tickets', badge: () => this.pendingTicketsCount() },
   ];
 
   private colaboradorNavItems: NavItem[] = [
     { label: 'Dashboard', icon: 'dashboard', route: '/dashboard' },
-    { label: 'Inmuebles', icon: 'apartment', route: '/properties' },
+    { label: 'Propiedades', icon: 'apartment', route: '/properties' },
     { label: 'Finanzas', icon: 'bar_chart', route: '/finances' },
-    { label: 'Marketplace', icon: 'storefront', route: '/inmuebles' },
+    { label: 'Marketplace', icon: 'storefront', route: '/' },
     { label: 'Tickets', icon: 'build_circle', route: '/tickets', badge: () => this.pendingTicketsCount() },
   ];
 

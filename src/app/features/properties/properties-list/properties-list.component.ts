@@ -20,7 +20,7 @@ import { PaymentFormComponent } from '../../payments/payment-form/payment-form.c
       <!-- Header -->
       <div class="flex items-center justify-between">
         <div>
-          <h1 class="text-2xl font-bold text-warm-900">Inmuebles</h1>
+          <h1 class="text-2xl font-bold text-warm-900">Propiedades</h1>
           <p class="text-warm-500 text-sm mt-1">{{ properties().length }} propiedad(es) registrada(s)</p>
         </div>
         @if (isOwner()) {
@@ -29,7 +29,7 @@ import { PaymentFormComponent } from '../../payments/payment-form/payment-form.c
             class="flex items-center gap-2 px-4 py-2.5 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium shadow-sm"
           >
             <mat-icon class="text-[18px]">add</mat-icon>
-            Nuevo inmueble
+            Nueva propiedad
           </a>
         }
       </div>
@@ -38,18 +38,18 @@ import { PaymentFormComponent } from '../../payments/payment-form/payment-form.c
       @if (properties().length === 0) {
         <div class="bg-white rounded-xl border border-warm-200 shadow-sm p-12 text-center">
           <mat-icon class="text-warm-300 text-[56px]">apartment</mat-icon>
-          <h3 class="text-warm-700 font-semibold mt-3">Sin inmuebles aún</h3>
+          <h3 class="text-warm-700 font-semibold mt-3">Sin propiedades aún</h3>
           @if (isOwner()) {
-            <p class="text-warm-400 text-sm mt-1 mb-5">Registra tu primer inmueble para comenzar</p>
+            <p class="text-warm-400 text-sm mt-1 mb-5">Registra tu primera propiedad para comenzar</p>
             <a
               routerLink="/properties/new"
               class="inline-flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium"
             >
               <mat-icon class="text-[18px]">add</mat-icon>
-              Agregar inmueble
+              Agregar propiedad
             </a>
           } @else {
-            <p class="text-warm-400 text-sm mt-1">Aún no tienes inmuebles asignados como colaborador</p>
+            <p class="text-warm-400 text-sm mt-1">Aún no tienes propiedades asignadas como colaborador</p>
           }
         </div>
       }
@@ -212,7 +212,7 @@ export class PropertiesListComponent {
   confirmDelete(property: Property) {
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       data: {
-        title: 'Eliminar inmueble',
+        title: 'Eliminar propiedad',
         message: `¿Estás seguro de eliminar "${property.name}"? Esta acción no se puede deshacer.`,
         confirmLabel: 'Eliminar',
         danger: true,
@@ -222,7 +222,7 @@ export class PropertiesListComponent {
     dialogRef.afterClosed().subscribe(async confirmed => {
       if (confirmed) {
         await this.propertyService.delete(property.id!);
-        this.snackBar.open('Inmueble eliminado.', 'OK', { duration: 3000 });
+        this.snackBar.open('Propiedad eliminada.', 'OK', { duration: 3000 });
       }
     });
   }

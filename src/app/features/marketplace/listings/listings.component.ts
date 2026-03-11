@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { MarketplaceService, listingPrice } from '../../../core/services/marketplace.service';
+import { AuthService } from '../../../core/auth/auth.service';
 import { Property } from '../../../core/models/property.model';
 import { ListingCardComponent } from './listing-card/listing-card.component';
 
@@ -26,14 +27,37 @@ const PAGE_SIZE = 12;
               <span class="text-white font-bold text-sm">V</span>
             </div>
             <span class="text-lg font-semibold text-warm-900">vivai</span>
-            <span class="text-warm-400 text-sm hidden sm:block">· Inmuebles disponibles</span>
+            <span class="text-warm-400 text-sm hidden sm:block">· Propiedades disponibles</span>
           </div>
-          <a
-            routerLink="/login"
-            class="text-sm font-medium text-primary-600 hover:text-primary-700 border border-primary-200 px-3 py-1.5 rounded-lg hover:bg-primary-50 transition-colors"
-          >
-            Iniciar sesión
-          </a>
+          @if (isLoggedIn()) {
+            <div class="flex items-center gap-3">
+              <a
+                routerLink="/dashboard"
+                class="text-sm font-medium text-primary-600 hover:text-primary-700 border border-primary-200 px-3 py-1.5 rounded-lg hover:bg-primary-50 transition-colors"
+              >
+                Ir al dashboard
+              </a>
+              @if (currentUser()?.photoURL) {
+                <img [src]="currentUser()!.photoURL!" class="w-8 h-8 rounded-full" alt="avatar">
+              } @else {
+                <div class="w-8 h-8 rounded-full bg-primary-500 flex items-center justify-center">
+                  <span class="text-white text-xs font-bold">{{ currentUser()?.displayName?.[0]?.toUpperCase() ?? 'U' }}</span>
+                </div>
+              }
+            </div>
+          } @else {
+            <button
+              (click)="loginWithGoogle()"
+              [disabled]="loginLoading()"
+              class="text-sm font-medium text-primary-600 hover:text-primary-700 border border-primary-200 px-3 py-1.5 rounded-lg hover:bg-primary-50 transition-colors disabled:opacity-50"
+            >
+              @if (loginLoading()) {
+                Abriendo Google...
+              } @else {
+                Iniciar sesión
+              }
+            </button>
+          }
         </div>
       </header>
 
@@ -85,7 +109,7 @@ const PAGE_SIZE = 12;
           <!-- Empty state -->
           <div class="flex flex-col items-center justify-center py-24 text-center">
             <mat-icon class="text-warm-300 text-[56px]">search_off</mat-icon>
-            <p class="text-warm-500 mt-3 text-base">No hay inmuebles disponibles en este momento.</p>
+            <p class="text-warm-500 mt-3 text-base">No hay propiedades disponibles en este momento.</p>
             <p class="text-warm-400 text-sm mt-1">Vuelve pronto para nuevas opciones.</p>
           </div>
         } @else {
@@ -124,6 +148,11 @@ const PAGE_SIZE = 12;
 })
 export class ListingsComponent {
   private marketplaceService = inject(MarketplaceService);
+  private authService = inject(AuthService);
+
+  currentUser = this.authService.currentUser;
+  isLoggedIn = this.authService.isLoggedIn;
+  loginLoading = signal(false);
 
   allListings = toSignal(this.marketplaceService.getListings());
   filterType = signal<FilterType>('todos');
@@ -178,5 +207,14 @@ export class ListingsComponent {
 
   nextPage() {
     if (this.currentPage() < this.totalPages()) this.currentPage.update(p => p + 1);
+  }
+
+  async loginWithGoogle() {
+    this.loginLoading.set(true);
+    try {
+      await this.authService.loginWithGoogle();
+    } catch {
+      this.loginLoading.set(false);
+    }
   }
 }

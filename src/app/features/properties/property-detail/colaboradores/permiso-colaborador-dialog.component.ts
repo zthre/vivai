@@ -30,9 +30,9 @@ interface PermissionSection {
 const SECTIONS: PermissionSection[] = [
   {
     icon: 'apartment',
-    title: 'Inmuebles',
+    title: 'Propiedades',
     subPermissions: [
-      { key: 'inmueblesUnidades', label: 'Crear, editar y eliminar unidades' },
+      { key: 'inmueblesUnidades', label: 'Crear, editar y eliminar' },
       { key: 'inmueblesPagos', label: 'Registrar pagos' },
       { key: 'inmueblesMedia', label: 'Fotos y contratos' },
     ],
@@ -62,7 +62,7 @@ const SECTIONS: PermissionSection[] = [
       <!-- Header -->
       <div class="px-6 pt-5 pb-4 border-b border-warm-100">
         <h2 class="text-base font-semibold text-warm-900">Permisos de colaboración</h2>
-        <p class="text-xs text-warm-400 mt-0.5">Aplica a todos los inmuebles del propietario</p>
+        <p class="text-xs text-warm-400 mt-0.5">Aplica a todas las propiedades del propietario</p>
       </div>
 
       <!-- Collaborator info -->

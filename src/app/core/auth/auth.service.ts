@@ -157,7 +157,7 @@ export class AuthService {
   async logout(): Promise<void> {
     localStorage.removeItem(ACTIVE_ROLE_KEY);
     await signOut(this.auth);
-    await this.router.navigate(['/login']);
+    await this.router.navigate(['/']);
   }
 
   private async handlePostLogin(firebaseUser: User): Promise<UserRole> {

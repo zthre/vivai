@@ -21,7 +21,7 @@ import { AuthService } from '../../../core/auth/auth.service';
     <div class="space-y-6">
       <!-- Breadcrumb -->
       <div class="flex items-center gap-2 text-sm text-warm-400">
-        <a routerLink="/properties" class="hover:text-warm-600 transition-colors">Inmuebles</a>
+        <a routerLink="/properties" class="hover:text-warm-600 transition-colors">Propiedades</a>
         <mat-icon class="text-[16px]">chevron_right</mat-icon>
         <span class="text-warm-700 font-medium">{{ property()?.name }}</span>
       </div>
@@ -239,7 +239,7 @@ export class PropertyDetailComponent implements OnInit {
       data: {
         propertyId: this.propertyId,
         rentPrice: this.property()?.tenantRentPrice ?? this.property()?.rentPrice ?? null,
-        label: this.property()?.name ?? 'Inmueble',
+        label: this.property()?.name ?? 'Propiedad',
       },
     });
   }

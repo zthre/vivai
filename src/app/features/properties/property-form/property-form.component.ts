@@ -21,8 +21,8 @@ type PropertyType = 'apartamento' | 'casa' | 'local' | 'bodega';
           <mat-icon>arrow_back</mat-icon>
         </a>
         <div>
-          <h1 class="text-2xl font-bold text-warm-900">{{ isEdit() ? 'Editar' : 'Nuevo' }} inmueble</h1>
-          <p class="text-warm-500 text-sm">{{ isEdit() ? 'Actualiza los datos del inmueble' : 'Registra una nueva propiedad' }}</p>
+          <h1 class="text-2xl font-bold text-warm-900">{{ isEdit() ? 'Editar' : 'Nueva' }} propiedad</h1>
+          <p class="text-warm-500 text-sm">{{ isEdit() ? 'Actualiza los datos de la propiedad' : 'Registra una nueva propiedad' }}</p>
         </div>
       </div>
 
@@ -30,7 +30,7 @@ type PropertyType = 'apartamento' | 'casa' | 'local' | 'bodega';
 
         <!-- ── Info básica ── -->
         <div>
-          <label class="block text-sm font-medium text-warm-700 mb-1.5">Nombre del inmueble *</label>
+          <label class="block text-sm font-medium text-warm-700 mb-1.5">Nombre de la propiedad *</label>
           <input formControlName="name" type="text" placeholder="Ej: Edificio Los Robles"
             class="w-full px-3 py-2.5 border border-warm-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             [class.border-red-400]="form.get('name')?.invalid && form.get('name')?.touched">
@@ -72,7 +72,7 @@ type PropertyType = 'apartamento' | 'casa' | 'local' | 'bodega';
             <input type="checkbox" formControlName="isOccupied" class="w-4 h-4 accent-warm-600 cursor-pointer mt-0.5 flex-shrink-0">
             <div>
               <span class="text-sm font-medium text-warm-700">Ocupado</span>
-              <p class="text-xs text-warm-400 mt-0.5">Hay un inquilino activo en este inmueble</p>
+              <p class="text-xs text-warm-400 mt-0.5">Hay un inquilino activo en esta propiedad</p>
             </div>
           </label>
 
@@ -122,7 +122,7 @@ type PropertyType = 'apartamento' | 'casa' | 'local' | 'bodega';
             <input type="checkbox" formControlName="isPublic" class="w-4 h-4 accent-primary-500 cursor-pointer mt-0.5 flex-shrink-0">
             <div>
               <span class="text-sm font-medium text-warm-700">Publicar en marketplace</span>
-              <p class="text-xs text-warm-400 mt-0.5">El inmueble aparecerá en el portal público</p>
+              <p class="text-xs text-warm-400 mt-0.5">La propiedad aparecerá en el portal público</p>
             </div>
           </label>
 
@@ -187,8 +187,35 @@ type PropertyType = 'apartamento' | 'casa' | 'local' | 'bodega';
                   <div>
                     <label class="block text-sm font-medium text-warm-700 mb-1.5">Descripción pública</label>
                     <textarea formControlName="publicDescription" rows="3"
-                      placeholder="Describe el inmueble para el marketplace..."
+                      placeholder="Describe la propiedad para el marketplace..."
                       class="w-full px-3 py-2.5 border border-warm-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"></textarea>
+                  </div>
+
+                  <!-- Tags -->
+                  <div>
+                    <label class="block text-sm font-medium text-warm-700 mb-1.5">Tags <span class="text-warm-400 font-normal">(máx. 3)</span></label>
+                    <div class="flex flex-wrap gap-2 mb-2">
+                      @for (tag of tags(); track tag) {
+                        <span class="inline-flex items-center gap-1 px-2.5 py-1 bg-primary-100 text-primary-700 text-xs font-semibold rounded-full">
+                          {{ tag }}
+                          <button type="button" (click)="removeTag(tag)" class="hover:text-primary-900 transition-colors">
+                            <mat-icon class="text-[14px]">close</mat-icon>
+                          </button>
+                        </span>
+                      }
+                    </div>
+                    @if (tags().length < 3) {
+                      <div class="flex gap-2">
+                        <input #tagInput type="text" placeholder="Ej: Parqueadero, Piscina..."
+                          (keydown.enter)="addTag(tagInput); $event.preventDefault()"
+                          class="flex-1 px-3 py-2 border border-warm-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                          maxlength="30">
+                        <button type="button" (click)="addTag(tagInput)"
+                          class="px-3 py-2 bg-primary-500 text-white rounded-lg text-sm font-medium hover:bg-primary-600 transition-colors">
+                          Agregar
+                        </button>
+                      </div>
+                    }
                   </div>
                 }
               </div>
@@ -254,7 +281,7 @@ type PropertyType = 'apartamento' | 'casa' | 'local' | 'bodega';
             @if (loading()) {
               <div class="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin"></div>
             }
-            {{ isEdit() ? 'Guardar cambios' : 'Crear inmueble' }}
+            {{ isEdit() ? 'Guardar cambios' : 'Crear propiedad' }}
           </button>
         </div>
       </form>
@@ -270,6 +297,7 @@ export class PropertyFormComponent implements OnInit {
 
   isEdit = signal(false);
   loading = signal(false);
+  tags = signal<string[]>([]);
   private propertyId: string | null = null;
 
   propertyTypes = [
@@ -323,6 +351,7 @@ export class PropertyFormComponent implements OnInit {
             ? (p.purchaseDate as Timestamp).toDate().toISOString().split('T')[0]
             : null;
           this.form.patchValue({ ...p, isOccupied: p.status === 'ocupado', purchaseDate: purchaseDateStr } as any);
+          if (p.tags?.length) this.tags.set(p.tags.slice(0, 3));
         }
       });
     }
@@ -330,6 +359,18 @@ export class PropertyFormComponent implements OnInit {
 
   setType(value: string) {
     this.form.get('type')?.setValue(value as PropertyType);
+  }
+
+  addTag(input: HTMLInputElement) {
+    const value = input.value.trim();
+    if (value && this.tags().length < 3 && !this.tags().includes(value)) {
+      this.tags.update(t => [...t, value]);
+    }
+    input.value = '';
+  }
+
+  removeTag(tag: string) {
+    this.tags.update(t => t.filter(x => x !== tag));
   }
 
   async submit() {
@@ -358,6 +399,7 @@ export class PropertyFormComponent implements OnInit {
         salePrice: isForSale ? (v.salePrice || null) : null,
         isListed: isForRent || isForSale,
         publicDescription: (isForRent || isForSale) ? (v.publicDescription || null) : null,
+        tags: (isForRent || isForSale) ? this.tags() : [],
         paymentDueDay: isOccupied ? (v.paymentDueDay || null) : null,
         notificationsEnabled: isOccupied ? !!v.notificationsEnabled : false,
         purchasePrice: v.purchasePrice || null,
@@ -368,10 +410,10 @@ export class PropertyFormComponent implements OnInit {
 
       if (this.isEdit() && this.propertyId) {
         await this.propertyService.update(this.propertyId, payload);
-        this.snackBar.open('Inmueble actualizado.', 'OK', { duration: 3000 });
+        this.snackBar.open('Propiedad actualizada.', 'OK', { duration: 3000 });
       } else {
         await this.propertyService.create(payload);
-        this.snackBar.open('Inmueble creado.', 'OK', { duration: 3000 });
+        this.snackBar.open('Propiedad creada.', 'OK', { duration: 3000 });
       }
       await this.router.navigate(['/properties']);
     } finally {

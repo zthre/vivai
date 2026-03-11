@@ -203,13 +203,13 @@ export class MyLeaseComponent implements OnInit {
       const propertyIds = (userData?.['propertyIds'] ?? userData?.['unitIds']) as string[] | undefined;
       const propertyId = propertyIds?.[0];
       if (!propertyId) {
-        this.error.set('No tienes un inmueble asignado. Contacta a tu arrendador.');
+        this.error.set('No tienes una propiedad asignada. Contacta a tu arrendador.');
         return;
       }
 
       const propSnap = await getDoc(doc(this.firestore, `properties/${propertyId}`));
       if (!propSnap.exists()) {
-        this.error.set('No se encontró tu inmueble.');
+        this.error.set('No se encontró tu propiedad.');
         return;
       }
 

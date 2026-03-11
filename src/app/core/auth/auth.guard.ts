@@ -12,6 +12,6 @@ export const authGuard: CanActivateFn = () => {
   // Without this, take(1) can capture the initial null before the redirect is handled.
   return from((auth as any).authStateReady()).pipe(
     switchMap(() => authState(auth).pipe(take(1))),
-    map(user => user ? true : router.createUrlTree(['/login']))
+    map(user => user ? true : router.createUrlTree(['/']))
   );
 };

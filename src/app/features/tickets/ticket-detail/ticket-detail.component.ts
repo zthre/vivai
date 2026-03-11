@@ -78,7 +78,7 @@ const STATUS_COLORS: Record<string, string> = {
 
           <div class="grid grid-cols-2 gap-3 text-sm">
             <div>
-              <p class="text-xs text-warm-400 mb-0.5">Inmueble</p>
+              <p class="text-xs text-warm-400 mb-0.5">Propiedad</p>
               <p class="text-warm-700 font-medium">{{ ticket()!.propertyName }}</p>
             </div>
             @if (ticket()!.tenantName) {

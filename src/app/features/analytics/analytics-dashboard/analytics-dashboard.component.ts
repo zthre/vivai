@@ -186,13 +186,13 @@ const MONTH_NAMES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Se
         <!-- Profitability Table -->
         <div class="bg-white rounded-xl border border-warm-200 shadow-sm overflow-hidden">
           <div class="px-5 py-4 border-b border-warm-100">
-            <h3 class="font-semibold text-warm-900">Rentabilidad por inmueble</h3>
+            <h3 class="font-semibold text-warm-900">Rentabilidad por propiedad</h3>
           </div>
           <div class="overflow-x-auto">
             <table class="w-full text-sm">
               <thead>
                 <tr class="bg-warm-50 text-xs font-semibold text-warm-500 uppercase tracking-wide">
-                  <th class="px-5 py-3 text-left">Inmueble</th>
+                  <th class="px-5 py-3 text-left">Propiedad</th>
                   <th class="px-5 py-3 text-right">Ingresos</th>
                   <th class="px-5 py-3 text-right">Gastos</th>
                   <th class="px-5 py-3 text-right">Balance</th>

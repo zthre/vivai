@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { RouterLink, ActivatedRoute } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MarketplaceService } from '../../../core/services/marketplace.service';
+import { AuthService } from '../../../core/auth/auth.service';
 import { Property } from '../../../core/models/property.model';
 
 @Component({
@@ -20,15 +21,31 @@ import { Property } from '../../../core/models/property.model';
             </div>
             <span class="text-lg font-semibold text-warm-900">vivai</span>
           </div>
-          <a routerLink="/login"
-            class="text-sm font-medium text-primary-600 hover:text-primary-700 border border-primary-200 px-3 py-1.5 rounded-lg hover:bg-primary-50 transition-colors">
-            Iniciar sesión
-          </a>
+          @if (isLoggedIn()) {
+            <div class="flex items-center gap-3">
+              <a routerLink="/dashboard"
+                class="text-sm font-medium text-primary-600 hover:text-primary-700 border border-primary-200 px-3 py-1.5 rounded-lg hover:bg-primary-50 transition-colors">
+                Ir al dashboard
+              </a>
+              @if (currentUser()?.photoURL) {
+                <img [src]="currentUser()!.photoURL!" class="w-8 h-8 rounded-full" alt="avatar">
+              } @else {
+                <div class="w-8 h-8 rounded-full bg-primary-500 flex items-center justify-center">
+                  <span class="text-white text-xs font-bold">{{ currentUser()?.displayName?.[0]?.toUpperCase() ?? 'U' }}</span>
+                </div>
+              }
+            </div>
+          } @else {
+            <button (click)="loginWithGoogle()" [disabled]="loginLoading()"
+              class="text-sm font-medium text-primary-600 hover:text-primary-700 border border-primary-200 px-3 py-1.5 rounded-lg hover:bg-primary-50 transition-colors disabled:opacity-50">
+              @if (loginLoading()) { Abriendo Google... } @else { Iniciar sesión }
+            </button>
+          }
         </div>
       </header>
 
       <main class="max-w-4xl mx-auto px-4 py-8">
-        <a routerLink="/inmuebles" class="inline-flex items-center gap-1 text-sm text-warm-500 hover:text-warm-700 mb-6">
+        <a routerLink="/" class="inline-flex items-center gap-1 text-sm text-warm-500 hover:text-warm-700 mb-6">
           <mat-icon class="text-[18px]">arrow_back</mat-icon>
           Volver al listado
         </a>
@@ -73,6 +90,14 @@ import { Property } from '../../../core/models/property.model';
                 {{ property()!.address }}
               </p>
             </div>
+
+            @if (property()!.tags?.length) {
+              <div class="flex flex-wrap gap-1.5">
+                @for (tag of property()!.tags!; track tag) {
+                  <span class="px-2.5 py-1 bg-primary-100 text-primary-700 text-xs font-semibold rounded-full">{{ tag }}</span>
+                }
+              </div>
+            }
 
             <!-- Price -->
             <div class="pt-2 border-t border-warm-100 space-y-3">
@@ -121,8 +146,12 @@ import { Property } from '../../../core/models/property.model';
 })
 export class PropertyListingDetailComponent implements OnInit {
   private marketplaceService = inject(MarketplaceService);
+  private authService = inject(AuthService);
   private route = inject(ActivatedRoute);
 
+  currentUser = this.authService.currentUser;
+  isLoggedIn = this.authService.isLoggedIn;
+  loginLoading = signal(false);
   property = signal<Property | null>(null);
 
   ngOnInit() {
@@ -136,5 +165,14 @@ export class PropertyListingDetailComponent implements OnInit {
       `Hola, me interesa la propiedad ${this.property()?.name} ( ${this.property()?.address} )`
     );
     return `https://wa.me/${phone}?text=${text}`;
+  }
+
+  async loginWithGoogle() {
+    this.loginLoading.set(true);
+    try {
+      await this.authService.loginWithGoogle();
+    } catch {
+      this.loginLoading.set(false);
+    }
   }
 }

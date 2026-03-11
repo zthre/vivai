@@ -157,7 +157,7 @@ function monthOptions(count = 24): { value: string; label: string }[] {
       <div class="bg-warm-50 rounded-xl border border-warm-200 p-4">
         <p class="text-xs font-semibold text-warm-600 uppercase tracking-wide mb-2">Columnas del reporte</p>
         <p class="text-xs text-warm-500 font-mono">
-          Fecha | Inmueble | Concepto | Categoría | Monto | Fuente
+          Fecha | Propiedad | Concepto | Categoría | Monto | Fuente
         </p>
       </div>
     </div>
@@ -195,7 +195,7 @@ export class ReportsComponent {
     this.downloadUrl.set(null);
     try {
       const rows = await this.fetchRows();
-      const header = 'Fecha,Inmueble,Concepto,Categoría,Monto,Fuente\n';
+      const header = 'Fecha,Propiedad,Concepto,Categoría,Monto,Fuente\n';
       const body = rows
         .map(r =>
           [r.fecha, r.inmueble, r.concepto, r.categoria, r.monto, r.fuente]

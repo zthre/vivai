@@ -1,7 +1,7 @@
 import { Timestamp } from '@angular/fire/firestore';
 
 export interface ColaboradorPermission {
-  /** Editar inmueble */
+  /** Editar propiedad */
   inmueblesUnidades?: boolean;
   /** Registrar pagos */
   inmueblesPagos?: boolean;
@@ -62,6 +62,7 @@ export interface Property {
   // Marketplace / público
   isPublic?: boolean;
   whatsappPhone?: string | null;
+  tags?: string[];
 
   // Colaboradores
   collaboratorUids?: string[];

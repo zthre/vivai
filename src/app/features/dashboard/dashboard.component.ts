@@ -25,7 +25,7 @@ import { AuthService } from '../../core/auth/auth.service';
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <div class="bg-white rounded-xl p-5 border border-warm-200 shadow-sm">
           <div class="flex items-center justify-between mb-3">
-            <span class="text-sm font-medium text-warm-500">Inmuebles</span>
+            <span class="text-sm font-medium text-warm-500">Propiedades</span>
             <div class="w-9 h-9 bg-primary-100 rounded-lg flex items-center justify-center">
               <mat-icon class="text-primary-600 text-[20px]">apartment</mat-icon>
             </div>
@@ -35,18 +35,18 @@ import { AuthService } from '../../core/auth/auth.service';
 
         <div class="bg-white rounded-xl p-5 border border-warm-200 shadow-sm">
           <div class="flex items-center justify-between mb-3">
-            <span class="text-sm font-medium text-warm-500">Inmuebles ocupados</span>
+            <span class="text-sm font-medium text-warm-500">Propiedades ocupadas</span>
             <div class="w-9 h-9 bg-green-100 rounded-lg flex items-center justify-center">
               <mat-icon class="text-green-600 text-[20px]">people</mat-icon>
             </div>
           </div>
           <p class="text-3xl font-bold text-warm-900">{{ occupiedProperties() }}</p>
-          <p class="text-xs text-warm-400 mt-1">de {{ totalProperties() }} inmuebles</p>
+          <p class="text-xs text-warm-400 mt-1">de {{ totalProperties() }} propiedades</p>
         </div>
 
         <div class="bg-white rounded-xl p-5 border border-warm-200 shadow-sm">
           <div class="flex items-center justify-between mb-3">
-            <span class="text-sm font-medium text-warm-500">Inmuebles disponibles</span>
+            <span class="text-sm font-medium text-warm-500">Propiedades disponibles</span>
             <div class="w-9 h-9 bg-orange-100 rounded-lg flex items-center justify-center">
               <mat-icon class="text-orange-600 text-[20px]">door_open</mat-icon>
             </div>
@@ -60,7 +60,7 @@ import { AuthService } from '../../core/auth/auth.service';
         <div class="flex items-center justify-between px-5 py-4 border-b border-warm-100">
           <h2 class="font-semibold text-warm-900">Últimos pagos</h2>
           <a routerLink="/properties" class="text-sm text-primary-600 hover:text-primary-700 font-medium">
-            Ver inmuebles →
+            Ver propiedades →
           </a>
         </div>
         <div class="divide-y divide-warm-100">
@@ -96,7 +96,7 @@ import { AuthService } from '../../core/auth/auth.service';
           class="flex items-center gap-2 px-4 py-2.5 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium shadow-sm"
         >
           <mat-icon class="text-[18px]">add</mat-icon>
-          Nuevo inmueble
+          Nueva propiedad
         </a>
       </div>
     </div>

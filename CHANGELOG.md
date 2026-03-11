@@ -4,6 +4,18 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ---
 
+## [v1.0.1] — Marketplace como Página Principal
+
+### Cambios
+- La ruta raíz `/` ahora carga el marketplace de inmuebles (antes redirigía a `/dashboard`).
+- El botón "Iniciar sesión" en el marketplace abre el popup de Google directamente (ya no navega a `/login`).
+- Cuando el usuario está autenticado, el header del marketplace muestra su foto de perfil y un enlace "Ir al dashboard".
+- El auth guard redirige a `/` (marketplace) en lugar de `/login` cuando no hay sesión.
+- Logout navega a `/` en lugar de `/login`.
+- Shell: versión actualizada a v1.0.1.
+
+---
+
 ## [v1.0.0] — Inteligencia de Negocio y Reportes
 
 ### Nuevo

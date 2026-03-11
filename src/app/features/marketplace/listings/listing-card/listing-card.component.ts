@@ -42,6 +42,15 @@ type FilterMode = 'todos' | 'renta' | 'venta';
           <span class="text-xs text-warm-400 capitalize">{{ property.type }}</span>
         </div>
 
+        <!-- Tags -->
+        @if (property.tags?.length) {
+          <div class="flex flex-wrap gap-1">
+            @for (tag of property.tags; track tag) {
+              <span class="px-2 py-0.5 bg-primary-100 text-primary-700 text-[10px] font-semibold rounded-full">{{ tag }}</span>
+            }
+          </div>
+        }
+
         <!-- Name and address -->
         <div>
           <h3 class="font-semibold text-warm-900 text-sm leading-snug">{{ property.name }}</h3>
@@ -121,7 +130,7 @@ export class ListingCardComponent {
   }
 
   detailLink(): string[] {
-    return ['/inmuebles', this.property.id!];
+    return ['/', this.property.id!];
   }
 
   whatsappLink(): string {

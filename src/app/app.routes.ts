@@ -5,7 +5,6 @@ import { tenantGuard } from './core/auth/tenant.guard';
 import { rolesGuard } from './core/auth/roles.guard';
 
 export const routes: Routes = [
-  { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
   {
     path: 'login',
     loadComponent: () =>
@@ -125,9 +124,9 @@ export const routes: Routes = [
     ],
   },
   {
-    path: 'inmuebles',
+    path: '',
     loadChildren: () =>
       import('./features/marketplace/marketplace.routes').then(m => m.MARKETPLACE_ROUTES),
   },
-  { path: '**', redirectTo: 'dashboard' },
+  { path: '**', redirectTo: '' },
 ];

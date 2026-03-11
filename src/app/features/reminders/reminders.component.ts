@@ -101,7 +101,7 @@ import { Property } from '../../core/models/property.model';
                 }
               </div>
               @if (!prop.tenantPhone) {
-                <p class="text-xs text-red-400 mt-0.5">Sin número de teléfono — agrégalo en el inmueble</p>
+                <p class="text-xs text-red-400 mt-0.5">Sin número de teléfono — agrégalo en la propiedad</p>
               }
             </div>
 

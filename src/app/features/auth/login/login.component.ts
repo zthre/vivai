@@ -20,7 +20,7 @@ import { AuthService } from '../../../core/auth/auth.service';
             <span class="text-white text-3xl font-bold">V</span>
           </div>
           <h1 class="text-2xl font-bold text-warm-900">vivai</h1>
-          <p class="text-warm-500 text-sm mt-1">Gestión de inmuebles</p>
+          <p class="text-warm-500 text-sm mt-1">Gestión de propiedades</p>
         </div>
 
         @if (checkingAuth()) {
@@ -76,8 +76,9 @@ export class LoginComponent implements OnInit {
       if (user) {
         // Redirect based on role
         const snap = await getDoc(doc(this.firestore, `users/${user.uid}`));
-        const role = snap.data()?.['role'];
-        await this.router.navigate([role === 'tenant' ? '/tenant' : '/dashboard']);
+        const data = snap.data();
+        const roles: string[] = data?.['roles'] ?? (data?.['role'] ? [data['role']] : []);
+        await this.router.navigate([roles.includes('tenant') ? '/tenant' : '/dashboard']);
       } else {
         this.checkingAuth.set(false);
       }

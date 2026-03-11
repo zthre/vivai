@@ -143,10 +143,10 @@ export class TicketFormComponent implements OnInit {
       const userData = userSnap.data();
       const propertyIds = (userData?.['propertyIds'] ?? userData?.['unitIds']) as string[] | undefined;
       const propertyId = propertyIds?.[0];
-      if (!propertyId) { this.loadError.set('No tienes un inmueble asignado.'); return; }
+      if (!propertyId) { this.loadError.set('No tienes una propiedad asignada.'); return; }
 
       const propSnap = await getDoc(doc(this.firestore, `properties/${propertyId}`));
-      if (!propSnap.exists()) { this.loadError.set('No se encontró tu inmueble.'); return; }
+      if (!propSnap.exists()) { this.loadError.set('No se encontró tu propiedad.'); return; }
       this.property = { id: propSnap.id, ...propSnap.data() } as Property;
     } catch {
       this.loadError.set('Error al cargar tu información.');

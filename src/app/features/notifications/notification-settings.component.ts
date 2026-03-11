@@ -28,7 +28,7 @@ import { Property } from '../../core/models/property.model';
       } @else if (occupiedProperties().length === 0) {
         <div class="bg-white rounded-xl border border-warm-200 p-10 text-center">
           <mat-icon class="text-warm-300 text-[48px]">apartment</mat-icon>
-          <p class="text-warm-500 text-sm mt-3">No tienes inmuebles ocupados</p>
+          <p class="text-warm-500 text-sm mt-3">No tienes propiedades ocupadas</p>
         </div>
       } @else {
         <div class="bg-white rounded-xl border border-warm-200 shadow-sm overflow-hidden">
