@@ -174,15 +174,47 @@ export class AuthService {
 
     // Existing user with new multi-role format
     if (existingData?.['roles'] && Array.isArray(existingData['roles'])) {
-      const roles = existingData['roles'] as UserRole[];
-      const propertyIds: string[] = existingData['propertyIds'] ?? existingData['unitIds'] ?? [];
+      let roles = [...(existingData['roles'] as UserRole[])];
+      let propertyIds: string[] = [...(existingData['propertyIds'] ?? existingData['unitIds'] ?? [])];
       const collaboratingPropertyIds: string[] = existingData['collaboratingPropertyIds'] ?? [];
+      let needsUpdate = false;
+
+      // Always check for new tenant email matches (owner may have assigned after account creation)
+      if (firebaseUser.email) {
+        const tenantPropsSnap = await getDocs(
+          query(collection(this.firestore, 'properties'), where('tenantEmail', '==', firebaseUser.email))
+        );
+        if (!tenantPropsSnap.empty) {
+          for (const propDoc of tenantPropsSnap.docs) {
+            // Add property to tenant's propertyIds if not already there
+            if (!propertyIds.includes(propDoc.id)) {
+              propertyIds.push(propDoc.id);
+              needsUpdate = true;
+            }
+            // Link tenantUid on property if not already set
+            if (propDoc.data()['tenantUid'] !== firebaseUser.uid) {
+              await updateDoc(doc(this.firestore, `properties/${propDoc.id}`), {
+                tenantUid: firebaseUser.uid,
+                updatedAt: serverTimestamp(),
+              });
+            }
+          }
+          if (!roles.includes('tenant')) {
+            roles.push('tenant');
+            needsUpdate = true;
+          }
+        }
+      }
+
+      if (needsUpdate) {
+        await updateDoc(userRef, { roles, propertyIds });
+      } else {
+        await setDoc(userRef, profileBase, { merge: true });
+      }
 
       this._userRoles.set(roles);
       this._tenantPropertyIds.set(propertyIds);
       this._collaboratingPropertyIds.set(collaboratingPropertyIds);
-
-      await setDoc(userRef, profileBase, { merge: true });
 
       const saved = localStorage.getItem(ACTIVE_ROLE_KEY) as UserRole | null;
       const activeRole = saved && roles.includes(saved)

@@ -99,24 +99,6 @@ function endOfMonth(d: Date): Date {
           }
         </div>
 
-        <!-- Contract -->
-        <div class="bg-white rounded-xl border border-warm-200 p-5">
-          <p class="text-sm font-medium text-warm-600 mb-3">Contrato de arriendo</p>
-          @if (property()?.contract?.url) {
-            <a
-              [href]="property()!.contract!.url"
-              target="_blank"
-              rel="noopener"
-              class="inline-flex items-center gap-2 px-4 py-2 bg-primary-50 text-primary-700 rounded-lg text-sm font-medium hover:bg-primary-100 transition-colors"
-            >
-              <mat-icon class="text-[18px]">open_in_new</mat-icon>
-              Ver contrato
-            </a>
-          } @else {
-            <p class="text-sm text-warm-400">Sin contrato disponible</p>
-          }
-        </div>
-
         <!-- Quick links -->
         <a
           routerLink="/tenant/payments"

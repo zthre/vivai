@@ -130,7 +130,7 @@ export class ListingCardComponent {
   }
 
   detailLink(): string[] {
-    return ['/', this.property.id!];
+    return ['/inmueble', this.property.id!];
   }
 
   whatsappLink(): string {

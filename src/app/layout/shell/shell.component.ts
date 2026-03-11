@@ -4,15 +4,18 @@ import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { toSignal, toObservable } from '@angular/core/rxjs-interop';
-import { switchMap, of } from 'rxjs';
+import { switchMap, of, combineLatest, filter, map } from 'rxjs';
 import { AuthService, UserRole } from '../../core/auth/auth.service';
 import { TicketService } from '../../core/services/ticket.service';
+import { PropertyService } from '../../core/services/property.service';
 
 interface NavItem {
   label: string;
   icon: string;
   route: string;
   badge?: () => number;
+  external?: boolean;
+  trailingIcon?: string;
 }
 
 @Component({
@@ -89,29 +92,48 @@ interface NavItem {
         <!-- Nav items -->
         <nav class="flex-1 py-4 space-y-1 overflow-y-auto">
           @for (item of navItems(); track item.route) {
-            <a
-              [routerLink]="item.route"
-              routerLinkActive="bg-primary-600 text-white"
-              [routerLinkActiveOptions]="{ exact: item.route === '/dashboard' || item.route === '/tenant' }"
-              class="relative flex items-center gap-3 px-4 py-2.5 mx-2 rounded-lg text-warm-300 hover:bg-warm-700 hover:text-white transition-colors"
-              [matTooltip]="!sidebarOpen() ? item.label : ''"
-              matTooltipPosition="right"
-            >
-              <mat-icon class="flex-shrink-0 text-[20px]">{{ item.icon }}</mat-icon>
-              @if (sidebarOpen()) {
-                <span class="text-sm font-medium truncate flex-1">{{ item.label }}</span>
-              }
-              @if (item.badge && item.badge() > 0) {
-                <span
-                  class="flex items-center justify-center min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full"
-                  [class.absolute]="!sidebarOpen()"
-                  [class.top-1]="!sidebarOpen()"
-                  [class.right-1]="!sidebarOpen()"
-                >
-                  {{ item.badge()! > 99 ? '99+' : item.badge() }}
-                </span>
-              }
-            </a>
+            @if (item.external) {
+              <a
+                [href]="item.route"
+                target="_blank"
+                rel="noopener"
+                class="relative flex items-center gap-3 px-4 py-2.5 mx-2 rounded-lg text-warm-300 hover:bg-warm-700 hover:text-white transition-colors"
+                [matTooltip]="!sidebarOpen() ? item.label : ''"
+                matTooltipPosition="right"
+              >
+                <mat-icon class="flex-shrink-0 text-[20px]">{{ item.icon }}</mat-icon>
+                @if (sidebarOpen()) {
+                  <span class="text-sm font-medium truncate flex-1">{{ item.label }}</span>
+                  @if (item.trailingIcon) {
+                    <mat-icon class="flex-shrink-0 text-[16px] text-warm-500">{{ item.trailingIcon }}</mat-icon>
+                  }
+                }
+              </a>
+            } @else {
+              <a
+                [routerLink]="item.route"
+                routerLinkActive="bg-primary-600 text-white"
+                [routerLinkActiveOptions]="{ exact: item.route === '/dashboard' || item.route === '/tenant' }"
+                class="relative flex items-center gap-3 px-4 py-2.5 mx-2 rounded-lg text-warm-300 hover:bg-warm-700 hover:text-white transition-colors"
+                [matTooltip]="!sidebarOpen() ? item.label : ''"
+                matTooltipPosition="right"
+              >
+                <mat-icon class="flex-shrink-0 text-[20px]">{{ item.icon }}</mat-icon>
+                @if (sidebarOpen()) {
+                  <span class="text-sm font-medium truncate flex-1">{{ item.label }}</span>
+                }
+                @if (item.badge && item.badge() > 0) {
+                  <span
+                    class="flex items-center justify-center min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full"
+                    [class.absolute]="!sidebarOpen()"
+                    [class.top-1]="!sidebarOpen()"
+                    [class.right-1]="!sidebarOpen()"
+                  >
+                    {{ item.badge()! > 99 ? '99+' : item.badge() }}
+                  </span>
+                }
+              </a>
+            }
           }
         </nav>
 
@@ -180,6 +202,7 @@ interface NavItem {
 export class ShellComponent {
   private authService = inject(AuthService);
   private ticketService = inject(TicketService);
+  private propertyService = inject(PropertyService);
 
   sidebarOpen = signal(true);
   roleDropdownOpen = signal(false);
@@ -197,13 +220,26 @@ export class ShellComponent {
     )
   );
 
+  private uid$ = toObservable(this.authService.uid).pipe(filter((uid): uid is string => !!uid));
+  private role$ = toObservable(this.authService.activeRole).pipe(filter((r): r is NonNullable<typeof r> => !!r));
+
   pendingTicketsCount = toSignal(
-    toObservable(this.authService.uid).pipe(
-      switchMap(uid => {
-        const role = this.authService.activeRole();
-        return uid && (role === 'owner' || role === 'colaborador')
-          ? this.ticketService.getPendingCount$(uid)
-          : of(0);
+    combineLatest([this.uid$, this.role$]).pipe(
+      switchMap(([uid, role]) => {
+        if (role === 'owner') return this.ticketService.getPendingCount$(uid);
+        if (role === 'colaborador') {
+          return this.uid$.pipe(
+            switchMap(() => this.propertyService.getAll()),
+            switchMap(properties => {
+              const propertyIds = properties.map(p => p.id!).filter(Boolean);
+              if (propertyIds.length === 0) return of(0);
+              return this.ticketService.getByPropertyIds$(propertyIds).pipe(
+                map(tickets => tickets.filter(t => t.status === 'pendiente').length)
+              );
+            })
+          );
+        }
+        return of(0);
       })
     ),
     { initialValue: 0 }
@@ -216,7 +252,7 @@ export class ShellComponent {
     { label: 'Analytics', icon: 'insights', route: '/analytics' },
     { label: 'Recordatorios', icon: 'chat', route: '/reminders' },
     { label: 'Colaboradores', icon: 'group', route: '/colaboradores' },
-    { label: 'Marketplace', icon: 'storefront', route: '/' },
+    { label: 'Marketplace', icon: 'storefront', route: '/', external: true, trailingIcon: 'open_in_new' },
     { label: 'Tickets', icon: 'build_circle', route: '/tickets', badge: () => this.pendingTicketsCount() },
   ];
 
@@ -224,7 +260,7 @@ export class ShellComponent {
     { label: 'Dashboard', icon: 'dashboard', route: '/dashboard' },
     { label: 'Propiedades', icon: 'apartment', route: '/properties' },
     { label: 'Finanzas', icon: 'bar_chart', route: '/finances' },
-    { label: 'Marketplace', icon: 'storefront', route: '/' },
+    { label: 'Marketplace', icon: 'storefront', route: '/', external: true, trailingIcon: 'open_in_new' },
     { label: 'Tickets', icon: 'build_circle', route: '/tickets', badge: () => this.pendingTicketsCount() },
   ];
 

@@ -34,7 +34,7 @@ const SECTIONS: PermissionSection[] = [
     subPermissions: [
       { key: 'inmueblesUnidades', label: 'Crear, editar y eliminar' },
       { key: 'inmueblesPagos', label: 'Registrar pagos' },
-      { key: 'inmueblesMedia', label: 'Fotos y contratos' },
+      { key: 'inmueblesMedia', label: 'Fotos' },
     ],
   },
   {

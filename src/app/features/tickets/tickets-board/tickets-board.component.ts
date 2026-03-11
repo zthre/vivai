@@ -4,13 +4,12 @@ import {
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
-import { FormsModule } from '@angular/forms';
 import {
   CdkDropList, CdkDropListGroup, CdkDragDrop,
   moveItemInArray, transferArrayItem, DragDropModule,
 } from '@angular/cdk/drag-drop';
 import { toSignal, toObservable } from '@angular/core/rxjs-interop';
-import { switchMap, of } from 'rxjs';
+import { switchMap, of, combineLatest, filter } from 'rxjs';
 import { AuthService } from '../../../core/auth/auth.service';
 import { TicketService } from '../../../core/services/ticket.service';
 import { PropertyService } from '../../../core/services/property.service';
@@ -34,7 +33,7 @@ const STATUS_COLORS: Record<string, string> = {
   selector: 'app-tickets-board',
   standalone: true,
   imports: [
-    CommonModule, RouterLink, MatIconModule, FormsModule,
+    CommonModule, RouterLink, MatIconModule,
     DragDropModule, TicketCardComponent,
   ],
   template: `
@@ -44,10 +43,10 @@ const STATUS_COLORS: Record<string, string> = {
       <div class="flex flex-wrap items-center justify-between gap-3">
         <h1 class="text-xl font-bold text-warm-900">Tickets de Mantenimiento</h1>
         <select
-          [(ngModel)]="selectedPropertyId"
+          (change)="onPropertyFilter($event)"
           class="px-3 py-1.5 rounded-lg border border-warm-200 text-sm text-warm-700 bg-white focus:outline-none focus:ring-2 focus:ring-primary-400"
         >
-          <option [value]="null">Todas las propiedades</option>
+          <option value="">Todas las propiedades</option>
           @for (prop of properties(); track prop.id) {
             <option [value]="prop.id">{{ prop.name }}</option>
           }
@@ -139,26 +138,38 @@ export class TicketsBoardComponent implements OnInit {
   private ticketService = inject(TicketService);
   private propertyService = inject(PropertyService);
 
-  selectedPropertyId: string | null = null;
+  selectedPropertyId = signal<string | null>(null);
   mobileTab: Ticket['status'] = 'pendiente';
   private dragging = false;
 
+  private uid$ = toObservable(this.authService.uid).pipe(filter((uid): uid is string => !!uid));
+  private role$ = toObservable(this.authService.activeRole).pipe(filter((r): r is NonNullable<typeof r> => !!r));
+
+  properties = toSignal(
+    this.uid$.pipe(switchMap(() => this.propertyService.getAll())),
+    { initialValue: [] as Property[] }
+  );
+
   allTickets = toSignal(
-    toObservable(this.authService.uid).pipe(
-      switchMap(uid => uid ? this.ticketService.getByOwner$(uid) : of([]))
+    combineLatest([this.uid$, this.role$]).pipe(
+      switchMap(([uid, role]) => {
+        if (role === 'owner') return this.ticketService.getByOwner$(uid);
+        // Colaborador: wait for properties, then get tickets by propertyIds
+        return this.uid$.pipe(
+          switchMap(() => this.propertyService.getAll()),
+          switchMap(properties => {
+            const propertyIds = properties.map(p => p.id!).filter(Boolean);
+            if (propertyIds.length === 0) return of([]);
+            return this.ticketService.getByPropertyIds$(propertyIds);
+          })
+        );
+      })
     ),
     { initialValue: [] as Ticket[] }
   );
 
-  properties = toSignal(
-    toObservable(this.authService.uid).pipe(
-      switchMap(uid => uid ? this.propertyService.getAll() : of([]))
-    ),
-    { initialValue: [] as Property[] }
-  );
-
   filteredTickets = computed(() => {
-    const pid = this.selectedPropertyId;
+    const pid = this.selectedPropertyId();
     return pid ? this.allTickets().filter(t => t.propertyId === pid) : this.allTickets();
   });
 
@@ -187,6 +198,11 @@ export class TicketsBoardComponent implements OnInit {
       this.inProgressList = tickets.filter(t => t.status === 'en_proceso');
       this.resolvedList = tickets.filter(t => t.status === 'resuelto');
     });
+  }
+
+  onPropertyFilter(event: Event) {
+    const value = (event.target as HTMLSelectElement).value;
+    this.selectedPropertyId.set(value || null);
   }
 
   ngOnInit() {}

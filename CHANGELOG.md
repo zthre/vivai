@@ -4,6 +4,26 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ---
 
+## [v1.0.2] — Mejoras Colaborador + Marketplace Landing
+
+### Nuevo
+- **Marketplace como landing**: La raiz (`/`) carga el marketplace publico directamente (`pathMatch: 'full'`). Detalle de inmueble movido a `/inmueble/:id`.
+- **Tags en info basica**: Los tags se movieron de la seccion Marketplace a la seccion de propiedad. Siempre visibles al crear/editar, independiente de si se publica en marketplace.
+- **Tags en cards**: Los tags aparecen como pills en las cards del listado de propiedades.
+- **Tickets para colaboradores**: Nuevo metodo `getByPropertyIds$()` en `TicketService` que consulta tickets por propertyIds con batching de 30 para el limite de Firestore `in`.
+
+### Fix
+- **Tickets no cargaban para colaboradores**: La query solo buscaba por `ownerId == uid`, lo cual excluia colaboradores. Ahora usa `getByPropertyIds$` con las propiedades accesibles.
+- **Filtro de tickets por propiedad**: El dropdown no filtraba porque `selectedPropertyId` era una variable plana. Convertido a signal reactivo.
+- **Carga de tickets al refrescar**: Corregido race condition donde `uid` y `activeRole` eran `null` al inicializar. Se agregaron `filter()` en los observables para esperar valores reales.
+- **Badge de tickets pendientes en sidebar**: Ahora funciona correctamente para colaboradores consultando por propertyIds.
+
+### Cambios
+- Eliminada seccion "Contrato de arriendo" del portal del tenant.
+- AuthGuard redirige a `/` (marketplace) cuando el usuario no esta autenticado.
+
+---
+
 ## [v1.0.1] — Marketplace como Página Principal
 
 ### Cambios

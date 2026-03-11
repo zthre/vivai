@@ -1,7 +1,15 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // Only allow access to files under owners/{ownerId}/ if authenticated as that owner
+    // Allow access to property files if authenticated as the owner or a collaborator
+    match /owners/{ownerId}/properties/{propertyId}/{allPaths=**} {
+      allow read, write: if request.auth != null && (
+        request.auth.uid == ownerId
+        || request.auth.uid in firestore.get(/databases/(default)/documents/properties/$(propertyId)).data.collaboratorUids
+      );
+    }
+
+    // Allow access to other owner files (non-property paths) only to the owner
     match /owners/{ownerId}/{allPaths=**} {
       allow read, write: if request.auth != null && request.auth.uid == ownerId;
     }

@@ -69,10 +69,6 @@ export interface Property {
   pendingCollaboratorEmails?: string[];
   collaboratorPermissions?: { [uid: string]: ColaboradorPermission };
 
-  // Inversión
-  purchasePrice?: number | null;
-  purchaseDate?: Timestamp | null;
-
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 }

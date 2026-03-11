@@ -15,7 +15,7 @@ export function rolesGuard(allowedRoles: UserRole[]): CanActivateFn {
     return from((auth as any).authStateReady()).pipe(
       switchMap(() => authState(auth).pipe(take(1))),
       switchMap(user => {
-        if (!user) return of(router.createUrlTree(['/login']));
+        if (!user) return of(router.createUrlTree(['/']));
         return from(getDoc(doc(firestore, `users/${user.uid}`))).pipe(
           map(snap => {
             const data = snap.data();

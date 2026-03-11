@@ -5,11 +5,19 @@ import { tenantGuard } from './core/auth/tenant.guard';
 import { rolesGuard } from './core/auth/roles.guard';
 
 export const routes: Routes = [
+  // Marketplace (public, no auth)
   {
-    path: 'login',
+    path: '',
+    pathMatch: 'full',
     loadComponent: () =>
-      import('./features/auth/login/login.component').then(m => m.LoginComponent),
+      import('./features/marketplace/listings/listings.component').then(m => m.ListingsComponent),
   },
+  {
+    path: 'inmueble/:propertyId',
+    loadComponent: () =>
+      import('./features/marketplace/listing-detail/listing-detail.component').then(m => m.ListingDetailComponent),
+  },
+  // Authenticated shell
   {
     path: '',
     loadComponent: () =>
@@ -32,9 +40,8 @@ export const routes: Routes = [
           ),
       },
       {
-        // Creating new properties: only owners (not colaboradores)
         path: 'properties/new',
-        canActivate: [rolesGuard(['owner'])],
+        canActivate: [ownerGuard],
         loadComponent: () =>
           import('./features/properties/property-form/property-form.component').then(
             m => m.PropertyFormComponent
@@ -122,11 +129,6 @@ export const routes: Routes = [
           ),
       },
     ],
-  },
-  {
-    path: '',
-    loadChildren: () =>
-      import('./features/marketplace/marketplace.routes').then(m => m.MARKETPLACE_ROUTES),
   },
   { path: '**', redirectTo: '' },
 ];

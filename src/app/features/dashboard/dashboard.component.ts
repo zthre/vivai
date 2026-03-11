@@ -90,15 +90,17 @@ import { AuthService } from '../../core/auth/auth.service';
       </div>
 
       <!-- Quick action -->
-      <div class="flex gap-3">
-        <a
-          routerLink="/properties/new"
-          class="flex items-center gap-2 px-4 py-2.5 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium shadow-sm"
-        >
-          <mat-icon class="text-[18px]">add</mat-icon>
-          Nueva propiedad
-        </a>
-      </div>
+      @if (canCreate()) {
+        <div class="flex gap-3">
+          <a
+            routerLink="/properties/new"
+            class="flex items-center gap-2 px-4 py-2.5 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium shadow-sm"
+          >
+            <mat-icon class="text-[18px]">add</mat-icon>
+            Nueva propiedad
+          </a>
+        </div>
+      }
     </div>
   `,
 })
@@ -118,5 +120,15 @@ export class DashboardComponent {
   firstName = computed(() => {
     const name = this.authService.currentUser()?.displayName ?? '';
     return name.split(' ')[0];
+  });
+
+  canCreate = computed(() => {
+    if (this.authService.activeRole() === 'owner') return true;
+    const uid = this.authService.uid();
+    if (!uid) return false;
+    return this.properties().some(p => {
+      const perms = p.collaboratorPermissions?.[uid];
+      return !perms || perms.inmueblesUnidades !== false;
+    });
   });
 }

@@ -1,4 +1,4 @@
-import { Component, inject, signal, computed, effect } from '@angular/core';
+import { Component, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink, Router } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
@@ -196,7 +196,6 @@ const MONTH_NAMES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Se
                   <th class="px-5 py-3 text-right">Ingresos</th>
                   <th class="px-5 py-3 text-right">Gastos</th>
                   <th class="px-5 py-3 text-right">Balance</th>
-                  <th class="px-5 py-3 text-right">ROI anual</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-warm-100">
@@ -215,17 +214,6 @@ const MONTH_NAMES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Se
                     >
                       {{ row.balance | currency:'COP':'symbol-narrow':'1.0-0' }}
                     </td>
-                    <td class="px-5 py-3.5 text-right">
-                      @if (row.roi !== null) {
-                        <span class="text-warm-700 font-medium">{{ row.roi | number:'1.1-1' }}%</span>
-                      } @else {
-                        <a
-                          [routerLink]="['/properties', row.propertyId, 'edit']"
-                          (click)="$event.stopPropagation()"
-                          class="text-xs text-primary-500 hover:underline"
-                        >Configurar precio</a>
-                      }
-                    </td>
                   </tr>
                 }
               </tbody>
@@ -233,55 +221,6 @@ const MONTH_NAMES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Se
           </div>
         </div>
 
-        <!-- ROI Calculator -->
-        <div class="bg-white rounded-xl border border-warm-200 shadow-sm p-5 space-y-5">
-          <h3 class="font-semibold text-warm-900">Calculadora de retorno de inversión</h3>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label class="block text-sm font-medium text-warm-700 mb-1.5">Precio de compra</label>
-              <div class="relative">
-                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-warm-400 text-sm">$</span>
-                <input
-                  type="number"
-                  [value]="calcPurchasePrice()"
-                  (input)="onCalcPriceChange($event)"
-                  placeholder="Ej: 350000000"
-                  class="w-full pl-7 pr-3 py-2.5 border border-warm-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                >
-              </div>
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-warm-700 mb-1.5">
-                Ingreso mensual promedio
-                <span class="text-warm-400 font-normal">(promedio real del año)</span>
-              </label>
-              <div class="relative">
-                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-warm-400 text-sm">$</span>
-                <input
-                  type="number"
-                  [value]="calcMonthlyIncome()"
-                  (input)="onCalcIncomeChange($event)"
-                  placeholder="Ej: 1200000"
-                  class="w-full pl-7 pr-3 py-2.5 border border-warm-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                >
-              </div>
-            </div>
-          </div>
-
-          @if (calcResult()) {
-            <div class="bg-warm-50 rounded-lg p-4 space-y-1">
-              <p class="text-sm font-medium text-warm-700">
-                Recuperación estimada:
-                <strong class="text-warm-900">
-                  {{ calcResult()!.months }} meses ({{ calcResult()!.years | number:'1.1-1' }} años)
-                </strong>
-              </p>
-              <p class="text-sm text-warm-500">
-                Rendimiento anual: ~<strong>{{ calcResult()!.annualYield | number:'1.1-1' }}%</strong>
-              </p>
-            </div>
-          }
-        </div>
       }
     </div>
   `,
@@ -300,8 +239,6 @@ export class AnalyticsDashboardComponent {
   regenerating = signal(false);
   loading = signal(false);
 
-  calcPurchasePrice = signal<number | null>(null);
-  calcMonthlyIncome = signal<number | null>(null);
 
   properties = toSignal(this.propertyService.getAll(), { initialValue: [] });
 
@@ -393,33 +330,10 @@ export class AnalyticsDashboardComponent {
       const totalIncome = propSnaps.reduce((s, sn) => s + sn.totalCollected, 0);
       const totalExpenses = propSnaps.reduce((s, sn) => s + sn.totalExpenses, 0);
       const balance = totalIncome - totalExpenses;
-      const roi = p.purchasePrice && p.purchasePrice > 0
-        ? (totalIncome / p.purchasePrice) * 100
-        : null;
-      return { propertyId: p.id!, name: p.name, totalIncome, totalExpenses, balance, roi };
+      return { propertyId: p.id!, name: p.name, totalIncome, totalExpenses, balance };
     }).filter(r => r.totalIncome > 0 || r.totalExpenses > 0);
   });
 
-  calcResult = computed(() => {
-    const price = this.calcPurchasePrice();
-    const income = this.calcMonthlyIncome();
-    if (!price || !income || income <= 0) return null;
-    const months = Math.ceil(price / income);
-    const years = months / 12;
-    const annualYield = (income * 12 / price) * 100;
-    return { months, years, annualYield };
-  });
-
-  constructor() {
-    // Pre-fill calculator with average monthly income from snapshots
-    effect(() => {
-      const data = this.dedupedMonthlyAgg();
-      if (data.length > 0 && !this.calcMonthlyIncome()) {
-        const avg = data.reduce((s, d) => s + d.totalCollected, 0) / data.length;
-        this.calcMonthlyIncome.set(Math.round(avg));
-      }
-    }, { allowSignalWrites: true });
-  }
 
   onYearChange(e: Event) {
     this.selectedYear.set(Number((e.target as HTMLSelectElement).value));
@@ -429,13 +343,6 @@ export class AnalyticsDashboardComponent {
     this.selectedPropertyId.set((e.target as HTMLSelectElement).value || null);
   }
 
-  onCalcPriceChange(e: Event) {
-    this.calcPurchasePrice.set(Number((e.target as HTMLInputElement).value) || null);
-  }
-
-  onCalcIncomeChange(e: Event) {
-    this.calcMonthlyIncome.set(Number((e.target as HTMLInputElement).value) || null);
-  }
 
   async regenerate() {
     if (this.regenerating()) return;

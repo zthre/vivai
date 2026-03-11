@@ -7,7 +7,7 @@ export const MARKETPLACE_ROUTES: Routes = [
       import('./listings/listings.component').then(m => m.ListingsComponent),
   },
   {
-    path: ':propertyId',
+    path: 'inmueble/:propertyId',
     loadComponent: () =>
       import('./listing-detail/listing-detail.component').then(m => m.ListingDetailComponent),
   },

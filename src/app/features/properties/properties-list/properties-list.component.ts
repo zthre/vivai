@@ -23,7 +23,7 @@ import { PaymentFormComponent } from '../../payments/payment-form/payment-form.c
           <h1 class="text-2xl font-bold text-warm-900">Propiedades</h1>
           <p class="text-warm-500 text-sm mt-1">{{ properties().length }} propiedad(es) registrada(s)</p>
         </div>
-        @if (isOwner()) {
+        @if (canCreate()) {
           <a
             routerLink="/properties/new"
             class="flex items-center gap-2 px-4 py-2.5 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium shadow-sm"
@@ -39,7 +39,7 @@ import { PaymentFormComponent } from '../../payments/payment-form/payment-form.c
         <div class="bg-white rounded-xl border border-warm-200 shadow-sm p-12 text-center">
           <mat-icon class="text-warm-300 text-[56px]">apartment</mat-icon>
           <h3 class="text-warm-700 font-semibold mt-3">Sin propiedades aún</h3>
-          @if (isOwner()) {
+          @if (canCreate()) {
             <p class="text-warm-400 text-sm mt-1 mb-5">Registra tu primera propiedad para comenzar</p>
             <a
               routerLink="/properties/new"
@@ -109,6 +109,15 @@ import { PaymentFormComponent } from '../../payments/payment-form/payment-form.c
                   </div>
                 }
               </div>
+
+              <!-- Tags -->
+              @if (property.tags?.length) {
+                <div class="mt-3 flex flex-wrap gap-1.5">
+                  @for (tag of property.tags; track tag) {
+                    <span class="text-xs px-2 py-0.5 bg-primary-100 text-primary-700 rounded-full font-medium">{{ tag }}</span>
+                  }
+                </div>
+              }
             </div>
 
             <!-- Card actions -->
@@ -139,14 +148,12 @@ import { PaymentFormComponent } from '../../payments/payment-form/payment-form.c
                   >
                     <mat-icon class="text-[18px]">edit</mat-icon>
                   </a>
-                  @if (isOwnerOf(property)) {
-                    <button
-                      (click)="confirmDelete(property)"
-                      class="p-1.5 text-warm-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                    >
-                      <mat-icon class="text-[18px]">delete</mat-icon>
-                    </button>
-                  }
+                  <button
+                    (click)="confirmDelete(property)"
+                    class="p-1.5 text-warm-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  >
+                    <mat-icon class="text-[18px]">delete</mat-icon>
+                  </button>
                 </div>
               }
             </div>
@@ -166,6 +173,17 @@ export class PropertiesListComponent {
 
   /** Only owners can create new properties */
   isOwner = computed(() => this.authService.activeRole() === 'owner');
+
+  /** Owner or colaborador with inmueblesUnidades permission */
+  canCreate = computed(() => {
+    if (this.isOwner()) return true;
+    const uid = this.authService.uid();
+    if (!uid) return false;
+    return this.properties().some(p => {
+      const perms = p.collaboratorPermissions?.[uid];
+      return !perms || perms.inmueblesUnidades !== false;
+    });
+  });
 
   /** True if user is the direct owner of this property */
   isOwnerOf(property: Property): boolean {

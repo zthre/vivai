@@ -13,7 +13,7 @@ import {
   arrayUnion,
   Timestamp,
 } from '@angular/fire/firestore';
-import { Observable } from 'rxjs';
+import { Observable, combineLatest, of } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { Ticket } from '../models/ticket.model';
 import { AuthService } from '../auth/auth.service';
@@ -56,6 +56,29 @@ export class TicketService {
     const q = query(ref, where('ownerId', '==', ownerId), where('status', '==', 'pendiente'));
     return (collectionData(q, { idField: 'id' }) as Observable<Ticket[]>).pipe(
       map(t => t.length)
+    );
+  }
+
+  /** Query tickets for a list of propertyIds (Firestore 'in' batches of 30) */
+  getByPropertyIds$(propertyIds: string[]): Observable<Ticket[]> {
+    if (propertyIds.length === 0) return of([]);
+    const ref = collection(this.firestore, 'tickets');
+    // Firestore 'in' supports max 30 items per query
+    const batches: Observable<Ticket[]>[] = [];
+    for (let i = 0; i < propertyIds.length; i += 30) {
+      const chunk = propertyIds.slice(i, i + 30);
+      const q = query(ref, where('propertyId', 'in', chunk));
+      batches.push(collectionData(q, { idField: 'id' }) as Observable<Ticket[]>);
+    }
+    return combineLatest(batches).pipe(
+      map(results => {
+        const all = results.flat();
+        return all.sort((a, b) => {
+          const aMs = (a.createdAt as any)?.toMillis?.() ?? 0;
+          const bMs = (b.createdAt as any)?.toMillis?.() ?? 0;
+          return bMs - aMs;
+        });
+      })
     );
   }
 
