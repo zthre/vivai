@@ -113,17 +113,54 @@ const DEFAULT_PERMISSION: ColaboradorPermission = {
               </button>
             </div>
 
-            <!-- Properties with access -->
+            <!-- Properties with access (toggleable) -->
             <div class="px-4 py-3 bg-warm-50 border-b border-warm-100">
-              <p class="text-[11px] font-semibold text-warm-500 uppercase tracking-wider mb-2">Acceso a propiedades</p>
-              <div class="flex flex-wrap gap-1.5">
-                @for (prop of propertiesFor(c.uid); track prop.id) {
-                  <span class="text-xs px-2.5 py-0.5 bg-white border border-warm-200 rounded-full text-warm-700">
-                    {{ prop.name }}
-                  </span>
+              <div class="flex items-center justify-between mb-2">
+                <p class="text-[11px] font-semibold text-warm-500 uppercase tracking-wider">Acceso a propiedades</p>
+                @if (propertiesFor(c.uid).length < ownedProperties().length) {
+                  <button
+                    (click)="addToAllProperties(c.uid)"
+                    [disabled]="actionLoading()"
+                    class="text-[11px] font-medium text-primary-600 hover:text-primary-700 disabled:opacity-50"
+                  >
+                    + Agregar todas
+                  </button>
+                } @else {
+                  <button
+                    (click)="removeFromAllProperties(c.uid)"
+                    [disabled]="actionLoading()"
+                    class="text-[11px] font-medium text-warm-400 hover:text-red-500 disabled:opacity-50"
+                  >
+                    Quitar todas
+                  </button>
                 }
-                @if (propertiesFor(c.uid).length === 0) {
-                  <span class="text-xs text-warm-400">Sin propiedades asignadas</span>
+              </div>
+              <div class="flex flex-wrap gap-1.5">
+                @for (prop of ownedProperties(); track prop.id) {
+                  <button
+                    (click)="toggleProperty(c.uid, prop.id!)"
+                    [disabled]="actionLoading()"
+                    class="text-xs px-2.5 py-1 rounded-full font-medium transition-colors border disabled:opacity-50"
+                    [class.bg-primary-100]="hasAccess(c.uid, prop.id!)"
+                    [class.text-primary-700]="hasAccess(c.uid, prop.id!)"
+                    [class.border-primary-300]="hasAccess(c.uid, prop.id!)"
+                    [class.bg-white]="!hasAccess(c.uid, prop.id!)"
+                    [class.text-warm-400]="!hasAccess(c.uid, prop.id!)"
+                    [class.border-warm-200]="!hasAccess(c.uid, prop.id!)"
+                    [class.hover:border-primary-400]="!hasAccess(c.uid, prop.id!)"
+                  >
+                    @if (hasAccess(c.uid, prop.id!)) {
+                      <span class="inline-flex items-center gap-0.5">
+                        <mat-icon class="text-[12px] leading-none">check</mat-icon>
+                        {{ prop.name }}
+                      </span>
+                    } @else {
+                      <span class="inline-flex items-center gap-0.5">
+                        <mat-icon class="text-[12px] leading-none">add</mat-icon>
+                        {{ prop.name }}
+                      </span>
+                    }
+                  </button>
                 }
               </div>
             </div>
@@ -247,6 +284,57 @@ export class ColaboradoresPageComponent {
 
   propertiesFor(uid: string): Property[] {
     return this.ownedProperties().filter(p => p.collaboratorUids?.includes(uid));
+  }
+
+  hasAccess(uid: string, propertyId: string): boolean {
+    const prop = this.ownedProperties().find(p => p.id === propertyId);
+    return prop?.collaboratorUids?.includes(uid) ?? false;
+  }
+
+  async toggleProperty(uid: string, propertyId: string) {
+    if (this.actionLoading()) return;
+    this.actionLoading.set(true);
+    try {
+      if (this.hasAccess(uid, propertyId)) {
+        await this.propertyService.removeColaboradorFromProperty(propertyId, uid);
+        this.snackBar.open('Acceso removido.', 'OK', { duration: 2000 });
+      } else {
+        await this.propertyService.addColaboradorToProperty(propertyId, uid);
+        this.snackBar.open('Acceso concedido.', 'OK', { duration: 2000 });
+      }
+    } catch {
+      this.snackBar.open('Error al actualizar acceso.', 'OK', { duration: 3000 });
+    } finally {
+      this.actionLoading.set(false);
+    }
+  }
+
+  async addToAllProperties(uid: string) {
+    if (this.actionLoading()) return;
+    this.actionLoading.set(true);
+    try {
+      const missing = this.ownedProperties().filter(p => !p.collaboratorUids?.includes(uid));
+      await Promise.all(missing.map(p => this.propertyService.addColaboradorToProperty(p.id!, uid)));
+      this.snackBar.open('Agregado a todas las propiedades.', 'OK', { duration: 3000 });
+    } catch {
+      this.snackBar.open('Error al agregar a todas.', 'OK', { duration: 3000 });
+    } finally {
+      this.actionLoading.set(false);
+    }
+  }
+
+  async removeFromAllProperties(uid: string) {
+    if (this.actionLoading()) return;
+    this.actionLoading.set(true);
+    try {
+      const assigned = this.propertiesFor(uid);
+      await Promise.all(assigned.map(p => this.propertyService.removeColaboradorFromProperty(p.id!, uid)));
+      this.snackBar.open('Removido de todas las propiedades.', 'OK', { duration: 3000 });
+    } catch {
+      this.snackBar.open('Error al remover de todas.', 'OK', { duration: 3000 });
+    } finally {
+      this.actionLoading.set(false);
+    }
   }
 
   permSummary(perms: ColaboradorPermission): { label: string; enabled: boolean }[] {

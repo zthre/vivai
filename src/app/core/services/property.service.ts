@@ -158,6 +158,36 @@ export class PropertyService {
     return 'pending';
   }
 
+  /** Add an existing collaborator (by uid) to a single property. */
+  async addColaboradorToProperty(propertyId: string, targetUid: string): Promise<void> {
+    const defaultPermission: ColaboradorPermission = {
+      inmueblesUnidades: true,
+      inmueblesPagos: true,
+      inmueblesMedia: true,
+      gastos: true,
+      tickets: true,
+    };
+    await updateDoc(doc(this.firestore, `properties/${propertyId}`), {
+      collaboratorUids: arrayUnion(targetUid),
+      [`collaboratorPermissions.${targetUid}`]: defaultPermission,
+      updatedAt: serverTimestamp(),
+    });
+    await updateDoc(doc(this.firestore, `users/${targetUid}`), {
+      collaboratingPropertyIds: arrayUnion(propertyId),
+    });
+  }
+
+  /** Remove a collaborator from a single property. */
+  async removeColaboradorFromProperty(propertyId: string, uid: string): Promise<void> {
+    await updateDoc(doc(this.firestore, `properties/${propertyId}`), {
+      collaboratorUids: arrayRemove(uid),
+      updatedAt: serverTimestamp(),
+    });
+    await updateDoc(doc(this.firestore, `users/${uid}`), {
+      collaboratingPropertyIds: arrayRemove(propertyId),
+    });
+  }
+
   async removeColaborador(propertyId: string, uid: string): Promise<void> {
     await updateDoc(doc(this.firestore, `properties/${propertyId}`), {
       collaboratorUids: arrayRemove(uid),

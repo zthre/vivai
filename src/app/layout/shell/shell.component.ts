@@ -43,48 +43,45 @@ interface NavItem {
           </div>
         </div>
 
-        <!-- Role selector (only when user has multiple effective roles) -->
+        <!-- Role toggle -->
         @if (effectiveRoles().length > 1) {
-          <div class="px-2 py-2 border-b border-warm-700 relative">
-            <!-- Trigger button -->
-            <button
-              (click)="roleDropdownOpen.set(!roleDropdownOpen())"
-              class="flex items-center gap-2 w-full px-3 py-2 rounded-lg bg-warm-800 text-warm-200 hover:bg-warm-700 transition-colors"
-              [matTooltip]="!sidebarOpen() ? roleLabel(activeRole()) : ''"
-              matTooltipPosition="right"
-            >
-              <mat-icon class="text-[18px] flex-shrink-0">{{ roleIcon(activeRole()) }}</mat-icon>
-              @if (sidebarOpen()) {
-                <span class="text-xs font-medium flex-1 text-left">{{ roleLabel(activeRole()) }}</span>
-                <mat-icon class="text-[16px]">{{ roleDropdownOpen() ? 'expand_less' : 'expand_more' }}</mat-icon>
-              }
-            </button>
+          <div class="px-2 py-2 border-b border-warm-700">
+            @if (sidebarOpen()) {
+              <button
+                (click)="cycleRole()"
+                class="flex items-center gap-2 w-full px-3 py-2 rounded-lg bg-warm-800 hover:bg-warm-700 transition-colors cursor-pointer"
+              >
+                <!-- Left role label -->
+                <span
+                  class="text-[11px] font-medium transition-colors duration-200"
+                  [class.text-white]="activeRole() === effectiveRoles()[0]"
+                  [class.text-warm-500]="activeRole() !== effectiveRoles()[0]"
+                >{{ roleLabel(effectiveRoles()[0]) }}</span>
 
-            <!-- Dropdown panel -->
-            @if (roleDropdownOpen() && sidebarOpen()) {
-              <!-- Backdrop -->
-              <div class="fixed inset-0 z-40" (click)="roleDropdownOpen.set(false)"></div>
-              <div class="absolute left-2 right-2 top-full mt-1 bg-warm-800 border border-warm-600 rounded-lg shadow-xl z-50 overflow-hidden">
-                @for (role of effectiveRoles(); track role) {
-                  <button
-                    (click)="selectRole(role)"
-                    class="flex items-center gap-3 w-full px-3 py-2.5 text-left hover:bg-warm-700 transition-colors"
-                    [class.bg-warm-700]="role === activeRole()"
-                  >
-                    <mat-icon class="text-[18px] flex-shrink-0"
-                      [class.text-primary-400]="role === activeRole()"
-                      [class.text-warm-400]="role !== activeRole()"
-                    >{{ roleIcon(role) }}</mat-icon>
-                    <span class="text-sm flex-1"
-                      [class.text-white]="role === activeRole()"
-                      [class.text-warm-300]="role !== activeRole()"
-                    >{{ roleLabel(role) }}</span>
-                    @if (role === activeRole()) {
-                      <mat-icon class="text-[16px] text-primary-400">check</mat-icon>
-                    }
-                  </button>
-                }
-              </div>
+                <!-- Toggle track -->
+                <div class="flex-shrink-0 w-9 h-[20px] rounded-full relative transition-colors duration-200 bg-warm-700">
+                  <div
+                    class="absolute top-[3px] w-[14px] h-[14px] rounded-full bg-primary-400 transition-all duration-200"
+                    [ngClass]="activeRole() === effectiveRoles()[0] ? 'left-[3px]' : 'left-[19px]'"
+                  ></div>
+                </div>
+
+                <!-- Right role label -->
+                <span
+                  class="text-[11px] font-medium transition-colors duration-200"
+                  [class.text-white]="activeRole() !== effectiveRoles()[0]"
+                  [class.text-warm-500]="activeRole() === effectiveRoles()[0]"
+                >{{ roleLabel(effectiveRoles()[1]) }}</span>
+              </button>
+            } @else {
+              <button
+                (click)="cycleRole()"
+                class="flex items-center justify-center w-full p-2 rounded-lg bg-warm-800 hover:bg-warm-700 text-primary-400 transition-colors"
+                [matTooltip]="roleLabel(activeRole())"
+                matTooltipPosition="right"
+              >
+                <mat-icon class="text-[20px]">{{ roleIcon(activeRole()) }}</mat-icon>
+              </button>
             }
           </div>
         }
@@ -140,7 +137,7 @@ interface NavItem {
         <!-- Version -->
         @if (sidebarOpen()) {
           <div class="px-4 pb-2">
-            <span class="text-xs text-warm-600 font-mono">v1.0.1</span>
+            <span class="text-xs text-warm-600 font-mono">v1.0.3</span>
           </div>
         }
 
@@ -205,7 +202,6 @@ export class ShellComponent {
   private propertyService = inject(PropertyService);
 
   sidebarOpen = signal(true);
-  roleDropdownOpen = signal(false);
 
   user = this.authService.currentUser;
   activeRole = this.authService.activeRole;
@@ -278,7 +274,14 @@ export class ShellComponent {
 
   selectRole(role: UserRole): void {
     this.authService.setActiveRole(role);
-    this.roleDropdownOpen.set(false);
+  }
+
+  cycleRole(): void {
+    const roles = this.effectiveRoles();
+    const current = this.activeRole();
+    const idx = roles.indexOf(current!);
+    const next = roles[(idx + 1) % roles.length];
+    this.authService.setActiveRole(next);
   }
 
   roleLabel(role: UserRole | null): string {

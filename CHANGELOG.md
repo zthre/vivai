@@ -4,6 +4,19 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ---
 
+## [v1.0.3] — Permisos Granulares por Propiedad
+
+### Nuevo
+- **Toggle de acceso por propiedad**: En la pagina de Colaboradores, cada propiedad del owner aparece como chip toggleable (on/off) para cada colaborador.
+- **Agregar/quitar todas**: Botones "Agregar todas" y "Quitar todas" para asignar o revocar acceso masivo a todas las propiedades.
+- `PropertyService.addColaboradorToProperty()` — agrega un colaborador existente a una propiedad especifica con permisos por defecto.
+- `PropertyService.removeColaboradorFromProperty()` — quita el acceso de un colaborador a una propiedad especifica.
+
+### Cambios
+- Las propiedades nuevas ya no heredan colaboradores automaticamente — el owner decide manualmente a quien dar acceso.
+
+---
+
 ## [v1.0.2] — Mejoras Colaborador + Marketplace Landing
 
 ### Nuevo
