@@ -1,5 +1,5 @@
-import { Component, signal, inject, computed } from '@angular/core';
-import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
+import { Component, signal, inject, computed, HostListener, OnInit } from '@angular/core';
+import { RouterOutlet, RouterLink, RouterLinkActive, NavigationEnd, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -25,11 +25,25 @@ interface NavItem {
   template: `
     <div class="flex h-screen bg-warm-50 overflow-hidden">
 
+      <!-- Mobile overlay -->
+      @if (isMobile() && sidebarOpen()) {
+        <div
+          class="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          (click)="sidebarOpen.set(false)"
+        ></div>
+      }
+
       <!-- Sidebar -->
       <aside
-        class="flex flex-col bg-warm-900 text-white transition-all duration-300"
+        class="flex flex-col bg-warm-900 text-white transition-all duration-300 flex-shrink-0"
+        [class.fixed]="isMobile()"
+        [class.inset-y-0]="isMobile()"
+        [class.left-0]="isMobile()"
+        [class.z-50]="isMobile()"
         [class.w-64]="sidebarOpen()"
-        [class.w-16]="!sidebarOpen()"
+        [class.w-16]="!sidebarOpen() && !isMobile()"
+        [class.-translate-x-full]="isMobile() && !sidebarOpen()"
+        [class.translate-x-0]="!isMobile() || sidebarOpen()"
       >
         <!-- Logo -->
         <div class="flex items-center h-16 px-4 border-b border-warm-700">
@@ -41,6 +55,14 @@ interface NavItem {
               <span class="text-lg font-semibold tracking-tight truncate">vivai</span>
             }
           </div>
+          @if (isMobile() && sidebarOpen()) {
+            <button
+              (click)="sidebarOpen.set(false)"
+              class="ml-auto p-1.5 rounded-lg text-warm-400 hover:text-white hover:bg-warm-700 transition-colors"
+            >
+              <mat-icon>close</mat-icon>
+            </button>
+          }
         </div>
 
         <!-- Role toggle -->
@@ -114,6 +136,7 @@ interface NavItem {
                 class="relative flex items-center gap-3 px-4 py-2.5 mx-2 rounded-lg text-warm-300 hover:bg-warm-700 hover:text-white transition-colors"
                 [matTooltip]="!sidebarOpen() ? item.label : ''"
                 matTooltipPosition="right"
+                (click)="onNavClick()"
               >
                 <mat-icon class="flex-shrink-0 text-[20px]">{{ item.icon }}</mat-icon>
                 @if (sidebarOpen()) {
@@ -137,7 +160,7 @@ interface NavItem {
         <!-- Version -->
         @if (sidebarOpen()) {
           <div class="px-4 pb-2">
-            <span class="text-xs text-warm-600 font-mono">v1.1.0</span>
+            <span class="text-xs text-warm-600 font-mono">v1.1.1</span>
           </div>
         }
 
@@ -182,25 +205,27 @@ interface NavItem {
             (click)="sidebarOpen.set(!sidebarOpen())"
             class="p-1.5 rounded-lg text-warm-500 hover:bg-warm-100 transition-colors"
           >
-            <mat-icon>{{ sidebarOpen() ? 'menu_open' : 'menu' }}</mat-icon>
+            <mat-icon>{{ sidebarOpen() && !isMobile() ? 'menu_open' : 'menu' }}</mat-icon>
           </button>
 
           <div class="flex-1"></div>
         </header>
 
         <!-- Page content -->
-        <main class="flex-1 overflow-y-auto p-6">
+        <main class="flex-1 overflow-y-auto p-4 sm:p-6">
           <router-outlet />
         </main>
       </div>
     </div>
   `,
 })
-export class ShellComponent {
+export class ShellComponent implements OnInit {
   private authService = inject(AuthService);
   private ticketService = inject(TicketService);
   private propertyService = inject(PropertyService);
+  private router = inject(Router);
 
+  isMobile = signal(false);
   sidebarOpen = signal(true);
 
   user = this.authService.currentUser;
@@ -273,6 +298,37 @@ export class ShellComponent {
     if (this.activeRole() === 'colaborador') return this.colaboradorNavItems;
     return this.ownerNavItems;
   });
+
+  ngOnInit() {
+    this.checkMobile();
+    // Close sidebar on navigation in mobile
+    this.router.events.pipe(
+      filter(e => e instanceof NavigationEnd)
+    ).subscribe(() => {
+      if (this.isMobile()) {
+        this.sidebarOpen.set(false);
+      }
+    });
+  }
+
+  @HostListener('window:resize')
+  onResize() {
+    this.checkMobile();
+  }
+
+  private checkMobile() {
+    const mobile = window.innerWidth < 1024;
+    this.isMobile.set(mobile);
+    if (mobile && this.sidebarOpen()) {
+      this.sidebarOpen.set(false);
+    }
+  }
+
+  onNavClick() {
+    if (this.isMobile()) {
+      this.sidebarOpen.set(false);
+    }
+  }
 
   selectRole(role: UserRole): void {
     this.authService.setActiveRole(role);

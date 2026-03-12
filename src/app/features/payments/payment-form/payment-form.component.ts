@@ -5,9 +5,10 @@ import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/materia
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { PaymentService } from '../../../core/services/payment.service';
+import { Payment } from '../../../core/models/payment.model';
 
-function localDateString(): string {
-  const d = new Date();
+function localDateString(date?: Date): string {
+  const d = date ?? new Date();
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');
@@ -16,7 +17,7 @@ function localDateString(): string {
 
 function parseLocalDate(dateStr: string): Date {
   const [y, m, d] = dateStr.split('-').map(Number);
-  return new Date(y, m - 1, d); // midnight local time — avoids UTC-offset day shift
+  return new Date(y, m - 1, d);
 }
 
 @Component({
@@ -28,7 +29,7 @@ function parseLocalDate(dateStr: string): Date {
       <!-- Header -->
       <div class="flex items-center justify-between mb-5">
         <div>
-          <h2 class="text-lg font-bold text-warm-900">Registrar pago</h2>
+          <h2 class="text-lg font-bold text-warm-900">{{ isEdit ? 'Editar pago' : 'Registrar pago' }}</h2>
           <p class="text-sm text-warm-400">
             {{ data.label ?? ('Propiedad · ' + data.propertyId) }}
           </p>
@@ -52,7 +53,7 @@ function parseLocalDate(dateStr: string): Date {
               [class.border-red-400]="form.get('amount')?.invalid && form.get('amount')?.touched"
             >
           </div>
-          @if (data.rentPrice) {
+          @if (data.rentPrice && !isEdit) {
             <p class="text-xs text-warm-400 mt-1">
               Renta mensual: <span class="font-medium text-warm-600">{{ data.rentPrice | currency:'COP':'symbol-narrow':'1.0-0' }}</span>
             </p>
@@ -91,7 +92,7 @@ function parseLocalDate(dateStr: string): Date {
             @if (loading()) {
               <div class="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin"></div>
             }
-            Guardar pago
+            Guardar
           </button>
         </div>
       </form>
@@ -108,14 +109,24 @@ export class PaymentFormComponent {
     propertyId: string;
     rentPrice?: number | null;
     label?: string;
+    payment?: Payment;
   } = inject(MAT_DIALOG_DATA);
 
+  isEdit = !!this.data.payment;
   loading = signal(false);
 
   form = this.fb.group({
-    amount: [(this.data.rentPrice ?? null) as number | null, [Validators.required, Validators.min(1)]],
-    date: [localDateString(), Validators.required],
-    notes: [''],
+    amount: [
+      (this.data.payment?.amount ?? this.data.rentPrice ?? null) as number | null,
+      [Validators.required, Validators.min(1)],
+    ],
+    date: [
+      this.data.payment
+        ? localDateString(this.data.payment.date.toDate())
+        : localDateString(),
+      Validators.required,
+    ],
+    notes: [this.data.payment?.notes ?? ''],
   });
 
   async submit() {
@@ -123,14 +134,34 @@ export class PaymentFormComponent {
     this.loading.set(true);
     try {
       const { amount, date, notes } = this.form.value;
-      await this.paymentService.create({
-        propertyId: this.data.propertyId,
-        amount: amount!,
-        date: parseLocalDate(date!),
-        notes: notes || null,
-      });
-      this.snackBar.open('Pago registrado exitosamente.', 'OK', { duration: 3000 });
+      if (this.isEdit && this.data.payment?.id) {
+        await this.paymentService.update(this.data.payment.id, {
+          amount: amount!,
+          date: parseLocalDate(date!),
+          notes: notes || null,
+        });
+        this.snackBar.open('Pago actualizado', 'OK', {
+          duration: 3000,
+          panelClass: 'snackbar-success',
+        });
+      } else {
+        await this.paymentService.create({
+          propertyId: this.data.propertyId,
+          amount: amount!,
+          date: parseLocalDate(date!),
+          notes: notes || null,
+        });
+        this.snackBar.open('Pago registrado', 'OK', {
+          duration: 3000,
+          panelClass: 'snackbar-success',
+        });
+      }
       this.dialogRef.close(true);
+    } catch (e) {
+      this.snackBar.open('Error al guardar el pago', 'OK', {
+        duration: 3000,
+        panelClass: 'snackbar-error',
+      });
     } finally {
       this.loading.set(false);
     }

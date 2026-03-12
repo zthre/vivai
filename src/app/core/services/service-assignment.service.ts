@@ -13,7 +13,7 @@ import {
   setDoc,
   getDoc,
 } from '@angular/fire/firestore';
-import { Observable } from 'rxjs';
+import { Observable, switchMap } from 'rxjs';
 import { ServiceAssignment } from '../models/service-assignment.model';
 import { AuthService } from '../auth/auth.service';
 
@@ -23,10 +23,13 @@ export class ServiceAssignmentService {
   private auth = inject(AuthService);
 
   getByService(serviceId: string): Observable<ServiceAssignment[]> {
-    const uid = this.auth.uid()!;
-    const ref = collection(this.firestore, 'serviceAssignments');
-    const q = query(ref, where('ownerId', '==', uid), where('serviceId', '==', serviceId));
-    return collectionData(q, { idField: 'id' }) as Observable<ServiceAssignment[]>;
+    return this.auth.uid$.pipe(
+      switchMap(uid => {
+        const ref = collection(this.firestore, 'serviceAssignments');
+        const q = query(ref, where('ownerId', '==', uid), where('serviceId', '==', serviceId));
+        return collectionData(q, { idField: 'id' }) as Observable<ServiceAssignment[]>;
+      })
+    );
   }
 
   getByProperty(propertyId: string): Observable<ServiceAssignment[]> {

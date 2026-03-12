@@ -13,7 +13,7 @@ import {
   orderBy,
   serverTimestamp,
 } from '@angular/fire/firestore';
-import { Observable } from 'rxjs';
+import { Observable, switchMap } from 'rxjs';
 import { Service } from '../models/service.model';
 import { AuthService } from '../auth/auth.service';
 
@@ -23,10 +23,13 @@ export class UtilityServiceService {
   private auth = inject(AuthService);
 
   getAll(): Observable<Service[]> {
-    const uid = this.auth.uid()!;
-    const ref = collection(this.firestore, 'services');
-    const q = query(ref, where('ownerId', '==', uid), orderBy('createdAt', 'desc'));
-    return collectionData(q, { idField: 'id' }) as Observable<Service[]>;
+    return this.auth.uid$.pipe(
+      switchMap(uid => {
+        const ref = collection(this.firestore, 'services');
+        const q = query(ref, where('ownerId', '==', uid), orderBy('createdAt', 'desc'));
+        return collectionData(q, { idField: 'id' }) as Observable<Service[]>;
+      })
+    );
   }
 
   getById(id: string): Observable<Service> {

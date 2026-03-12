@@ -22,6 +22,7 @@ import {
 } from '@angular/fire/firestore';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
+import { Observable, filter, map, distinctUntilChanged, shareReplay } from 'rxjs';
 
 export type UserRole = 'owner' | 'tenant' | 'colaborador';
 
@@ -48,6 +49,14 @@ export class AuthService {
   readonly collaboratingPropertyIds = this._collaboratingPropertyIds.asReadonly();
   readonly userRole = computed(() => this._activeRole());
   readonly tenantPropertyId = computed(() => this._tenantPropertyIds()[0] ?? null);
+
+  /** Observable that emits only when uid is available (non-null). Uses Firebase Auth directly to avoid toObservable microtask delays. */
+  readonly uid$: Observable<string> = user(this.auth).pipe(
+    map(u => u?.uid ?? null),
+    filter((uid): uid is string => !!uid),
+    distinctUntilChanged(),
+    shareReplay(1),
+  );
 
   constructor() {
     user(this.auth).subscribe(async firebaseUser => {

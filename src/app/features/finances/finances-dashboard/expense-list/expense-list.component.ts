@@ -38,7 +38,7 @@ const CATEGORY_CLASSES: Record<ExpenseCategory, string> = {
               class="flex items-center gap-1.5 px-3 py-1.5 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-xs font-medium"
             >
               <mat-icon class="text-[16px]">add</mat-icon>
-              Registrar Gasto
+              Registrar
             </button>
           }
         </div>

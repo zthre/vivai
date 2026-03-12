@@ -13,7 +13,7 @@ import {
   serverTimestamp,
   getDoc,
 } from '@angular/fire/firestore';
-import { Observable } from 'rxjs';
+import { Observable, switchMap } from 'rxjs';
 import { ServiceReceipt } from '../models/service-receipt.model';
 import { ServiceAssignment } from '../models/service-assignment.model';
 import { Property } from '../models/property.model';
@@ -25,10 +25,13 @@ export class ServiceReceiptService {
   private auth = inject(AuthService);
 
   getByServiceAndMonth(serviceId: string, month: string): Observable<ServiceReceipt[]> {
-    const uid = this.auth.uid()!;
-    const ref = collection(this.firestore, 'serviceReceipts');
-    const q = query(ref, where('ownerId', '==', uid), where('serviceId', '==', serviceId), where('month', '==', month));
-    return collectionData(q, { idField: 'id' }) as Observable<ServiceReceipt[]>;
+    return this.auth.uid$.pipe(
+      switchMap(uid => {
+        const ref = collection(this.firestore, 'serviceReceipts');
+        const q = query(ref, where('ownerId', '==', uid), where('serviceId', '==', serviceId), where('month', '==', month));
+        return collectionData(q, { idField: 'id' }) as Observable<ServiceReceipt[]>;
+      })
+    );
   }
 
   getByPropertyAndMonth(propertyId: string, month: string): Observable<ServiceReceipt[]> {
@@ -44,7 +47,6 @@ export class ServiceReceiptService {
   ): Promise<void> {
     const uid = this.auth.uid()!;
 
-    // Load properties to get residentCount
     const properties: { id: string; name: string; residentCount: number }[] = [];
     for (const pid of assignment.propertyIds) {
       const snap = await getDoc(doc(this.firestore, `properties/${pid}`));
@@ -56,7 +58,6 @@ export class ServiceReceiptService {
       });
     }
 
-    // Calculate amounts per property
     const amounts: Record<string, number> = {};
     if (assignment.distributionMethod === 'por_persona') {
       const totalPersonas = properties.reduce((sum, p) => sum + p.residentCount, 0);
@@ -71,12 +72,9 @@ export class ServiceReceiptService {
         amounts[p.id] = perProperty;
       }
     }
-    // 'manual' amounts are set to 0 — user edits them inline
 
-    // Delete existing receipts for this assignment+month
     await this.deleteByMonth(assignment.id!, month);
 
-    // Create new receipts
     const ref = collection(this.firestore, 'serviceReceipts');
     for (const p of properties) {
       await addDoc(ref, {

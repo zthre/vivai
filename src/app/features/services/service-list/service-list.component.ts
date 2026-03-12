@@ -19,7 +19,7 @@ import { UtilityServiceService } from '../../../core/services/utility-service.se
         <a routerLink="/services/new"
           class="flex items-center gap-2 px-4 py-2.5 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium shadow-sm">
           <mat-icon class="text-[18px]">add</mat-icon>
-          Nuevo servicio
+          Nuevo
         </a>
       </div>
 

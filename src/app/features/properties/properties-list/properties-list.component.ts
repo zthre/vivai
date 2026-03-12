@@ -29,7 +29,7 @@ import { PaymentFormComponent } from '../../payments/payment-form/payment-form.c
             class="flex items-center gap-2 px-4 py-2.5 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium shadow-sm"
           >
             <mat-icon class="text-[18px]">add</mat-icon>
-            Nueva propiedad
+            Nueva
           </a>
         }
       </div>
@@ -46,7 +46,7 @@ import { PaymentFormComponent } from '../../payments/payment-form/payment-form.c
               class="inline-flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium"
             >
               <mat-icon class="text-[18px]">add</mat-icon>
-              Agregar propiedad
+              Agregar
             </a>
           } @else {
             <p class="text-warm-400 text-sm mt-1">Aún no tienes propiedades asignadas como colaborador</p>

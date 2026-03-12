@@ -8,7 +8,7 @@ import {
   orderBy,
 } from '@angular/fire/firestore';
 import { Functions, httpsCallable } from '@angular/fire/functions';
-import { Observable, of } from 'rxjs';
+import { Observable, of, switchMap } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { MonthlySnapshot } from '../models/monthly-snapshot.model';
 import { AuthService } from '../auth/auth.service';
@@ -20,17 +20,20 @@ export class SnapshotService {
   private auth = inject(AuthService);
 
   getByYear(year: number, propertyId?: string | null): Observable<MonthlySnapshot[]> {
-    const uid = this.auth.uid()!;
-    const ref = collection(this.firestore, 'monthlySnapshots');
-    const q = query(
-      ref,
-      where('ownerId', '==', uid),
-      where('month', '>=', `${year}-01`),
-      where('month', '<=', `${year}-12`),
-      orderBy('month', 'asc')
-    );
-    return (collectionData(q, { idField: 'id' }) as Observable<MonthlySnapshot[]>).pipe(
-      catchError(() => of([]))
+    return this.auth.uid$.pipe(
+      switchMap(uid => {
+        const ref = collection(this.firestore, 'monthlySnapshots');
+        const q = query(
+          ref,
+          where('ownerId', '==', uid),
+          where('month', '>=', `${year}-01`),
+          where('month', '<=', `${year}-12`),
+          orderBy('month', 'asc')
+        );
+        return (collectionData(q, { idField: 'id' }) as Observable<MonthlySnapshot[]>).pipe(
+          catchError(() => of([]))
+        );
+      })
     );
   }
 

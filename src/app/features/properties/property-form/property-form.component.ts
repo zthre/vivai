@@ -263,6 +263,7 @@ export class PropertyFormComponent implements OnInit {
   loading = signal(false);
   tags = signal<string[]>([]);
   private propertyId: string | null = null;
+  private wasOccupied = false;
 
   propertyTypes = [
     { value: 'apartamento', label: 'Apartamento', icon: 'apartment' },
@@ -306,7 +307,8 @@ export class PropertyFormComponent implements OnInit {
       this.isEdit.set(true);
       this.propertyService.getById(this.propertyId).subscribe(p => {
         if (p) {
-          this.form.patchValue({ ...p, isOccupied: p.status === 'ocupado' } as any);
+          this.wasOccupied = p.status === 'ocupado';
+          this.form.patchValue({ ...p, isOccupied: this.wasOccupied } as any);
           if (p.tags?.length) this.tags.set(p.tags.slice(0, 3));
         }
       });
@@ -360,6 +362,18 @@ export class PropertyFormComponent implements OnInit {
       };
 
       if (this.isEdit() && this.propertyId) {
+        // If transitioning from occupied to available, clean up tenant user data
+        if (this.wasOccupied && !isOccupied) {
+          await this.propertyService.removeTenant(this.propertyId);
+          // removeTenant already clears tenant fields, so remove them from payload
+          delete payload.tenantName;
+          delete payload.tenantPhone;
+          delete payload.tenantEmail;
+          delete payload.tenantUid;
+          delete payload.tenantRentPrice;
+          delete payload.status;
+          delete payload.residentCount;
+        }
         await this.propertyService.update(this.propertyId, payload);
         this.snackBar.open('Propiedad actualizada.', 'OK', { duration: 3000 });
       } else {

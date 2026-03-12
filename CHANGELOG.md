@@ -4,6 +4,21 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ---
 
+## [v1.1.1] — Gestión de Inquilinos
+
+### Nuevo
+- **Sección de inquilino en detalle de propiedad**: card dedicada para ver, agregar y quitar inquilinos directamente desde `/properties/:id`.
+- `PropertyService.assignTenant()`: asigna inquilino a una propiedad. Si el email coincide con un usuario existente, lo vincula automáticamente (setea `tenantUid`, agrega `propertyId` y rol `tenant`).
+- `PropertyService.removeTenant()`: remueve inquilino de la propiedad y limpia el documento del usuario — quita `propertyId` de `propertyIds` y elimina el rol `tenant` si no tiene más propiedades.
+- Badge "Vinculado" en la card de inquilino cuando el tenant tiene cuenta activa.
+- Formulario inline para agregar inquilino (nombre, celular, email, renta, personas) con feedback de vinculación.
+
+### Fix
+- **Inquilino no desaparecía al quitar email**: Al desmarcar "Ocupado" en el formulario, `tenantUid` no se limpiaba y el documento del usuario inquilino no se actualizaba — seguía con rol `tenant` y acceso a la propiedad. Ahora el formulario llama `removeTenant()` que limpia ambos lados.
+- Confirmación antes de quitar inquilino con mensaje claro sobre remoción de permisos.
+
+---
+
 ## [v1.1.0] — Modulo de Servicios
 
 ### Nuevo

@@ -38,7 +38,7 @@ const MAX_SIZE_MB = 5;
             class="flex items-center gap-2 px-3 py-1.5 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <mat-icon class="text-[16px]">add_photo_alternate</mat-icon>
-            Agregar fotos
+            Agregar
           </button>
           <input
             #fileInput

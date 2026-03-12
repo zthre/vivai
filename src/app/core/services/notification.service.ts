@@ -11,7 +11,7 @@ import {
   doc,
   getDocs,
 } from '@angular/fire/firestore';
-import { Observable, map } from 'rxjs';
+import { Observable, map, switchMap } from 'rxjs';
 import { AppNotification } from '../models/notification.model';
 import { AuthService } from '../auth/auth.service';
 
@@ -21,38 +21,47 @@ export class NotificationService {
   private auth = inject(AuthService);
 
   getAll(propertyId?: string | null, month?: string | null): Observable<AppNotification[]> {
-    const uid = this.auth.uid()!;
-    const ref = collection(this.firestore, 'notifications');
-    const q = query(ref, where('ownerId', '==', uid), orderBy('sentAt', 'desc'));
-    return (collectionData(q, { idField: 'id' }) as Observable<AppNotification[]>).pipe(
-      map(list => {
-        let result = list;
-        if (propertyId) result = result.filter(n => n.propertyId === propertyId);
-        if (month) {
-          result = result.filter(n => {
-            const d = n.sentAt.toDate();
-            const m = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-            return m === month;
-          });
-        }
-        return result;
+    return this.auth.uid$.pipe(
+      switchMap(uid => {
+        const ref = collection(this.firestore, 'notifications');
+        const q = query(ref, where('ownerId', '==', uid), orderBy('sentAt', 'desc'));
+        return (collectionData(q, { idField: 'id' }) as Observable<AppNotification[]>).pipe(
+          map(list => {
+            let result = list;
+            if (propertyId) result = result.filter(n => n.propertyId === propertyId);
+            if (month) {
+              result = result.filter(n => {
+                const d = n.sentAt.toDate();
+                const m = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                return m === month;
+              });
+            }
+            return result;
+          })
+        );
       })
     );
   }
 
   getRecent(count = 5): Observable<AppNotification[]> {
-    const uid = this.auth.uid()!;
-    const ref = collection(this.firestore, 'notifications');
-    const q = query(ref, where('ownerId', '==', uid), orderBy('sentAt', 'desc'), limit(count));
-    return collectionData(q, { idField: 'id' }) as Observable<AppNotification[]>;
+    return this.auth.uid$.pipe(
+      switchMap(uid => {
+        const ref = collection(this.firestore, 'notifications');
+        const q = query(ref, where('ownerId', '==', uid), orderBy('sentAt', 'desc'), limit(count));
+        return collectionData(q, { idField: 'id' }) as Observable<AppNotification[]>;
+      })
+    );
   }
 
   getUnreadCount(): Observable<number> {
-    const uid = this.auth.uid()!;
-    const ref = collection(this.firestore, 'notifications');
-    const q = query(ref, where('ownerId', '==', uid), where('viewedByOwner', '==', false));
-    return (collectionData(q, { idField: 'id' }) as Observable<AppNotification[]>).pipe(
-      map(list => list.length)
+    return this.auth.uid$.pipe(
+      switchMap(uid => {
+        const ref = collection(this.firestore, 'notifications');
+        const q = query(ref, where('ownerId', '==', uid), where('viewedByOwner', '==', false));
+        return (collectionData(q, { idField: 'id' }) as Observable<AppNotification[]>).pipe(
+          map(list => list.length)
+        );
+      })
     );
   }
 

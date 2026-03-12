@@ -42,3 +42,19 @@ html, body {
 .mat-mdc-snack-bar-container {
   --mdc-snackbar-container-shape: 8px;
 }
+
+.snackbar-success .mdc-snackbar__surface {
+  background-color: #16a34a !important;
+}
+.snackbar-success .mdc-snackbar__label,
+.snackbar-success .mat-mdc-button.mat-mdc-snack-bar-action {
+  color: #ffffff !important;
+}
+
+.snackbar-error .mdc-snackbar__surface {
+  background-color: #dc2626 !important;
+}
+.snackbar-error .mdc-snackbar__label,
+.snackbar-error .mat-mdc-button.mat-mdc-snack-bar-action {
+  color: #ffffff !important;
+}
