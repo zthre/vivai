@@ -137,7 +137,7 @@ interface NavItem {
         <!-- Version -->
         @if (sidebarOpen()) {
           <div class="px-4 pb-2">
-            <span class="text-xs text-warm-600 font-mono">v1.0.3</span>
+            <span class="text-xs text-warm-600 font-mono">v1.1.0</span>
           </div>
         }
 
@@ -245,6 +245,7 @@ export class ShellComponent {
     { label: 'Dashboard', icon: 'dashboard', route: '/dashboard' },
     { label: 'Propiedades', icon: 'apartment', route: '/properties' },
     { label: 'Finanzas', icon: 'bar_chart', route: '/finances' },
+    { label: 'Servicios', icon: 'receipt_long', route: '/services' },
     { label: 'Analytics', icon: 'insights', route: '/analytics' },
     { label: 'Recordatorios', icon: 'chat', route: '/reminders' },
     { label: 'Colaboradores', icon: 'group', route: '/colaboradores' },
@@ -256,6 +257,7 @@ export class ShellComponent {
     { label: 'Dashboard', icon: 'dashboard', route: '/dashboard' },
     { label: 'Propiedades', icon: 'apartment', route: '/properties' },
     { label: 'Finanzas', icon: 'bar_chart', route: '/finances' },
+    { label: 'Servicios', icon: 'receipt_long', route: '/services' },
     { label: 'Marketplace', icon: 'storefront', route: '/', external: true, trailingIcon: 'open_in_new' },
     { label: 'Tickets', icon: 'build_circle', route: '/tickets', badge: () => this.pendingTicketsCount() },
   ];

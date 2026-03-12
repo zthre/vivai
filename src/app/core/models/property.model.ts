@@ -11,6 +11,8 @@ export interface ColaboradorPermission {
   gastos?: boolean;
   /** Cambiar estado de tickets */
   tickets?: boolean;
+  /** Acceso a servicios */
+  servicios?: boolean;
 }
 
 export interface PhotoItem {
@@ -68,6 +70,9 @@ export interface Property {
   collaboratorUids?: string[];
   pendingCollaboratorEmails?: string[];
   collaboratorPermissions?: { [uid: string]: ColaboradorPermission };
+
+  // Residentes
+  residentCount?: number;
 
   createdAt?: Timestamp;
   updatedAt?: Timestamp;

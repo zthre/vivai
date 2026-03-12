@@ -51,6 +51,13 @@ const SECTIONS: PermissionSection[] = [
       { key: 'tickets', label: 'Cambiar estado de solicitudes' },
     ],
   },
+  {
+    icon: 'receipt_long',
+    title: 'Servicios',
+    subPermissions: [
+      { key: 'servicios', label: 'Ver, crear y editar servicios y recibos' },
+    ],
+  },
 ];
 
 @Component({

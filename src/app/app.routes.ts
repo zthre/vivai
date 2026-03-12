@@ -108,6 +108,12 @@ export const routes: Routes = [
           import('./features/analytics/analytics.routes').then(m => m.ANALYTICS_ROUTES),
       },
       {
+        path: 'services',
+        canActivate: [ownerGuard],
+        loadChildren: () =>
+          import('./features/services/services.routes').then(m => m.SERVICES_ROUTES),
+      },
+      {
         path: 'finances',
         canActivate: [ownerGuard],
         loadComponent: () =>

@@ -26,7 +26,7 @@ import { AuthService } from '../../../core/auth/auth.service';
         <span class="text-warm-700 font-medium">{{ property()?.name }}</span>
       </div>
 
-      <!-- Header -->
+      <!-- Header (full width) -->
       <div class="bg-white rounded-xl border border-warm-200 shadow-sm p-6">
         <div class="flex items-start justify-between flex-wrap gap-4">
           <div class="flex items-center gap-3">
@@ -96,11 +96,16 @@ import { AuthService } from '../../../core/auth/auth.service';
               </div>
               <div class="flex-1 min-w-0">
                 <p class="text-sm font-medium text-warm-800">{{ property()!.tenantName }}</p>
-                @if (property()?.tenantPhone) {
-                  <p class="text-xs text-warm-500">{{ property()!.tenantPhone }}</p>
-                } @else if (property()?.tenantEmail) {
-                  <p class="text-xs text-warm-400">{{ property()!.tenantEmail }}</p>
-                }
+                <div class="flex items-center gap-2">
+                  @if (property()?.tenantPhone) {
+                    <p class="text-xs text-warm-500">{{ property()!.tenantPhone }}</p>
+                  } @else if (property()?.tenantEmail) {
+                    <p class="text-xs text-warm-400">{{ property()!.tenantEmail }}</p>
+                  }
+                  @if (property()?.residentCount && property()!.residentCount! > 0) {
+                    <span class="text-xs text-warm-400">· {{ property()!.residentCount }} persona(s)</span>
+                  }
+                </div>
               </div>
             </div>
             @if (property()?.tenantPhone || property()?.tenantEmail) {
@@ -130,54 +135,62 @@ import { AuthService } from '../../../core/auth/auth.service';
         }
       </div>
 
-      <!-- Photo gallery -->
-      @if (property()) {
-        <app-photo-gallery
-          [photos]="property()?.photos ?? []"
-          [propertyId]="propertyId"
-          [ownerId]="property()!.ownerId"
-          [canWrite]="canWriteMedia()"
-        />
-      }
+      <!-- Two-column layout on desktop -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Left column: Photos + Contract -->
+        <div class="space-y-6">
+          <!-- Photo gallery -->
+          @if (property()) {
+            <app-photo-gallery
+              [photos]="property()?.photos ?? []"
+              [propertyId]="propertyId"
+              [ownerId]="property()!.ownerId"
+              [canWrite]="canWriteMedia()"
+            />
+          }
 
-      <!-- Contract -->
-      @if (property()?.contract?.url) {
-        <div class="bg-white rounded-xl border border-warm-200 shadow-sm p-5">
-          <p class="text-sm font-medium text-warm-600 mb-3">Contrato</p>
-          <a [href]="property()!.contract!.url" target="_blank" rel="noopener"
-            class="inline-flex items-center gap-2 px-4 py-2 bg-primary-50 text-primary-700 rounded-lg text-sm font-medium hover:bg-primary-100 transition-colors">
-            <mat-icon class="text-[18px]">open_in_new</mat-icon>
-            Ver contrato ({{ property()!.contract!.filename }})
-          </a>
-        </div>
-      }
-
-      <!-- Payment history -->
-      <div class="bg-white rounded-xl border border-warm-200 shadow-sm">
-        <div class="px-5 py-4 border-b border-warm-100">
-          <h2 class="font-semibold text-warm-900">Historial de pagos</h2>
-        </div>
-        @if (propertyPayments().length === 0) {
-          <div class="px-5 py-10 text-center">
-            <mat-icon class="text-warm-300 text-[40px]">receipt_long</mat-icon>
-            <p class="text-warm-400 text-sm mt-2">No hay pagos registrados</p>
-          </div>
-        }
-        <div class="divide-y divide-warm-100">
-          @for (payment of propertyPayments(); track payment.id) {
-            <div class="flex items-center gap-4 px-5 py-4">
-              <div class="w-9 h-9 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
-                <mat-icon class="text-green-600 text-[18px]">check_circle</mat-icon>
-              </div>
-              <div class="flex-1 min-w-0">
-                <p class="text-sm font-medium text-warm-800">{{ payment.notes || 'Pago registrado' }}</p>
-                <p class="text-xs text-warm-400">{{ payment.date?.toDate() | date:'d MMMM y' }}</p>
-              </div>
-              <span class="text-sm font-bold text-warm-900">
-                {{ payment.amount | currency:'COP':'symbol-narrow':'1.0-0' }}
-              </span>
+          <!-- Contract -->
+          @if (property()?.contract?.url) {
+            <div class="bg-white rounded-xl border border-warm-200 shadow-sm p-5">
+              <p class="text-sm font-medium text-warm-600 mb-3">Contrato</p>
+              <a [href]="property()!.contract!.url" target="_blank" rel="noopener"
+                class="inline-flex items-center gap-2 px-4 py-2 bg-primary-50 text-primary-700 rounded-lg text-sm font-medium hover:bg-primary-100 transition-colors">
+                <mat-icon class="text-[18px]">open_in_new</mat-icon>
+                Ver contrato ({{ property()!.contract!.filename }})
+              </a>
             </div>
           }
+        </div>
+
+        <!-- Right column: Payment history -->
+        <div class="space-y-6">
+          <div class="bg-white rounded-xl border border-warm-200 shadow-sm">
+            <div class="px-5 py-4 border-b border-warm-100">
+              <h2 class="font-semibold text-warm-900">Historial de pagos</h2>
+            </div>
+            @if (propertyPayments().length === 0) {
+              <div class="px-5 py-10 text-center">
+                <mat-icon class="text-warm-300 text-[40px]">receipt_long</mat-icon>
+                <p class="text-warm-400 text-sm mt-2">No hay pagos registrados</p>
+              </div>
+            }
+            <div class="divide-y divide-warm-100">
+              @for (payment of propertyPayments(); track payment.id) {
+                <div class="flex items-center gap-4 px-5 py-4">
+                  <div class="w-9 h-9 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
+                    <mat-icon class="text-green-600 text-[18px]">check_circle</mat-icon>
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <p class="text-sm font-medium text-warm-800">{{ payment.notes || 'Pago registrado' }}</p>
+                    <p class="text-xs text-warm-400">{{ payment.date?.toDate() | date:'d MMMM y' }}</p>
+                  </div>
+                  <span class="text-sm font-bold text-warm-900">
+                    {{ payment.amount | currency:'COP':'symbol-narrow':'1.0-0' }}
+                  </span>
+                </div>
+              }
+            </div>
+          </div>
         </div>
       </div>
 

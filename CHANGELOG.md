@@ -4,6 +4,26 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ---
 
+## [v1.1.0] — Modulo de Servicios
+
+### Nuevo
+- Modulo de Servicios (`/services`): crear, editar y gestionar servicios (agua, luz, gas, etc.).
+- Asignacion de servicios a multiples propiedades con distribucion por cantidad de personas, partes iguales o manual.
+- Generacion de recibos mensuales por propiedad con calculo automatico.
+- Recibos editables: ajustar monto, marcar como pagado, agregar notas.
+- Campo `residentCount` en Property para registrar cantidad de personas.
+- Permiso `servicios` en ColaboradorPermission para control de acceso.
+- Navegacion "Servicios" en sidebar para owner y colaborador.
+- Reglas Firestore para `services`, `serviceAssignments`, `serviceReceipts`.
+
+### Archivos nuevos
+- Modelos: `service.model.ts`, `service-assignment.model.ts`, `service-receipt.model.ts`
+- Servicios: `utility-service.service.ts`, `service-assignment.service.ts`, `service-receipt.service.ts`
+- Componentes: `service-list`, `service-form`, `service-detail`, `service-receipts`
+- Rutas: `services.routes.ts`
+
+---
+
 ## [v1.0.3] — Permisos Granulares por Propiedad
 
 ### Nuevo

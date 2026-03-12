@@ -344,6 +344,7 @@ export class ColaboradoresPageComponent {
       { label: 'Media', enabled: perms.inmueblesMedia !== false },
       { label: 'Gastos', enabled: perms.gastos !== false },
       { label: 'Tickets', enabled: perms.tickets !== false },
+      { label: 'Servicios', enabled: perms.servicios !== false },
     ];
   }
 
