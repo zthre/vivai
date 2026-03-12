@@ -4,6 +4,20 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ---
 
+## [v1.1.2] — Colaboradores: Visibilidad de Pagos + Layout
+
+### Fix
+- **Pagos invisibles para colaboradores**: `PaymentService.getByMonth()` filtraba por `ownerId == uid`, excluyendo colaboradores. Dashboard de finanzas y dashboard principal ahora usan queries per-property (`getByProperty()`) que funcionan tanto para owners como colaboradores.
+- **Pagos creados por colaboradores no visibles para el owner**: `PaymentService.create()` guardaba `ownerId` como el uid del colaborador. Ahora busca el `ownerId` real de la propiedad para que los pagos siempre queden atribuidos al propietario.
+- **Dashboard: conteo de ocupadas excluía propiedades colaboradas**: `getAllOccupied()` filtraba por `ownerId`. Reemplazado por `computed()` derivado de `properties()` que ya incluye propiedades colaboradas.
+- **Warnings NG8107**: Eliminados todos los optional chain innecesarios (`?.`) en templates donde el tipo no incluía `null`/`undefined`.
+
+### Cambios
+- **Property detail en dos columnas**: Columna izquierda (Inquilino + Contrato), columna derecha (Historial de pagos), Fotos full-width al final.
+- **Modal de permisos de colaboración en dos columnas**: Las 4 secciones de permisos (Propiedades, Finanzas, Tickets, Servicios) ahora se muestran en grid 2x2.
+
+---
+
 ## [v1.1.1] — Gestión de Inquilinos
 
 ### Nuevo

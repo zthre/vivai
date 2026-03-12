@@ -77,7 +77,7 @@ type DistMethod = 'por_persona' | 'partes_iguales' | 'manual';
           </div>
           <div class="p-5 space-y-4">
             <!-- Property checkboxes -->
-            @if (allProperties()?.length) {
+            @if (allProperties().length) {
               <div class="space-y-2">
                 @for (prop of allProperties(); track prop.id) {
                   <label class="flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-all"
@@ -186,10 +186,10 @@ type DistMethod = 'por_persona' | 'partes_iguales' | 'manual';
                   </div>
                 }
 
-                @if (existingReceipts()?.length) {
+                @if (existingReceipts().length) {
                   <div class="p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2">
                     <mat-icon class="text-amber-500 text-[18px] flex-shrink-0 mt-0.5">warning</mat-icon>
-                    <p class="text-xs text-amber-700">Ya existen {{ existingReceipts()!.length }} recibo(s) para este mes. Al generar nuevos se reemplazarán.</p>
+                    <p class="text-xs text-amber-700">Ya existen {{ existingReceipts().length }} recibo(s) para este mes. Al generar nuevos se reemplazarán.</p>
                   </div>
                 }
 
@@ -202,7 +202,7 @@ type DistMethod = 'por_persona' | 'partes_iguales' | 'manual';
                   Generar recibos
                 </button>
 
-                @if (existingReceipts()?.length) {
+                @if (existingReceipts().length) {
                   <div class="flex gap-2">
                     <a [routerLink]="['/services', serviceId, 'receipts']" [queryParams]="{ month: selectedMonth() }"
                       class="flex-1 text-center px-4 py-2.5 border border-warm-200 text-warm-600 rounded-lg text-sm font-medium hover:bg-warm-50 transition-colors">

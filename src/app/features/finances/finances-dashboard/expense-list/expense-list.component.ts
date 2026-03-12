@@ -74,7 +74,7 @@ const CATEGORY_CLASSES: Record<ExpenseCategory, string> = {
               @for (e of expenses(); track e.id) {
                 <tr class="hover:bg-warm-50 transition-colors">
                   <td class="px-5 py-3 text-warm-600">
-                    {{ e.date?.toDate() | date:'d MMM y' }}
+                    {{ e.date.toDate() | date:'d MMM y' }}
                   </td>
                   <td class="px-5 py-3">
                     <span

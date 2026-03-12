@@ -355,7 +355,7 @@ export class ColaboradoresPageComponent {
   openPermisos(c: ColaboradorInfo) {
     const ref = this.dialog.open(PermisoColaboradorDialogComponent, {
       data: { collaborator: c },
-      width: '420px',
+      width: '540px',
       maxWidth: '95vw',
     });
     ref.afterClosed().subscribe((updatedPerms: ColaboradorPermission | undefined) => {

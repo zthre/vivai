@@ -4,12 +4,23 @@ import { RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { toSignal, toObservable } from '@angular/core/rxjs-interop';
+import { switchMap, map } from 'rxjs/operators';
+import { combineLatest, of } from 'rxjs';
 import { PropertyService } from '../../../core/services/property.service';
+import { PaymentService } from '../../../core/services/payment.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { Property } from '../../../core/models/property.model';
+import { Payment } from '../../../core/models/payment.model';
 import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialog/confirm-dialog.component';
 import { PaymentFormComponent } from '../../payments/payment-form/payment-form.component';
+
+function startOfMonth(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+function endOfMonth(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
+}
 
 @Component({
   selector: 'app-properties-list',
@@ -131,13 +142,23 @@ import { PaymentFormComponent } from '../../payments/payment-form/payment-form.c
                   <mat-icon class="text-[16px]">arrow_forward</mat-icon>
                 </a>
                 @if (property.status === 'ocupado' && canWritePagos(property)) {
-                  <button
-                    (click)="openPaymentForm(property)"
-                    class="text-sm text-green-600 hover:text-green-700 font-medium flex items-center gap-1"
-                  >
-                    <mat-icon class="text-[16px]">add</mat-icon>
-                    Pago
-                  </button>
+                  @if (hasPaymentThisMonth(property)) {
+                    <button
+                      (click)="openEditPaymentForm(property)"
+                      class="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+                    >
+                      <mat-icon class="text-[16px]">edit</mat-icon>
+                      Editar Pago
+                    </button>
+                  } @else {
+                    <button
+                      (click)="openPaymentForm(property)"
+                      class="text-sm text-green-600 hover:text-green-700 font-medium flex items-center gap-1"
+                    >
+                      <mat-icon class="text-[16px]">add</mat-icon>
+                      Pagar
+                    </button>
+                  }
                 }
               </div>
               @if (canWrite(property)) {
@@ -165,11 +186,53 @@ import { PaymentFormComponent } from '../../payments/payment-form/payment-form.c
 })
 export class PropertiesListComponent {
   private propertyService = inject(PropertyService);
+  private paymentService = inject(PaymentService);
   private authService = inject(AuthService);
   private dialog = inject(MatDialog);
   private snackBar = inject(MatSnackBar);
 
   properties = toSignal(this.propertyService.getAll(), { initialValue: [] });
+
+  /** Payments for the current month, queried per occupied property (works for owners AND collaborators) */
+  private currentMonthPayments = toSignal(
+    toObservable(this.properties).pipe(
+      switchMap(props => {
+        const occupied = props.filter(p => p.status === 'ocupado' && p.id);
+        if (occupied.length === 0) return of([] as Payment[]);
+        const now = new Date();
+        const monthStart = startOfMonth(now).getTime();
+        const monthEnd = endOfMonth(now).getTime();
+        return combineLatest(
+          occupied.map(p => this.paymentService.getByProperty(p.id!))
+        ).pipe(
+          map(arrays => arrays.flat().filter(payment => {
+            const payDate = payment.date?.toDate().getTime();
+            return payDate >= monthStart && payDate <= monthEnd;
+          }))
+        );
+      })
+    ),
+    { initialValue: [] }
+  );
+
+  /** Map of propertyId → Payment for the current month */
+  private paymentByProperty = computed(() => {
+    const map = new Map<string, Payment>();
+    for (const p of this.currentMonthPayments()) {
+      if (!map.has(p.propertyId)) map.set(p.propertyId, p);
+    }
+    return map;
+  });
+
+  /** Check if a property has a payment this month */
+  hasPaymentThisMonth(property: Property): boolean {
+    return this.paymentByProperty().has(property.id!);
+  }
+
+  /** Get the payment for a property this month */
+  getPaymentThisMonth(property: Property): Payment | undefined {
+    return this.paymentByProperty().get(property.id!);
+  }
 
   /** Only owners can create new properties */
   isOwner = computed(() => this.authService.activeRole() === 'owner');
@@ -223,6 +286,18 @@ export class PropertiesListComponent {
         propertyId: property.id,
         rentPrice: property.tenantRentPrice ?? property.rentPrice ?? null,
         label: property.name,
+      },
+    });
+  }
+
+  openEditPaymentForm(property: Property) {
+    const payment = this.getPaymentThisMonth(property);
+    this.dialog.open(PaymentFormComponent, {
+      width: '420px',
+      data: {
+        propertyId: property.id,
+        label: property.name,
+        payment,
       },
     });
   }

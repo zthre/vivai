@@ -12,6 +12,7 @@ import {
   orderBy,
   serverTimestamp,
   limit,
+  getDoc,
 } from '@angular/fire/firestore';
 import { Observable, switchMap } from 'rxjs';
 import { Payment } from '../models/payment.model';
@@ -66,11 +67,14 @@ export class PaymentService {
 
   async create(data: { propertyId: string; amount: number; date: Date; notes: string | null }): Promise<void> {
     const uid = this.auth.uid()!;
+    // Always attribute the payment to the property owner (not the colaborador who might be creating it)
+    const propSnap = await getDoc(doc(this.firestore, `properties/${data.propertyId}`));
+    const ownerId = propSnap.data()?.['ownerId'] ?? uid;
     const ref = collection(this.firestore, 'payments');
     await addDoc(ref, {
       ...data,
       date: Timestamp.fromDate(data.date),
-      ownerId: uid,
+      ownerId,
       createdBy: uid,
       createdAt: serverTimestamp(),
     });

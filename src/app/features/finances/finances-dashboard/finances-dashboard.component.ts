@@ -5,7 +5,8 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { MatIconModule } from '@angular/material/icon';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { toSignal, toObservable } from '@angular/core/rxjs-interop';
-import { switchMap } from 'rxjs/operators';
+import { switchMap, map } from 'rxjs/operators';
+import { combineLatest, of } from 'rxjs';
 import { PropertyService } from '../../../core/services/property.service';
 import { PaymentService } from '../../../core/services/payment.service';
 import { ExpenseService } from '../../../core/services/expense.service';
@@ -123,9 +124,24 @@ export class FinancesDashboardComponent implements OnInit {
 
   private month$ = toObservable(this.selectedMonth);
 
+  /** Query payments per-property so both owners AND colaboradores see them */
   paymentsInMonth = toSignal(
-    this.month$.pipe(
-      switchMap(m => this.paymentService.getByMonth(startOfMonth(m), endOfMonth(m)))
+    combineLatest([toObservable(this.properties), this.month$]).pipe(
+      switchMap(([props, m]) => {
+        if (props.length === 0) return of([] as any[]);
+        const monthStart = startOfMonth(m).getTime();
+        const monthEnd = endOfMonth(m).getTime();
+        return combineLatest(
+          props.map(p => this.paymentService.getByProperty(p.id!))
+        ).pipe(
+          map(arrays =>
+            arrays.flat().filter(payment => {
+              const payDate = payment.date?.toDate?.()?.getTime?.();
+              return payDate && payDate >= monthStart && payDate <= monthEnd;
+            })
+          )
+        );
+      })
     ),
     { initialValue: [] }
   );

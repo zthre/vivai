@@ -2,7 +2,9 @@ import { Component, inject, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { toSignal, toObservable } from '@angular/core/rxjs-interop';
+import { switchMap, map } from 'rxjs/operators';
+import { combineLatest, of } from 'rxjs';
 import { PropertyService } from '../../core/services/property.service';
 import { PaymentService } from '../../core/services/payment.service';
 import { AuthService } from '../../core/auth/auth.service';
@@ -78,7 +80,7 @@ import { AuthService } from '../../core/auth/auth.service';
                 </div>
                 <div>
                   <p class="text-sm font-medium text-warm-800">{{ payment.notes || 'Pago de arriendo' }}</p>
-                  <p class="text-xs text-warm-400">{{ payment.date?.toDate() | date:'d MMM y' }}</p>
+                  <p class="text-xs text-warm-400">{{ payment.date.toDate() | date:'d MMM y' }}</p>
                 </div>
               </div>
               <span class="text-sm font-semibold text-warm-900">
@@ -110,8 +112,25 @@ export class DashboardComponent {
   private authService = inject(AuthService);
 
   private properties = toSignal(this.propertyService.getAll(), { initialValue: [] });
-  private allOccupied = toSignal(this.propertyService.getAllOccupied(), { initialValue: [] });
-  recentPayments = toSignal(this.paymentService.getRecent(5), { initialValue: [] });
+  private allOccupied = computed(() => this.properties().filter(p => p.status === 'ocupado'));
+  /** Query per-property so both owners AND colaboradores see recent payments */
+  recentPayments = toSignal(
+    toObservable(this.properties).pipe(
+      switchMap(props => {
+        if (props.length === 0) return of([] as any[]);
+        return combineLatest(
+          props.map(p => this.paymentService.getByProperty(p.id!))
+        ).pipe(
+          map(arrays =>
+            arrays.flat()
+              .sort((a, b) => (b.date?.toDate?.()?.getTime?.() ?? 0) - (a.date?.toDate?.()?.getTime?.() ?? 0))
+              .slice(0, 5)
+          )
+        );
+      })
+    ),
+    { initialValue: [] }
+  );
 
   totalProperties = computed(() => this.properties().length);
   occupiedProperties = computed(() => this.allOccupied().length);

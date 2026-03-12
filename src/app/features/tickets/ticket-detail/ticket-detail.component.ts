@@ -136,7 +136,7 @@ const STATUS_COLORS: Record<string, string> = {
         }
 
         <!-- Status history -->
-        @if (ticket()!.statusHistory?.length) {
+        @if (ticket()!.statusHistory.length) {
           <div class="bg-white rounded-xl border border-warm-200 p-5">
             <p class="text-sm font-medium text-warm-700 mb-3">Historial de cambios</p>
             <div class="space-y-2">

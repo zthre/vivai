@@ -18,7 +18,7 @@ import {
   arrayUnion,
   arrayRemove,
 } from '@angular/fire/firestore';
-import { Observable, combineLatest, map, switchMap } from 'rxjs';
+import { Observable, combineLatest, map, switchMap, startWith } from 'rxjs';
 import { Property, PhotoItem, ColaboradorPermission, ContractFile } from '../models/property.model';
 import { AuthService } from '../auth/auth.service';
 
@@ -35,8 +35,8 @@ export class PropertyService {
         const collabQuery = query(ref, where('collaboratorUids', 'array-contains', uid));
 
         return combineLatest([
-          collectionData(ownerQuery, { idField: 'id' }) as Observable<Property[]>,
-          collectionData(collabQuery, { idField: 'id' }) as Observable<Property[]>,
+          (collectionData(ownerQuery, { idField: 'id' }) as Observable<Property[]>).pipe(startWith([] as Property[])),
+          (collectionData(collabQuery, { idField: 'id' }) as Observable<Property[]>).pipe(startWith([] as Property[])),
         ]).pipe(
           map(([owned, collab]) => {
             const seen = new Set<string>();

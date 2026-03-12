@@ -59,6 +59,9 @@ export class AuthService {
   );
 
   constructor() {
+    // Warm up uid$ so shareReplay(1) caches the uid before components subscribe
+    this.uid$.subscribe();
+
     user(this.auth).subscribe(async firebaseUser => {
       if (!firebaseUser) {
         this._userRoles.set([]);

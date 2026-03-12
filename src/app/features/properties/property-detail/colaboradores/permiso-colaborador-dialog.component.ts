@@ -65,7 +65,7 @@ const SECTIONS: PermissionSection[] = [
   standalone: true,
   imports: [CommonModule, MatIconModule, MatDialogModule, MatSnackBarModule],
   template: `
-    <div class="w-full max-w-sm">
+    <div class="w-full max-w-lg">
       <!-- Header -->
       <div class="px-6 pt-5 pb-4 border-b border-warm-100">
         <h2 class="text-base font-semibold text-warm-900">Permisos de colaboración</h2>
@@ -92,7 +92,7 @@ const SECTIONS: PermissionSection[] = [
       </div>
 
       <!-- Permission sections -->
-      <div class="px-6 py-4 space-y-5">
+      <div class="px-6 py-4 grid grid-cols-1 sm:grid-cols-2 gap-5">
         @for (section of sections; track section.icon) {
           <div>
             <!-- Section label -->

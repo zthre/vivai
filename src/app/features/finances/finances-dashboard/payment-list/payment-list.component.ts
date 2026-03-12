@@ -41,7 +41,7 @@ const MONTH_NAMES = [
               @for (p of payments(); track p.id) {
                 <tr class="hover:bg-warm-50 transition-colors">
                   <td class="px-5 py-3 text-warm-600">
-                    {{ p.date?.toDate() | date:'d MMM y' }}
+                    {{ p.date.toDate() | date:'d MMM y' }}
                   </td>
                   <td class="px-5 py-3 text-warm-800 font-medium">
                     {{ propertyName(p.propertyId) }}

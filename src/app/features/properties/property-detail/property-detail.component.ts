@@ -92,155 +92,145 @@ import { AuthService } from '../../../core/auth/auth.service';
 
       </div>
 
-      <!-- Inquilino section -->
-      @if (canWrite()) {
-        <div class="bg-white rounded-xl border border-warm-200 shadow-sm">
-          <div class="px-5 py-4 border-b border-warm-100 flex items-center justify-between">
-            <h2 class="font-semibold text-warm-900 flex items-center gap-2">
-              <mat-icon class="text-[20px] text-warm-500">person</mat-icon>
-              Inquilino
-            </h2>
-            @if (property()?.tenantName && !showTenantForm()) {
-              <div class="flex items-center gap-2">
-                @if (property()?.tenantUid) {
-                  <span class="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">Vinculado</span>
-                }
-                <button (click)="confirmRemoveTenant()"
-                  class="flex items-center gap-1 px-2.5 py-1.5 text-red-600 hover:bg-red-50 rounded-lg text-xs font-medium transition-colors"
-                  [disabled]="tenantLoading()">
-                  <mat-icon class="text-[14px]">person_remove</mat-icon>
-                  Quitar
-                </button>
-              </div>
-            }
-          </div>
-
-          @if (property()?.tenantName && !showTenantForm()) {
-            <!-- Tenant info display -->
-            <div class="p-5">
-              <div class="flex items-center gap-3">
-                <div class="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
-                  <mat-icon class="text-green-600 text-[20px]">person</mat-icon>
-                </div>
-                <div class="flex-1 min-w-0">
-                  <p class="text-sm font-medium text-warm-800">{{ property()!.tenantName }}</p>
-                  <div class="flex items-center gap-2 flex-wrap">
-                    @if (property()?.tenantPhone) {
-                      <p class="text-xs text-warm-500">{{ property()!.tenantPhone }}</p>
-                    }
-                    @if (property()?.tenantEmail) {
-                      <p class="text-xs text-warm-400">{{ property()!.tenantEmail }}</p>
-                    }
-                    @if (property()?.residentCount && property()!.residentCount! > 0) {
-                      <span class="text-xs text-warm-400">· {{ property()!.residentCount }} persona(s)</span>
-                    }
-                    @if (property()?.tenantRentPrice) {
-                      <span class="text-xs text-warm-400">· {{ property()!.tenantRentPrice | currency:'COP':'symbol-narrow':'1.0-0' }}/mes</span>
-                    }
-                  </div>
-                </div>
-              </div>
-              @if (property()?.tenantPhone || property()?.tenantEmail) {
-                <div class="mt-3 flex gap-2 flex-wrap">
-                  @if (property()?.tenantPhone) {
-                    <a [href]="whatsappTenantLink()" target="_blank" rel="noopener"
-                      class="flex items-center gap-1.5 px-3 py-1.5 bg-green-500 text-white rounded-lg text-xs font-medium hover:bg-green-600 transition-colors">
-                      <mat-icon class="text-[14px]">chat</mat-icon>
-                      WhatsApp
-                    </a>
-                    <a [href]="'tel:' + property()!.tenantPhone"
-                      class="flex items-center gap-1.5 px-3 py-1.5 border border-warm-200 text-warm-600 rounded-lg text-xs font-medium hover:bg-warm-50 transition-colors">
-                      <mat-icon class="text-[14px]">call</mat-icon>
-                      Llamar
-                    </a>
-                  }
-                  @if (property()?.tenantEmail) {
-                    <a [href]="'mailto:' + property()!.tenantEmail"
-                      class="flex items-center gap-1.5 px-3 py-1.5 border border-warm-200 text-warm-600 rounded-lg text-xs font-medium hover:bg-warm-50 transition-colors">
-                      <mat-icon class="text-[14px]">email</mat-icon>
-                      Email
-                    </a>
-                  }
-                </div>
-              }
-            </div>
-          } @else if (!showTenantForm()) {
-            <!-- No tenant — show add button -->
-            <div class="p-5 text-center">
-              <mat-icon class="text-warm-300 text-[40px]">person_add</mat-icon>
-              <p class="text-warm-400 text-sm mt-2">No hay inquilino asignado</p>
-              <button (click)="showTenantForm.set(true)"
-                class="mt-3 inline-flex items-center gap-1.5 px-4 py-2 bg-primary-500 text-white rounded-lg text-sm font-medium hover:bg-primary-600 transition-colors">
-                <mat-icon class="text-[16px]">person_add</mat-icon>
-                Agregar inquilino
-              </button>
-            </div>
-          } @else {
-            <!-- Add tenant form -->
-            <form [formGroup]="tenantForm" (ngSubmit)="submitTenant()" class="p-5 space-y-4">
-              <div>
-                <label class="block text-sm font-medium text-warm-700 mb-1.5">Nombre *</label>
-                <input formControlName="name" type="text" placeholder="Nombre completo"
-                  class="w-full px-3 py-2.5 border border-warm-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
-              </div>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label class="block text-sm font-medium text-warm-700 mb-1.5">Celular (WhatsApp)</label>
-                  <input formControlName="phone" type="tel" placeholder="3001234567"
-                    class="w-full px-3 py-2.5 border border-warm-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
-                </div>
-                <div>
-                  <label class="block text-sm font-medium text-warm-700 mb-1.5">Email</label>
-                  <input formControlName="email" type="email" placeholder="inquilino@email.com"
-                    class="w-full px-3 py-2.5 border border-warm-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
-                  <p class="text-xs text-warm-400 mt-1">Si coincide con una cuenta existente, se vincula automáticamente</p>
-                </div>
-              </div>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label class="block text-sm font-medium text-warm-700 mb-1.5">Renta mensual</label>
-                  <div class="relative">
-                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-warm-400 text-sm">$</span>
-                    <input formControlName="rentPrice" type="number" placeholder="1200000"
-                      class="w-full pl-7 pr-3 py-2.5 border border-warm-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
-                  </div>
-                </div>
-                <div>
-                  <label class="block text-sm font-medium text-warm-700 mb-1.5">Personas</label>
-                  <input formControlName="residentCount" type="number" min="1" placeholder="1"
-                    class="w-full px-3 py-2.5 border border-warm-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
-                </div>
-              </div>
-              <div class="flex gap-2 pt-2">
-                <button type="button" (click)="showTenantForm.set(false)"
-                  class="flex-1 px-4 py-2.5 border border-warm-200 text-warm-600 rounded-lg text-sm font-medium hover:bg-warm-50 transition-colors">
-                  Cancelar
-                </button>
-                <button type="submit" [disabled]="tenantForm.get('name')?.invalid || tenantLoading()"
-                  class="flex-1 px-4 py-2.5 bg-primary-500 text-white rounded-lg text-sm font-medium hover:bg-primary-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
-                  @if (tenantLoading()) {
-                    <div class="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin"></div>
-                  }
-                  Asignar inquilino
-                </button>
-              </div>
-            </form>
-          }
-        </div>
-      }
-
       <!-- Two-column layout on desktop -->
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <!-- Left column: Photos + Contract -->
+        <!-- Left column: Inquilino + Contract -->
         <div class="space-y-6">
-          <!-- Photo gallery -->
-          @if (property()) {
-            <app-photo-gallery
-              [photos]="property()?.photos ?? []"
-              [propertyId]="propertyId"
-              [ownerId]="property()!.ownerId"
-              [canWrite]="canWriteMedia()"
-            />
+          <!-- Inquilino section -->
+          @if (canWrite()) {
+            <div class="bg-white rounded-xl border border-warm-200 shadow-sm">
+              <div class="px-5 py-4 border-b border-warm-100 flex items-center justify-between">
+                <h2 class="font-semibold text-warm-900 flex items-center gap-2">
+                  <mat-icon class="text-[20px] text-warm-500">person</mat-icon>
+                  Inquilino
+                </h2>
+                @if (property()?.tenantName && !showTenantForm()) {
+                  <div class="flex items-center gap-2">
+                    @if (property()?.tenantUid) {
+                      <span class="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">Vinculado</span>
+                    }
+                    <button (click)="confirmRemoveTenant()"
+                      class="flex items-center gap-1 px-2.5 py-1.5 text-red-600 hover:bg-red-50 rounded-lg text-xs font-medium transition-colors"
+                      [disabled]="tenantLoading()">
+                      <mat-icon class="text-[14px]">person_remove</mat-icon>
+                      Quitar
+                    </button>
+                  </div>
+                }
+              </div>
+
+              @if (property()?.tenantName && !showTenantForm()) {
+                <!-- Tenant info display -->
+                <div class="p-5">
+                  <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
+                      <mat-icon class="text-green-600 text-[20px]">person</mat-icon>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <p class="text-sm font-medium text-warm-800">{{ property()!.tenantName }}</p>
+                      <div class="flex items-center gap-2 flex-wrap">
+                        @if (property()?.tenantPhone) {
+                          <p class="text-xs text-warm-500">{{ property()!.tenantPhone }}</p>
+                        }
+                        @if (property()?.tenantEmail) {
+                          <p class="text-xs text-warm-400">{{ property()!.tenantEmail }}</p>
+                        }
+                        @if (property()?.residentCount && property()!.residentCount! > 0) {
+                          <span class="text-xs text-warm-400">· {{ property()!.residentCount }} persona(s)</span>
+                        }
+                        @if (property()?.tenantRentPrice) {
+                          <span class="text-xs text-warm-400">· {{ property()!.tenantRentPrice | currency:'COP':'symbol-narrow':'1.0-0' }}/mes</span>
+                        }
+                      </div>
+                    </div>
+                  </div>
+                  @if (property()?.tenantPhone || property()?.tenantEmail) {
+                    <div class="mt-3 flex gap-2 flex-wrap">
+                      @if (property()?.tenantPhone) {
+                        <a [href]="whatsappTenantLink()" target="_blank" rel="noopener"
+                          class="flex items-center gap-1.5 px-3 py-1.5 bg-green-500 text-white rounded-lg text-xs font-medium hover:bg-green-600 transition-colors">
+                          <mat-icon class="text-[14px]">chat</mat-icon>
+                          WhatsApp
+                        </a>
+                        <a [href]="'tel:' + property()!.tenantPhone"
+                          class="flex items-center gap-1.5 px-3 py-1.5 border border-warm-200 text-warm-600 rounded-lg text-xs font-medium hover:bg-warm-50 transition-colors">
+                          <mat-icon class="text-[14px]">call</mat-icon>
+                          Llamar
+                        </a>
+                      }
+                      @if (property()?.tenantEmail) {
+                        <a [href]="'mailto:' + property()!.tenantEmail"
+                          class="flex items-center gap-1.5 px-3 py-1.5 border border-warm-200 text-warm-600 rounded-lg text-xs font-medium hover:bg-warm-50 transition-colors">
+                          <mat-icon class="text-[14px]">email</mat-icon>
+                          Email
+                        </a>
+                      }
+                    </div>
+                  }
+                </div>
+              } @else if (!showTenantForm()) {
+                <!-- No tenant — show add button -->
+                <div class="p-5 text-center">
+                  <mat-icon class="text-warm-300 text-[40px]">person_add</mat-icon>
+                  <p class="text-warm-400 text-sm mt-2">No hay inquilino asignado</p>
+                  <button (click)="showTenantForm.set(true)"
+                    class="mt-3 inline-flex items-center gap-1.5 px-4 py-2 bg-primary-500 text-white rounded-lg text-sm font-medium hover:bg-primary-600 transition-colors">
+                    <mat-icon class="text-[16px]">person_add</mat-icon>
+                    Agregar inquilino
+                  </button>
+                </div>
+              } @else {
+                <!-- Add tenant form -->
+                <form [formGroup]="tenantForm" (ngSubmit)="submitTenant()" class="p-5 space-y-4">
+                  <div>
+                    <label class="block text-sm font-medium text-warm-700 mb-1.5">Nombre *</label>
+                    <input formControlName="name" type="text" placeholder="Nombre completo"
+                      class="w-full px-3 py-2.5 border border-warm-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                  </div>
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label class="block text-sm font-medium text-warm-700 mb-1.5">Celular (WhatsApp)</label>
+                      <input formControlName="phone" type="tel" placeholder="3001234567"
+                        class="w-full px-3 py-2.5 border border-warm-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                    </div>
+                    <div>
+                      <label class="block text-sm font-medium text-warm-700 mb-1.5">Email</label>
+                      <input formControlName="email" type="email" placeholder="inquilino@email.com"
+                        class="w-full px-3 py-2.5 border border-warm-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                      <p class="text-xs text-warm-400 mt-1">Si coincide con una cuenta existente, se vincula automáticamente</p>
+                    </div>
+                  </div>
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label class="block text-sm font-medium text-warm-700 mb-1.5">Renta mensual</label>
+                      <div class="relative">
+                        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-warm-400 text-sm">$</span>
+                        <input formControlName="rentPrice" type="number" placeholder="1200000"
+                          class="w-full pl-7 pr-3 py-2.5 border border-warm-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                      </div>
+                    </div>
+                    <div>
+                      <label class="block text-sm font-medium text-warm-700 mb-1.5">Personas</label>
+                      <input formControlName="residentCount" type="number" min="1" placeholder="1"
+                        class="w-full px-3 py-2.5 border border-warm-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                    </div>
+                  </div>
+                  <div class="flex gap-2 pt-2">
+                    <button type="button" (click)="showTenantForm.set(false)"
+                      class="flex-1 px-4 py-2.5 border border-warm-200 text-warm-600 rounded-lg text-sm font-medium hover:bg-warm-50 transition-colors">
+                      Cancelar
+                    </button>
+                    <button type="submit" [disabled]="tenantForm.get('name')?.invalid || tenantLoading()"
+                      class="flex-1 px-4 py-2.5 bg-primary-500 text-white rounded-lg text-sm font-medium hover:bg-primary-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                      @if (tenantLoading()) {
+                        <div class="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin"></div>
+                      }
+                      Asignar inquilino
+                    </button>
+                  </div>
+                </form>
+              }
+            </div>
           }
 
           <!-- Contract -->
@@ -276,7 +266,7 @@ import { AuthService } from '../../../core/auth/auth.service';
                   </div>
                   <div class="flex-1 min-w-0">
                     <p class="text-sm font-medium text-warm-800">{{ payment.notes || 'Pago registrado' }}</p>
-                    <p class="text-xs text-warm-400">{{ payment.date?.toDate() | date:'d MMMM y' }}</p>
+                    <p class="text-xs text-warm-400">{{ payment.date.toDate() | date:'d MMMM y' }}</p>
                   </div>
                   <span class="text-sm font-bold text-warm-900">
                     {{ payment.amount | currency:'COP':'symbol-narrow':'1.0-0' }}
@@ -299,6 +289,16 @@ import { AuthService } from '../../../core/auth/auth.service';
           </div>
         </div>
       </div>
+
+      <!-- Photos (full width, at the end) -->
+      @if (property()) {
+        <app-photo-gallery
+          [photos]="property()?.photos ?? []"
+          [propertyId]="propertyId"
+          [ownerId]="property()!.ownerId"
+          [canWrite]="canWriteMedia()"
+        />
+      }
 
     </div>
   `,

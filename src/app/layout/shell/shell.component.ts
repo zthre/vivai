@@ -160,7 +160,7 @@ interface NavItem {
         <!-- Version -->
         @if (sidebarOpen()) {
           <div class="px-4 pb-2">
-            <span class="text-xs text-warm-600 font-mono">v1.1.1</span>
+            <span class="text-xs text-warm-600 font-mono">v1.1.2</span>
           </div>
         }
 
