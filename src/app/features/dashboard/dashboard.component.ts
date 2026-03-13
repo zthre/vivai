@@ -137,6 +137,24 @@ function endOfMonth(d: Date): Date {
                     }
                   </div>
                 </div>
+
+                <!-- Payment CTA -->
+                @if (prop.status === 'ocupado' && canWritePagos(prop)) {
+                  @if (hasPaymentThisMonth(prop)) {
+                    <button (click)="openEditPayment(prop)"
+                      class="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-50 text-green-700 border border-green-200 rounded-lg text-sm font-medium hover:bg-green-100 transition-colors">
+                      <mat-icon class="text-[18px]">check_circle</mat-icon>
+                      Recibo pagado — ver detalle
+                    </button>
+                  } @else {
+                    <button (click)="openPayment(prop)"
+                      class="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-500 text-white rounded-lg text-sm font-medium hover:bg-primary-600 transition-colors shadow-sm">
+                      <mat-icon class="text-[18px]">receipt_long</mat-icon>
+                      Registrar pago del mes
+                    </button>
+                  }
+                }
+
                 <div class="flex items-center gap-2 flex-wrap">
                   <a [routerLink]="['/properties', prop.id]"
                     class="text-xs text-primary-600 hover:text-primary-700 font-medium flex items-center gap-0.5">
@@ -147,19 +165,6 @@ function endOfMonth(d: Date): Date {
                       class="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-0.5">
                       <mat-icon class="text-[14px]">storefront</mat-icon> Marketplace
                     </a>
-                  }
-                  @if (prop.status === 'ocupado' && canWritePagos(prop)) {
-                    @if (hasPaymentThisMonth(prop)) {
-                      <button (click)="openEditPayment(prop)"
-                        class="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-0.5">
-                        <mat-icon class="text-[14px]">edit</mat-icon> Editar Pago
-                      </button>
-                    } @else {
-                      <button (click)="openPayment(prop)"
-                        class="text-xs text-green-600 hover:text-green-700 font-medium flex items-center gap-0.5">
-                        <mat-icon class="text-[14px]">add</mat-icon> Pagar
-                      </button>
-                    }
                   }
                   @if (canEdit(prop)) {
                     <a [routerLink]="['/properties', prop.id, 'edit']"
@@ -247,7 +252,18 @@ function endOfMonth(d: Date): Date {
                       @if (prop.status !== 'ocupado') {
                         <span class="text-warm-300">—</span>
                       } @else if (hasPaymentThisMonth(prop)) {
-                        <span class="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">Pagado</span>
+                        <button (click)="openEditPayment(prop)"
+                          class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-lg text-xs font-medium hover:bg-green-100 transition-colors"
+                          [class.pointer-events-none]="!canWritePagos(prop)">
+                          <mat-icon class="text-[16px]">check_circle</mat-icon>
+                          Pagado
+                        </button>
+                      } @else if (canWritePagos(prop)) {
+                        <button (click)="openPayment(prop)"
+                          class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary-500 text-white rounded-lg text-xs font-medium hover:bg-primary-600 transition-colors shadow-sm">
+                          <mat-icon class="text-[16px]">receipt_long</mat-icon>
+                          Registrar pago
+                        </button>
                       } @else {
                         <span class="text-xs px-2 py-0.5 bg-red-100 text-red-600 rounded-full font-medium">Pendiente</span>
                       }
@@ -266,21 +282,6 @@ function endOfMonth(d: Date): Date {
                             title="Ver en marketplace">
                             <mat-icon class="text-[18px]">storefront</mat-icon>
                           </a>
-                        }
-                        @if (prop.status === 'ocupado' && canWritePagos(prop)) {
-                          @if (hasPaymentThisMonth(prop)) {
-                            <button (click)="openEditPayment(prop)"
-                              class="p-1.5 text-warm-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                              title="Editar pago">
-                              <mat-icon class="text-[18px]">edit</mat-icon>
-                            </button>
-                          } @else {
-                            <button (click)="openPayment(prop)"
-                              class="p-1.5 text-warm-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                              title="Registrar pago">
-                              <mat-icon class="text-[18px]">add_circle</mat-icon>
-                            </button>
-                          }
                         }
                         @if (canEdit(prop)) {
                           <a [routerLink]="['/properties', prop.id, 'edit']"
