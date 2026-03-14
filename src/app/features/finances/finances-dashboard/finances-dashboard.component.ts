@@ -51,29 +51,24 @@ function fromMonthParam(param: string): Date | null {
     ExpenseListComponent,
   ],
   template: `
-    <div class="space-y-6">
+    <div class="space-y-4">
 
-      <!-- Header + filters -->
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <h1 class="text-2xl font-bold text-warm-900">Finanzas</h1>
-
-        <div class="flex flex-wrap items-center gap-3">
-          <app-month-selector
-            [month]="selectedMonth()"
-            (monthChange)="onMonthChange($event)"
-          />
-
-          <select
-            [value]="selectedPropertyId() ?? ''"
-            (change)="onPropertyChange($event)"
-            class="px-3 py-1.5 border border-warm-200 rounded-lg text-sm text-warm-700 bg-white focus:outline-none focus:ring-2 focus:ring-primary-300"
-          >
-            <option value="">Todas las propiedades</option>
-            @for (p of properties(); track p.id) {
-              <option [value]="p.id">{{ p.name }}</option>
-            }
-          </select>
-        </div>
+      <!-- Filters -->
+      <div class="flex flex-wrap items-center justify-end gap-3">
+        <app-month-selector
+          [month]="selectedMonth()"
+          (monthChange)="onMonthChange($event)"
+        />
+        <select
+          [value]="selectedPropertyId() ?? ''"
+          (change)="onPropertyChange($event)"
+          class="px-3 py-1.5 border border-warm-200 rounded-lg text-sm text-warm-700 bg-white focus:outline-none focus:ring-2 focus:ring-primary-300"
+        >
+          <option value="">Todas las propiedades</option>
+          @for (p of properties(); track p.id) {
+            <option [value]="p.id">{{ p.name }}</option>
+          }
+        </select>
       </div>
 
       <!-- KPI cards -->

@@ -371,6 +371,7 @@ export class PropertyDetailComponent implements OnInit {
         propertyId: this.propertyId,
         rentPrice: this.property()?.tenantRentPrice ?? this.property()?.rentPrice ?? null,
         label: this.property()?.name ?? 'Propiedad',
+        defaultDate: new Date(),
       },
     });
   }

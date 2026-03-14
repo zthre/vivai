@@ -10,15 +10,11 @@ import { UtilityServiceService } from '../../../core/services/utility-service.se
   standalone: true,
   imports: [CommonModule, RouterLink, MatIconModule],
   template: `
-    <div class="space-y-6">
-      <div class="flex items-center justify-between">
-        <div>
-          <h1 class="text-2xl font-bold text-warm-900">Servicios</h1>
-          <p class="text-warm-500 text-sm mt-1">Gestiona servicios y distribúyelos entre tus propiedades</p>
-        </div>
+    <div class="space-y-4">
+      <div class="flex justify-end">
         <a routerLink="/services/new"
-          class="flex items-center gap-2 px-4 py-2.5 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium shadow-sm">
-          <mat-icon class="text-[18px]">add</mat-icon>
+          class="flex items-center gap-1.5 px-3 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-xs font-medium shadow-sm">
+          <mat-icon class="text-[16px]">add</mat-icon>
           Nuevo
         </a>
       </div>

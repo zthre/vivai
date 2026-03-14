@@ -8,10 +8,13 @@ import { switchMap, map } from 'rxjs/operators';
 import { combineLatest, of } from 'rxjs';
 import { PropertyService } from '../../core/services/property.service';
 import { PaymentService } from '../../core/services/payment.service';
+import { ServiceReceiptService } from '../../core/services/service-receipt.service';
 import { AuthService } from '../../core/auth/auth.service';
 import { Property } from '../../core/models/property.model';
 import { Payment } from '../../core/models/payment.model';
+import { ServiceReceipt } from '../../core/models/service-receipt.model';
 import { PaymentFormComponent } from '../payments/payment-form/payment-form.component';
+import { PropertyReceiptsDialogComponent } from '../services/property-receipts-dialog/property-receipts-dialog.component';
 
 function startOfMonth(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -25,26 +28,7 @@ function endOfMonth(d: Date): Date {
   standalone: true,
   imports: [CommonModule, RouterLink, MatIconModule, MatDialogModule],
   template: `
-    <div class="space-y-6">
-      <!-- Header -->
-      <div class="flex items-center justify-between">
-        <div>
-          <h1 class="text-2xl font-bold text-warm-900">
-            Buenos días, {{ firstName() }} 👋
-          </h1>
-          <p class="text-warm-500 text-sm mt-1">Resumen de tu portafolio</p>
-        </div>
-        @if (canCreate()) {
-          <a
-            routerLink="/properties/new"
-            class="flex items-center gap-2 px-4 py-2.5 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium shadow-sm"
-          >
-            <mat-icon class="text-[18px]">add</mat-icon>
-            Nueva
-          </a>
-        }
-      </div>
-
+    <div class="space-y-4">
       <!-- Stats cards -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div class="bg-white rounded-xl p-5 border border-warm-200 shadow-sm">
@@ -80,7 +64,7 @@ function endOfMonth(d: Date): Date {
 
         <div class="bg-white rounded-xl p-5 border border-warm-200 shadow-sm">
           <div class="flex items-center justify-between mb-3">
-            <span class="text-sm font-medium text-warm-500">Pagado este mes</span>
+            <span class="text-sm font-medium text-warm-500">Pagado</span>
             <div class="w-9 h-9 bg-green-100 rounded-lg flex items-center justify-center">
               <mat-icon class="text-green-600 text-[20px]">payments</mat-icon>
             </div>
@@ -91,8 +75,21 @@ function endOfMonth(d: Date): Date {
 
       <!-- Properties table -->
       <div class="bg-white rounded-xl border border-warm-200 shadow-sm overflow-hidden">
-        <div class="px-5 py-4 border-b border-warm-100">
+        <div class="px-5 py-4 border-b border-warm-100 flex items-center justify-between">
           <h2 class="font-semibold text-warm-900">Propiedades</h2>
+          <div class="flex items-center gap-2">
+            <button (click)="prevMonth()"
+              class="p-1.5 rounded-lg text-warm-400 hover:bg-warm-100 transition-colors">
+              <mat-icon class="text-[20px]">chevron_left</mat-icon>
+            </button>
+            <span class="text-sm font-medium text-warm-700 min-w-[140px] text-center capitalize">
+              {{ monthLabel() }}
+            </span>
+            <button (click)="nextMonth()"
+              class="p-1.5 rounded-lg text-warm-400 hover:bg-warm-100 transition-colors">
+              <mat-icon class="text-[20px]">chevron_right</mat-icon>
+            </button>
+          </div>
         </div>
 
         @if (properties().length === 0) {
@@ -155,6 +152,33 @@ function endOfMonth(d: Date): Date {
                   }
                 }
 
+                <!-- Service receipts CTA -->
+                @if (canWriteServicios(prop)) {
+                  @if (receiptSummary(prop).total > 0) {
+                    @if (receiptSummary(prop).paid === receiptSummary(prop).total) {
+                      <button (click)="openServiceReceipts(prop)"
+                        class="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-50 text-green-700 border border-green-200 rounded-lg text-sm font-medium hover:bg-green-100 transition-colors">
+                        <mat-icon class="text-[18px]">check_circle</mat-icon>
+                        Servicios al día
+                        <span class="text-[10px] px-1.5 py-0.5 bg-green-200 text-green-800 rounded-full">{{ receiptSummary(prop).total }}</span>
+                      </button>
+                    } @else {
+                      <button (click)="openServiceReceipts(prop)"
+                        class="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-sm font-medium hover:bg-blue-100 transition-colors">
+                        <mat-icon class="text-[18px]">bolt</mat-icon>
+                        Pagar servicios
+                        <span class="text-[10px] px-1.5 py-0.5 bg-red-100 text-red-700 rounded-full">{{ receiptSummary(prop).total - receiptSummary(prop).paid }} pendientes</span>
+                      </button>
+                    }
+                  } @else {
+                    <button (click)="openServiceReceipts(prop)"
+                      class="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-warm-50 text-warm-500 border border-warm-200 rounded-lg text-sm font-medium hover:bg-warm-100 transition-colors">
+                      <mat-icon class="text-[18px]">bolt</mat-icon>
+                      Sin servicios este mes
+                    </button>
+                  }
+                }
+
                 <div class="flex items-center gap-2 flex-wrap">
                   <a [routerLink]="['/properties', prop.id]"
                     class="text-xs text-primary-600 hover:text-primary-700 font-medium flex items-center gap-0.5">
@@ -193,6 +217,7 @@ function endOfMonth(d: Date): Date {
                   <th class="text-right px-5 py-3 font-semibold">Arriendo</th>
                   <th class="text-center px-5 py-3 font-semibold">Estado</th>
                   <th class="text-center px-5 py-3 font-semibold">Pago mes</th>
+                  <th class="text-center px-5 py-3 font-semibold">Servicios</th>
                   <th class="text-right px-5 py-3 font-semibold">Acciones</th>
                 </tr>
               </thead>
@@ -268,6 +293,30 @@ function endOfMonth(d: Date): Date {
                         <span class="text-xs px-2 py-0.5 bg-red-100 text-red-600 rounded-full font-medium">Pendiente</span>
                       }
                     </td>
+                    <!-- Servicios -->
+                    <td class="px-5 py-3 text-center">
+                      @if (canWriteServicios(prop)) {
+                        @if (receiptSummary(prop).total > 0) {
+                          @if (receiptSummary(prop).paid === receiptSummary(prop).total) {
+                            <button (click)="openServiceReceipts(prop)"
+                              class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-lg text-xs font-medium hover:bg-green-100 transition-colors">
+                              <mat-icon class="text-[16px]">check_circle</mat-icon>
+                              {{ receiptSummary(prop).total }} al día
+                            </button>
+                          } @else {
+                            <button (click)="openServiceReceipts(prop)"
+                              class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-xs font-medium hover:bg-blue-100 transition-colors">
+                              <mat-icon class="text-[16px]">bolt</mat-icon>
+                              {{ receiptSummary(prop).paid }}/{{ receiptSummary(prop).total }}
+                            </button>
+                          }
+                        } @else {
+                          <span class="text-warm-300 text-xs">Sin recibos</span>
+                        }
+                      } @else {
+                        <span class="text-warm-300">—</span>
+                      }
+                    </td>
                     <!-- Acciones -->
                     <td class="px-5 py-3">
                       <div class="flex items-center justify-end gap-1">
@@ -305,20 +354,75 @@ function endOfMonth(d: Date): Date {
 export class DashboardComponent {
   private propertyService = inject(PropertyService);
   private paymentService = inject(PaymentService);
+  private receiptService = inject(ServiceReceiptService);
   private authService = inject(AuthService);
   private dialog = inject(MatDialog);
 
+  selectedMonth = signal<Date>(startOfMonth(new Date()));
+
+  private selectedMonthStr = computed(() => {
+    const d = this.selectedMonth();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}`;
+  });
+
+  monthLabel = computed(() => {
+    const d = this.selectedMonth();
+    return d.toLocaleDateString('es-CO', { month: 'long', year: 'numeric' });
+  });
+
+  isCurrentMonth = computed(() => {
+    const now = new Date();
+    const sel = this.selectedMonth();
+    return sel.getFullYear() === now.getFullYear() && sel.getMonth() === now.getMonth();
+  });
+
+  isFutureMonth = computed(() => {
+    const now = new Date();
+    const sel = this.selectedMonth();
+    return sel.getFullYear() > now.getFullYear() ||
+      (sel.getFullYear() === now.getFullYear() && sel.getMonth() > now.getMonth());
+  });
+
   properties = toSignal(this.propertyService.getAll(), { initialValue: [] });
 
-  /** Payments for the current month, queried per occupied property */
+  /** Service receipts for the selected month, queried per property */
+  private currentMonthReceipts = toSignal(
+    combineLatest([toObservable(this.properties), toObservable(this.selectedMonthStr)]).pipe(
+      switchMap(([props, monthStr]) => {
+        const withId = props.filter(p => p.id);
+        if (withId.length === 0) return of([] as ServiceReceipt[]);
+        return combineLatest(
+          withId.map(p => this.receiptService.getByPropertyAndMonth(p.id!, monthStr))
+        ).pipe(
+          map(arrays => arrays.flat())
+        );
+      })
+    ),
+    { initialValue: [] as ServiceReceipt[] }
+  );
+
+  /** Map of propertyId → { total, paid } */
+  private receiptSummaryByProperty = computed(() => {
+    const m = new Map<string, { total: number; paid: number }>();
+    for (const r of this.currentMonthReceipts()) {
+      const entry = m.get(r.propertyId) ?? { total: 0, paid: 0 };
+      entry.total++;
+      if (r.isPaid) entry.paid++;
+      m.set(r.propertyId, entry);
+    }
+    return m;
+  });
+
+  /** Payments for the selected month, queried per occupied property */
   private currentMonthPayments = toSignal(
-    toObservable(this.properties).pipe(
-      switchMap(props => {
+    combineLatest([toObservable(this.properties), toObservable(this.selectedMonth)]).pipe(
+      switchMap(([props, selMonth]) => {
         const occupied = props.filter(p => p.status === 'ocupado' && p.id);
         if (occupied.length === 0) return of([] as Payment[]);
-        const now = new Date();
-        const monthStart = startOfMonth(now).getTime();
-        const monthEnd = endOfMonth(now).getTime();
+        const monthStart = startOfMonth(selMonth).getTime();
+        const monthEnd = endOfMonth(selMonth).getTime();
         return combineLatest(
           occupied.map(p => this.paymentService.getByProperty(p.id!))
         ).pipe(
@@ -393,6 +497,39 @@ export class DashboardComponent {
     return `https://wa.me/${phone}?text=${text}`;
   }
 
+  receiptSummary(prop: Property): { total: number; paid: number } {
+    return this.receiptSummaryByProperty().get(prop.id!) ?? { total: 0, paid: 0 };
+  }
+
+  canWriteServicios(prop: Property): boolean {
+    const uid = this.authService.uid();
+    if (!uid) return false;
+    if (prop.ownerId === uid) return true;
+    const perms = prop.collaboratorPermissions?.[uid];
+    return !perms || perms.servicios !== false;
+  }
+
+  prevMonth() {
+    const d = this.selectedMonth();
+    this.selectedMonth.set(new Date(d.getFullYear(), d.getMonth() - 1, 1));
+  }
+
+  nextMonth() {
+    const d = this.selectedMonth();
+    this.selectedMonth.set(new Date(d.getFullYear(), d.getMonth() + 1, 1));
+  }
+
+  openServiceReceipts(prop: Property) {
+    this.dialog.open(PropertyReceiptsDialogComponent, {
+      width: '480px',
+      data: {
+        propertyId: prop.id,
+        propertyName: prop.name,
+        month: this.selectedMonthStr(),
+      },
+    });
+  }
+
   openPayment(prop: Property) {
     this.dialog.open(PaymentFormComponent, {
       width: '420px',
@@ -400,6 +537,7 @@ export class DashboardComponent {
         propertyId: prop.id,
         rentPrice: prop.tenantRentPrice ?? prop.rentPrice ?? null,
         label: prop.name,
+        defaultDate: this.selectedMonth(),
       },
     });
   }

@@ -32,13 +32,7 @@ const DEFAULT_PERMISSION: ColaboradorPermission = {
   standalone: true,
   imports: [CommonModule, FormsModule, MatIconModule, MatDialogModule, MatSnackBarModule],
   template: `
-    <div class="space-y-6">
-
-      <!-- Header -->
-      <div>
-        <h1 class="text-2xl font-bold text-warm-900">Colaboradores</h1>
-        <p class="text-warm-500 text-sm mt-1">Gestión global de accesos y permisos para todas tus propiedades</p>
-      </div>
+    <div class="space-y-4">
 
       <!-- Invite form -->
       <div class="bg-white rounded-xl border border-warm-200 shadow-sm p-5">

@@ -18,13 +18,8 @@ const MONTH_NAMES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Se
   template: `
     <div class="space-y-6">
 
-      <!-- Header + filters -->
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 class="text-2xl font-bold text-warm-900">Analytics</h1>
-          <p class="text-warm-500 text-sm mt-0.5">Inteligencia de negocio de tu portafolio</p>
-        </div>
-        <div class="flex flex-wrap items-center gap-3">
+      <!-- Filters -->
+      <div class="flex flex-wrap items-center justify-end gap-3">
 
           <!-- Year selector -->
           <select
@@ -67,7 +62,6 @@ const MONTH_NAMES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Se
             <mat-icon class="text-[16px]">download</mat-icon>
             Exportar
           </a>
-        </div>
       </div>
 
       <!-- KPI Cards -->

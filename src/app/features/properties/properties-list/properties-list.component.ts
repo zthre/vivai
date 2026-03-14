@@ -27,23 +27,18 @@ function endOfMonth(d: Date): Date {
   standalone: true,
   imports: [CommonModule, RouterLink, MatIconModule, MatDialogModule, MatSnackBarModule],
   template: `
-    <div class="space-y-6">
-      <!-- Header -->
-      <div class="flex items-center justify-between">
-        <div>
-          <h1 class="text-2xl font-bold text-warm-900">Propiedades</h1>
-          <p class="text-warm-500 text-sm mt-1">{{ properties().length }} propiedad(es) registrada(s)</p>
-        </div>
-        @if (canCreate()) {
+    <div class="space-y-4">
+      @if (canCreate()) {
+        <div class="flex justify-end">
           <a
             routerLink="/properties/new"
-            class="flex items-center gap-2 px-4 py-2.5 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium shadow-sm"
+            class="flex items-center gap-1.5 px-3 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-xs font-medium shadow-sm"
           >
-            <mat-icon class="text-[18px]">add</mat-icon>
+            <mat-icon class="text-[16px]">add</mat-icon>
             Nueva
           </a>
-        }
-      </div>
+        </div>
+      }
 
       <!-- Empty state -->
       @if (properties().length === 0) {
@@ -286,6 +281,7 @@ export class PropertiesListComponent {
         propertyId: property.id,
         rentPrice: property.tenantRentPrice ?? property.rentPrice ?? null,
         label: property.name,
+        defaultDate: new Date(),
       },
     });
   }

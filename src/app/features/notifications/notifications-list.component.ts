@@ -12,15 +12,10 @@ import { AppNotification, NotificationType } from '../../core/models/notificatio
   standalone: true,
   imports: [CommonModule, RouterLink, MatIconModule],
   template: `
-    <div class="space-y-6">
+    <div class="space-y-4">
 
-      <!-- Header -->
-      <div class="flex items-center justify-between">
-        <div>
-          <h1 class="text-2xl font-bold text-warm-900">Notificaciones</h1>
-          <p class="text-warm-500 text-sm mt-1">Historial de alertas automáticas enviadas</p>
-        </div>
-        @if (unreadCount() > 0) {
+      @if (unreadCount() > 0) {
+        <div class="flex justify-end">
           <button
             (click)="markAllRead()"
             [disabled]="marking()"
@@ -28,8 +23,8 @@ import { AppNotification, NotificationType } from '../../core/models/notificatio
           >
             Marcar todo como leído
           </button>
-        }
-      </div>
+        </div>
+      }
 
       <!-- Filters -->
       <div class="flex flex-wrap gap-3">

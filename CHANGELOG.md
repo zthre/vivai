@@ -4,6 +4,26 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ---
 
+## [v1.1.3] — Dashboard: Navegación por Mes + UX de Títulos
+
+### Nuevo
+- **Paginación de mes en dashboard**: Selector de mes con flechas `<` `>` en el header de la tabla de propiedades. Pagos y recibos de servicios reaccionan al mes seleccionado.
+- **Navegación a meses futuros**: Permite registrar pagos anticipados seleccionando meses posteriores al actual.
+- **Periodo visible en formulario de pago**: Al registrar un pago, el dialog muestra el mes seleccionado (ej. "Casa Norte — marzo de 2026") y pre-llena la fecha con ese mes.
+- **Recibos de servicios en dashboard**: Columna "Servicios" en la tabla y CTA en cards mobile con resumen de recibos pagados/pendientes del mes.
+- **Dialog de recibos por propiedad**: `PropertyReceiptsDialogComponent` para ver, marcar como pagado y gestionar recibos de servicios desde el dashboard.
+
+### Cambios
+- **Títulos en top bar del shell**: Los títulos y subtítulos de cada página (Dashboard, Propiedades, Finanzas, Servicios, Analytics, Colaboradores, Tickets, Notificaciones) se movieron a la franja blanca del header, liberando espacio vertical para el contenido.
+- **Spacing reducido**: `space-y-6` → `space-y-4` en todas las páginas principales para mayor densidad de información.
+- **Botones de acción compactos**: Botones "Nueva", "Nuevo" y filtros alineados a la derecha, más pequeños.
+- **Logging en reportes**: `exportCSV()` y `fetchRows()` ahora imprimen logs detallados en consola del navegador para depuración.
+
+### Fix
+- **`ExpenseFormData` extendido**: Ahora acepta `propertyId`, `category` y `label` opcionales para pre-llenar el formulario desde otros contextos.
+
+---
+
 ## [v1.1.2] — Colaboradores: Visibilidad de Pagos + Layout
 
 ### Fix

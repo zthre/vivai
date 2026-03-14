@@ -4,7 +4,7 @@ import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { toSignal, toObservable } from '@angular/core/rxjs-interop';
-import { switchMap, of, combineLatest, filter, map } from 'rxjs';
+import { switchMap, of, combineLatest, filter, map, startWith } from 'rxjs';
 import { AuthService, UserRole } from '../../core/auth/auth.service';
 import { TicketService } from '../../core/services/ticket.service';
 import { PropertyService } from '../../core/services/property.service';
@@ -160,7 +160,7 @@ interface NavItem {
         <!-- Version -->
         @if (sidebarOpen()) {
           <div class="px-4 pb-2">
-            <span class="text-xs text-warm-600 font-mono">v1.1.2</span>
+            <span class="text-xs text-warm-600 font-mono">v1.1.3</span>
           </div>
         }
 
@@ -200,13 +200,20 @@ interface NavItem {
       <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
 
         <!-- Top bar -->
-        <header class="h-16 bg-white border-b border-warm-200 flex items-center px-4 gap-3 flex-shrink-0">
+        <header class="h-14 bg-white border-b border-warm-200 flex items-center px-4 gap-3 flex-shrink-0">
           <button
             (click)="sidebarOpen.set(!sidebarOpen())"
             class="p-1.5 rounded-lg text-warm-500 hover:bg-warm-100 transition-colors"
           >
             <mat-icon>{{ sidebarOpen() && !isMobile() ? 'menu_open' : 'menu' }}</mat-icon>
           </button>
+
+          <div class="flex items-baseline gap-2 min-w-0">
+            <h1 class="text-sm font-bold text-warm-900 truncate">{{ pageTitle() }}</h1>
+            @if (pageSubtitle()) {
+              <span class="text-[11px] text-warm-400 truncate hidden sm:inline">{{ pageSubtitle() }}</span>
+            }
+          </div>
 
           <div class="flex-1"></div>
         </header>
@@ -227,6 +234,54 @@ export class ShellComponent implements OnInit {
 
   isMobile = signal(false);
   sidebarOpen = signal(true);
+
+  private currentUrl = toSignal(
+    this.router.events.pipe(
+      filter(e => e instanceof NavigationEnd),
+      map((e: any) => e.urlAfterRedirects as string),
+      startWith(this.router.url)
+    ),
+    { initialValue: this.router.url }
+  );
+
+  private static routeMeta: Record<string, { title?: string; subtitle?: string }> = {
+    '/properties': { title: 'Propiedades', subtitle: 'Gestiona tus inmuebles' },
+    '/finances': { title: 'Finanzas', subtitle: 'Ingresos y gastos de tu portafolio' },
+    '/services': { title: 'Servicios', subtitle: 'Distribúyelos entre tus propiedades' },
+    '/analytics': { title: 'Analytics', subtitle: 'Inteligencia de negocio' },
+    '/reminders': { title: 'Recordatorios', subtitle: 'Mensajes automáticos a inquilinos' },
+    '/colaboradores': { title: 'Colaboradores', subtitle: 'Accesos y permisos' },
+    '/tickets': { title: 'Tickets', subtitle: 'Mantenimiento y soporte' },
+    '/notifications': { title: 'Notificaciones', subtitle: 'Alertas automáticas' },
+    '/tenant': { title: 'Mi Arriendo' },
+    '/tenant/payments': { title: 'Mis Pagos' },
+    '/tenant/tickets': { title: 'Soporte' },
+  };
+
+  private matchedRoute = computed(() => {
+    const url = this.currentUrl();
+    if (ShellComponent.routeMeta[url]) return { url, meta: ShellComponent.routeMeta[url] };
+    // Longest prefix match (e.g. /properties/abc → /properties)
+    const key = Object.keys(ShellComponent.routeMeta)
+      .filter(k => url.startsWith(k))
+      .sort((a, b) => b.length - a.length)[0];
+    return key ? { url: key, meta: ShellComponent.routeMeta[key] } : null;
+  });
+
+  pageTitle = computed(() => {
+    const url = this.currentUrl();
+    if (url === '/dashboard' || url.startsWith('/dashboard')) {
+      const name = this.authService.currentUser()?.displayName?.split(' ')[0] ?? '';
+      return `Hola, ${name} 👋`;
+    }
+    return this.matchedRoute()?.meta.title ?? '';
+  });
+
+  pageSubtitle = computed(() => {
+    const url = this.currentUrl();
+    if (url === '/dashboard' || url.startsWith('/dashboard')) return 'Resumen de tu portafolio';
+    return this.matchedRoute()?.meta.subtitle ?? '';
+  });
 
   user = this.authService.currentUser;
   activeRole = this.authService.activeRole;

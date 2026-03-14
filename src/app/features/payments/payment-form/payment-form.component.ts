@@ -32,6 +32,9 @@ function parseLocalDate(dateStr: string): Date {
           <h2 class="text-lg font-bold text-warm-900">{{ isEdit ? 'Editar pago' : 'Registrar pago' }}</h2>
           <p class="text-sm text-warm-400">
             {{ data.label ?? ('Propiedad · ' + data.propertyId) }}
+            @if (periodLabel) {
+              <span class="text-warm-500"> — {{ periodLabel }}</span>
+            }
           </p>
         </div>
         <button (click)="close()" class="p-1.5 text-warm-400 hover:text-warm-700 hover:bg-warm-100 rounded-lg transition-colors">
@@ -110,10 +113,15 @@ export class PaymentFormComponent {
     rentPrice?: number | null;
     label?: string;
     payment?: Payment;
+    defaultDate?: Date;
   } = inject(MAT_DIALOG_DATA);
 
   isEdit = !!this.data.payment;
   loading = signal(false);
+
+  periodLabel = this.data.defaultDate
+    ? this.data.defaultDate.toLocaleDateString('es-CO', { month: 'long', year: 'numeric' })
+    : '';
 
   form = this.fb.group({
     amount: [
@@ -123,7 +131,7 @@ export class PaymentFormComponent {
     date: [
       this.data.payment
         ? localDateString(this.data.payment.date.toDate())
-        : localDateString(),
+        : localDateString(this.data.defaultDate),
       Validators.required,
     ],
     notes: [this.data.payment?.notes ?? ''],

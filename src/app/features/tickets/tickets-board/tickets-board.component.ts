@@ -39,9 +39,8 @@ const STATUS_COLORS: Record<string, string> = {
   template: `
     <div class="space-y-4">
 
-      <!-- Header -->
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <h1 class="text-xl font-bold text-warm-900">Tickets de Mantenimiento</h1>
+      <!-- Filter -->
+      <div class="flex justify-end">
         <select
           (change)="onPropertyFilter($event)"
           class="px-3 py-1.5 rounded-lg border border-warm-200 text-sm text-warm-700 bg-white focus:outline-none focus:ring-2 focus:ring-primary-400"

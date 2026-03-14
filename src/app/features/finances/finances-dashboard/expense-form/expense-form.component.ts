@@ -11,6 +11,9 @@ import { Expense, ExpenseCategory } from '../../../../core/models/expense.model'
 
 export interface ExpenseFormData {
   expense?: Expense;
+  propertyId?: string;
+  category?: ExpenseCategory;
+  label?: string;
 }
 
 function formatDate(d: Date): string {
@@ -178,6 +181,9 @@ export class ExpenseFormComponent implements OnInit {
         propertyId: e.propertyId,
         notes: e.notes ?? '',
       };
+    } else {
+      if (this.data?.propertyId) this.form.propertyId = this.data.propertyId;
+      if (this.data?.category) this.form.category = this.data.category;
     }
   }
 

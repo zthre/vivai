@@ -193,8 +193,18 @@ export class ReportsComponent {
   async exportCSV() {
     this.exporting.set(true);
     this.downloadUrl.set(null);
+    console.log('[Reporte CSV] Iniciando...', {
+      startMonth: this.startMonth(),
+      endMonth: this.endMonth(),
+      propertyId: this.selectedPropertyId(),
+    });
     try {
       const rows = await this.fetchRows();
+      console.log('[Reporte CSV] Filas obtenidas:', rows.length);
+      if (rows.length === 0) {
+        this.snackBar.open('No hay datos en el rango seleccionado.', 'OK', { duration: 3000 });
+        return;
+      }
       const header = 'Fecha,Propiedad,Concepto,Categoría,Monto,Fuente\n';
       const body = rows
         .map(r =>
@@ -206,13 +216,17 @@ export class ReportsComponent {
       const blob = new Blob(['\uFEFF' + header + body], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       this.downloadUrl.set(url);
-      // Auto-trigger download
       const a = document.createElement('a');
       a.href = url;
       a.download = `vivai-reporte-${this.startMonth()}-${this.endMonth()}.csv`;
       a.click();
-    } catch (err) {
-      this.snackBar.open('Error al generar el reporte CSV.', 'OK', { duration: 3000 });
+      this.snackBar.open(`Reporte generado: ${rows.length} registros`, 'OK', { duration: 3000, panelClass: 'snackbar-success' });
+    } catch (err: any) {
+      console.error('[Reporte CSV] Error:', err);
+      const msg = err?.message?.includes('index')
+        ? 'Error: Se necesita un índice en Firestore. Revisa la consola del navegador para el link.'
+        : `Error al generar CSV: ${err?.message ?? 'desconocido'}`;
+      this.snackBar.open(msg, 'OK', { duration: 5000 });
     } finally {
       this.exporting.set(false);
     }
@@ -221,6 +235,11 @@ export class ReportsComponent {
   async exportXLSX() {
     this.exporting.set(true);
     this.downloadUrl.set(null);
+    console.log('[Reporte XLSX] Iniciando...', {
+      startMonth: this.startMonth(),
+      endMonth: this.endMonth(),
+      propertyId: this.selectedPropertyId(),
+    });
     try {
       const url = await this.snapshotService.exportReport({
         startMonth: this.startMonth(),
@@ -228,12 +247,15 @@ export class ReportsComponent {
         propertyId: this.selectedPropertyId(),
         format: 'xlsx',
       });
+      console.log('[Reporte XLSX] URL generada:', url);
       this.downloadUrl.set(url);
-    } catch {
+      this.snackBar.open('Reporte Excel generado', 'OK', { duration: 3000, panelClass: 'snackbar-success' });
+    } catch (err: any) {
+      console.error('[Reporte XLSX] Error:', err);
       this.snackBar.open(
-        'Error al generar el Excel. Verifica que las Cloud Functions estén desplegadas.',
+        `Error al generar Excel: ${err?.message ?? 'Verifica que las Cloud Functions estén desplegadas.'}`,
         'OK',
-        { duration: 4000 }
+        { duration: 5000 }
       );
     } finally {
       this.exporting.set(false);
@@ -248,10 +270,13 @@ export class ReportsComponent {
     const startDate = new Date(sy, sm - 1, 1);
     const endDate = new Date(ey, em, 0, 23, 59, 59);
 
+    console.log('[fetchRows] uid:', uid, 'rango:', startDate, '→', endDate, 'pid:', pid);
+
     const propsSnap = await getDocs(
       query(collection(this.firestore, 'properties'), where('ownerId', '==', uid))
     );
     const propMap = new Map<string, string>(propsSnap.docs.map(d => [d.id, (d.data() as any)['name']]));
+    console.log('[fetchRows] Propiedades encontradas:', propsSnap.docs.length);
 
     const rows: any[] = [];
 
@@ -264,6 +289,7 @@ export class ReportsComponent {
     );
     if (pid) pq = query(pq, where('propertyId', '==', pid));
     const paymentsSnap = await getDocs(pq);
+    console.log('[fetchRows] Pagos encontrados:', paymentsSnap.docs.length);
     for (const d of paymentsSnap.docs) {
       const p = d.data() as any;
       rows.push({
@@ -285,6 +311,7 @@ export class ReportsComponent {
     );
     if (pid) eq = query(eq, where('propertyId', '==', pid));
     const expensesSnap = await getDocs(eq);
+    console.log('[fetchRows] Gastos encontrados:', expensesSnap.docs.length);
     for (const d of expensesSnap.docs) {
       const e = d.data() as any;
       rows.push({
@@ -297,6 +324,7 @@ export class ReportsComponent {
       });
     }
 
+    console.log('[fetchRows] Total filas:', rows.length);
     return rows.sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
   }
 }
