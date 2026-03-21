@@ -34,6 +34,16 @@ export class ServiceReceiptService {
     );
   }
 
+  getByAssignmentAndMonth(assignmentId: string, month: string): Observable<ServiceReceipt[]> {
+    return this.auth.uid$.pipe(
+      switchMap(uid => {
+        const ref = collection(this.firestore, 'serviceReceipts');
+        const q = query(ref, where('ownerId', '==', uid), where('assignmentId', '==', assignmentId), where('month', '==', month));
+        return collectionData(q, { idField: 'id' }) as Observable<ServiceReceipt[]>;
+      })
+    );
+  }
+
   getByPropertyAndMonth(propertyId: string, month: string): Observable<ServiceReceipt[]> {
     const ref = collection(this.firestore, 'serviceReceipts');
     const q = query(ref, where('propertyId', '==', propertyId), where('month', '==', month));
@@ -82,6 +92,7 @@ export class ServiceReceiptService {
         serviceId: assignment.serviceId,
         serviceName: assignment.serviceName,
         assignmentId: assignment.id,
+        assignmentCode: assignment.code ?? '',
         propertyId: p.id,
         month,
         totalAmount,

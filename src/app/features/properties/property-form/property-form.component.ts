@@ -135,15 +135,30 @@ type PropertyType = 'apartamento' | 'casa' | 'local' | 'bodega';
                     class="w-full px-3 py-2.5 border border-warm-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
                   <p class="text-xs text-warm-400 mt-1">Se usa para distribuir costos de servicios</p>
                 </div>
-                <div>
-                  <label class="block text-sm font-medium text-warm-700 mb-1.5">Precio de renta mensual</label>
-                  <div class="relative">
-                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-warm-400 text-sm">$</span>
-                    <input formControlName="tenantRentPrice" type="number" placeholder="Ej: 1200000"
-                      class="w-full pl-7 pr-3 py-2.5 border border-warm-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                <!-- Sin cobro toggle -->
+                <label class="flex items-start gap-3 cursor-pointer p-3 border rounded-lg transition-all"
+                  [class.border-amber-400]="form.get('paymentFree')?.value"
+                  [class.bg-amber-50]="form.get('paymentFree')?.value"
+                  [class.border-warm-200]="!form.get('paymentFree')?.value">
+                  <input type="checkbox" formControlName="paymentFree"
+                    class="w-4 h-4 accent-amber-500 cursor-pointer mt-0.5 flex-shrink-0">
+                  <div>
+                    <span class="text-sm font-medium text-warm-700">Sin cobro de arriendo</span>
+                    <p class="text-xs text-warm-400 mt-0.5">El pago mensual no aparecerá como pendiente en el dashboard</p>
                   </div>
-                  <p class="text-xs text-warm-400 mt-1">Monto que paga el inquilino — se usa al registrar pagos</p>
-                </div>
+                </label>
+
+                @if (!form.get('paymentFree')?.value) {
+                  <div>
+                    <label class="block text-sm font-medium text-warm-700 mb-1.5">Precio de renta mensual</label>
+                    <div class="relative">
+                      <span class="absolute left-3 top-1/2 -translate-y-1/2 text-warm-400 text-sm">$</span>
+                      <input formControlName="tenantRentPrice" type="number" placeholder="Ej: 1200000"
+                        class="w-full pl-7 pr-3 py-2.5 border border-warm-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                    </div>
+                    <p class="text-xs text-warm-400 mt-1">Monto que paga el inquilino — se usa al registrar pagos</p>
+                  </div>
+                }
               </div>
             }
           </div>
@@ -282,6 +297,7 @@ export class PropertyFormComponent implements OnInit {
     tenantPhone: [null as string | null],
     tenantEmail: [null as string | null],
     tenantRentPrice: [null as number | null],
+    paymentFree: [false],
     residentCount: [1 as number | null],
     // Marketplace (independent of occupancy)
     isPublic: [false],
@@ -348,7 +364,8 @@ export class PropertyFormComponent implements OnInit {
         tenantName: isOccupied ? (v.tenantName || null) : null,
         tenantPhone: isOccupied ? (v.tenantPhone || null) : null,
         tenantEmail: isOccupied ? (v.tenantEmail || null) : null,
-        tenantRentPrice: isOccupied ? (v.tenantRentPrice || null) : null,
+        paymentFree: isOccupied ? !!v.paymentFree : false,
+        tenantRentPrice: isOccupied && !v.paymentFree ? (v.tenantRentPrice || null) : null,
         residentCount: isOccupied ? (v.residentCount || 1) : 1,
         isPublic: !!v.isPublic,
         whatsappPhone: v.isPublic ? (v.whatsappPhone || null) : null,

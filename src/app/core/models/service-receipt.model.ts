@@ -6,6 +6,7 @@ export interface ServiceReceipt {
   serviceId: string;
   serviceName: string;
   assignmentId: string;
+  assignmentCode?: string; // denormalized from ServiceAssignment.code
   propertyId: string;
   month: string; // 'YYYY-MM'
   totalAmount: number;

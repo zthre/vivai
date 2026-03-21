@@ -180,7 +180,10 @@ const MONTH_NAMES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Se
         <!-- Profitability Table -->
         <div class="bg-white rounded-xl border border-warm-200 shadow-sm overflow-hidden">
           <div class="px-5 py-4 border-b border-warm-100">
-            <h3 class="font-semibold text-warm-900">Rentabilidad por propiedad</h3>
+            <div class="flex items-center gap-2">
+              <h3 class="font-semibold text-warm-900">Rentabilidad por propiedad</h3>
+              <span class="text-xs px-2 py-0.5 bg-primary-100 text-primary-700 rounded-full font-medium">Top 5</span>
+            </div>
           </div>
           <div class="overflow-x-auto">
             <table class="w-full text-sm">
@@ -325,7 +328,10 @@ export class AnalyticsDashboardComponent {
       const totalExpenses = propSnaps.reduce((s, sn) => s + sn.totalExpenses, 0);
       const balance = totalIncome - totalExpenses;
       return { propertyId: p.id!, name: p.name, totalIncome, totalExpenses, balance };
-    }).filter(r => r.totalIncome > 0 || r.totalExpenses > 0);
+    })
+      .filter(r => r.totalIncome > 0 || r.totalExpenses > 0)
+      .sort((a, b) => b.balance - a.balance)
+      .slice(0, 5);
   });
 
 

@@ -4,6 +4,30 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ---
 
+## [v1.2.0] — Servicios Multi-Código + Sin Cobro de Arriendo + Analytics Top 5
+
+### Nuevo
+- **Múltiples códigos de distribución por servicio**: Un servicio (ej. "Gas") ahora puede tener N códigos de distribución, cada uno con un `code` (identificador), `description`, propiedades asignadas y método de distribución propio. Ejemplo: `GAS-NORTE → aptos 101, 102`; `GAS-SUR → apto 301`.
+- **Generación de recibos por código**: Los recibos se generan por código de distribución (no por servicio completo). Navegar a recibos desde un código filtra automáticamente por `assignmentId`.
+- **Propiedad sin cobro de arriendo**: Nuevo flag `paymentFree` en `Property`. Cuando está activo, la propiedad no aparece como "Pendiente" en el dashboard, no muestra botón "Registrar" / "Pagar" en lista, detalle y dashboard, y cuenta como "al día" en el stat de pagos del mes.
+
+### Cambios
+- **`service-detail` rediseñado**: Lista de códigos con tarjetas (código badge, descripción, propiedades, método), formulario inline para crear/editar códigos, panel lateral de generación de recibos por código seleccionado.
+- **`service-receipts`**: Columna "Código" visible cuando se visualizan todos los recibos de un servicio. Soporta query param `?assignmentId=` para filtrar por código específico.
+- **Analytics Top 5**: La tabla "Rentabilidad por propiedad" ordena por balance descendente y limita a 5 propiedades. Badge "Top 5" en el encabezado.
+- **Dashboard badge "Sin cobro"**: Propiedades con `paymentFree` muestran badge amber "Sin cobro" en lugar de "Pendiente".
+- **Formulario de propiedad**: Toggle "Sin cobro de arriendo" en la sección de inquilino. Oculta el campo de precio de renta cuando está activo.
+
+### Modelos actualizados
+- `Property`: campo `paymentFree?: boolean`
+- `ServiceAssignment`: campos `code?: string`, `description?: string`
+- `ServiceReceipt`: campo `assignmentCode?: string` (denormalizado del assignment)
+
+### Servicios actualizados
+- `ServiceReceiptService`: nuevo método `getByAssignmentAndMonth(assignmentId, month)`; `generateReceipts` persiste `assignmentCode` en cada recibo
+
+---
+
 ## [v1.1.3] — Dashboard: Navegación por Mes + UX de Títulos
 
 ### Nuevo

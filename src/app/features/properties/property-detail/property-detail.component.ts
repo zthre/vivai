@@ -78,7 +78,7 @@ import { AuthService } from '../../../core/auth/auth.service';
                 <mat-icon class="text-[20px]">edit</mat-icon>
               </a>
             }
-            @if (canWritePagos()) {
+            @if (canWritePagos() && !property()?.paymentFree) {
               <button
                 (click)="openPaymentForm()"
                 class="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium shadow-sm"

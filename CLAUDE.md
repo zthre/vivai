@@ -61,12 +61,14 @@ All docs owned by a user have `ownerId = uid`. Key collections:
 | Collection | Key fields |
 |---|---|
 | `users` | `roles[]`, `propertyIds[]`, `collaboratingPropertyIds[]` |
-| `properties` | `ownerId`, `collaboratorUids[]`, `pendingCollaboratorEmails[]`, `collaboratorPermissions: {uid: ColaboradorPermission}`, `status: 'ocupado'\|'disponible'`, `isForRent`, `isForSale`, `isListed`, `tenantUid?`, `paymentDueDay?`, `notificationsEnabled?`, `purchasePrice?`, `purchaseDate?` |
+| `properties` | `ownerId`, `collaboratorUids[]`, `pendingCollaboratorEmails[]`, `collaboratorPermissions: {uid: ColaboradorPermission}`, `status: 'ocupado'\|'disponible'`, `isForRent`, `isForSale`, `isListed`, `tenantUid?`, `paymentFree?`, `paymentDueDay?`, `notificationsEnabled?`, `purchasePrice?`, `purchaseDate?` |
 | `payments` | `ownerId`, `propertyId`, `date: Timestamp`, `source?: 'manual'\|'gateway'` |
 | `expenses` | `ownerId`, `propertyId`, `date: Timestamp`, `category: 'reparacion'\|'impuesto'\|'servicio'\|'otro'` |
 | `tickets` | `ownerId`, `tenantUid`, `propertyId`, `status` |
 | `notifications` | `ownerId`, `type: 'payment_reminder'\|'payment_overdue'\|'ticket_update'`, `viewedByOwner` |
 | `paymentLinks` | `propertyId`, `month: 'YYYY-MM'`, `status: 'active'\|'paid'\|'expired'`, `externalId` (Stripe session) |
+| `serviceAssignments` | `ownerId`, `serviceId`, `serviceName`, `code?`, `description?`, `propertyIds[]`, `distributionMethod` |
+| `serviceReceipts` | `ownerId`, `serviceId`, `assignmentId`, `assignmentCode?`, `propertyId`, `month: 'YYYY-MM'`, `totalAmount`, `propertyAmount`, `isPaid` |
 | `monthlySnapshots` | `ownerId`, `propertyId`, `month: 'YYYY-MM'`, aggregated financials |
 | `mail` | Written by Cloud Functions; consumed by Firebase "Trigger Email" extension |
 
@@ -154,3 +156,6 @@ Required env vars for functions: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `
 - **`rolesGuard`** reads Firestore directly (not just the AuthService signal) to avoid race conditions on first load.
 - **Compound Firestore queries** with `ownerId + array-contains` require a composite index — avoid them in global collaborator methods; use single-field `ownerId` filter instead.
 - **`canWrite` input pattern** on child components (`photo-gallery`, `contract-section`, `expense-list`): `canWrite = input<boolean>(true)` to propagate permission down.
+- **`paymentFree` flag on Property**: when `true`, hides all payment CTAs ("Registrar", "Pagar") in dashboard, properties-list and property-detail, and counts the property as "al día" in the paid-this-month stat. Check `!prop.paymentFree` before showing any payment action.
+- **Service multi-code pattern**: a single `Service` can have multiple `ServiceAssignment` docs, each with its own `code`, `description`, `propertyIds[]` and `distributionMethod`. Receipts are generated per assignment (not per service). `ServiceReceipt` stores `assignmentCode` denormalized for display. Use `getByAssignmentAndMonth(assignmentId, month)` to query per-code receipts.
+- **Analytics Top 5**: `profitabilityRows` is capped at 5, sorted by balance desc.

@@ -5,12 +5,11 @@ import { RouterLink, ActivatedRoute } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { toSignal, toObservable } from '@angular/core/rxjs-interop';
-import { switchMap, combineLatest } from 'rxjs';
+import { switchMap, combineLatest, of } from 'rxjs';
 import { ServiceReceiptService } from '../../../core/services/service-receipt.service';
 import { UtilityServiceService } from '../../../core/services/utility-service.service';
 import { PropertyService } from '../../../core/services/property.service';
 import { ServiceReceipt } from '../../../core/models/service-receipt.model';
-import { Property } from '../../../core/models/property.model';
 
 function startOfMonth(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -34,13 +33,22 @@ function formatMonth(d: Date): string {
         <mat-icon class="text-[16px]">chevron_right</mat-icon>
         <a [routerLink]="['/services', serviceId]" class="hover:text-warm-600 transition-colors">{{ service()?.name }}</a>
         <mat-icon class="text-[16px]">chevron_right</mat-icon>
-        <span class="text-warm-700 font-medium">Recibos</span>
+        <span class="text-warm-700 font-medium">Recibos{{ assignmentId ? ' — ' + filterCode() : '' }}</span>
       </div>
 
-      <!-- Month selector -->
+      <!-- Month selector + back -->
       <div class="bg-white rounded-xl border border-warm-200 shadow-sm p-5">
-        <div class="flex items-center justify-between">
-          <h1 class="text-xl font-bold text-warm-900">Recibos — {{ service()?.name }}</h1>
+        <div class="flex items-center justify-between gap-4">
+          <div>
+            <h1 class="text-xl font-bold text-warm-900">
+              Recibos — {{ service()?.name }}
+            </h1>
+            @if (assignmentId && filterCode()) {
+              <p class="text-sm text-warm-500 mt-0.5">
+                Código: <span class="font-mono font-bold text-warm-700">{{ filterCode() }}</span>
+              </p>
+            }
+          </div>
           <div class="flex items-center gap-3">
             <button (click)="prevMonth()" class="p-1.5 text-warm-400 hover:text-warm-700 hover:bg-warm-100 rounded-lg transition-colors">
               <mat-icon>chevron_left</mat-icon>
@@ -65,12 +73,14 @@ function formatMonth(d: Date): string {
           </a>
         </div>
       } @else {
-        <!-- Receipts table -->
         <div class="bg-white rounded-xl border border-warm-200 shadow-sm overflow-hidden">
           <div class="overflow-x-auto">
             <table class="w-full text-sm">
               <thead class="bg-warm-50 border-b border-warm-200">
                 <tr>
+                  @if (!assignmentId) {
+                    <th class="text-left px-4 py-3 text-xs font-semibold text-warm-500 uppercase">Código</th>
+                  }
                   <th class="text-left px-4 py-3 text-xs font-semibold text-warm-500 uppercase">Propiedad</th>
                   <th class="text-center px-4 py-3 text-xs font-semibold text-warm-500 uppercase">Personas</th>
                   <th class="text-right px-4 py-3 text-xs font-semibold text-warm-500 uppercase">Total servicio</th>
@@ -82,6 +92,13 @@ function formatMonth(d: Date): string {
               <tbody class="divide-y divide-warm-100">
                 @for (r of receipts(); track r.id) {
                   <tr class="hover:bg-warm-50 transition-colors">
+                    @if (!assignmentId) {
+                      <td class="px-4 py-3">
+                        <span class="px-1.5 py-0.5 bg-warm-100 rounded text-xs font-mono font-bold text-warm-600 border border-warm-200">
+                          {{ r.assignmentCode || '—' }}
+                        </span>
+                      </td>
+                    }
                     <td class="px-4 py-3 font-medium text-warm-800">{{ propertyName(r.propertyId) }}</td>
                     <td class="px-4 py-3 text-center text-warm-500">{{ r.residentCount }}</td>
                     <td class="px-4 py-3 text-right text-warm-500">{{ r.totalAmount | currency:'COP':'symbol-narrow':'1.0-0' }}</td>
@@ -139,6 +156,7 @@ export class ServiceReceiptsComponent implements OnInit {
   private snackBar = inject(MatSnackBar);
 
   serviceId!: string;
+  assignmentId: string | null = null;
   selectedMonthDate = signal<Date>(startOfMonth(new Date()));
 
   service = toSignal(
@@ -158,12 +176,18 @@ export class ServiceReceiptsComponent implements OnInit {
     return d.toLocaleDateString('es-CO', { month: 'long', year: 'numeric' });
   });
 
+  filterCode = signal('');
+
   private month$ = toObservable(this.selectedMonth);
   receipts = toSignal(
     combineLatest([this.route.paramMap, this.month$]).pipe(
-      switchMap(([params, month]) =>
-        this.receiptService.getByServiceAndMonth(params.get('id')!, month)
-      )
+      switchMap(([params, month]) => {
+        const sid = params.get('id')!;
+        if (this.assignmentId) {
+          return this.receiptService.getByAssignmentAndMonth(this.assignmentId, month);
+        }
+        return this.receiptService.getByServiceAndMonth(sid, month);
+      })
     ),
     { initialValue: [] }
   );
@@ -173,11 +197,17 @@ export class ServiceReceiptsComponent implements OnInit {
   );
 
   ngOnInit() {
-    // Parse month from query params if provided
-    const qMonth = this.route.snapshot.queryParamMap.get('month');
+    const q = this.route.snapshot.queryParamMap;
+    const qMonth = q.get('month');
     if (qMonth) {
       const [y, m] = qMonth.split('-').map(Number);
       if (y && m) this.selectedMonthDate.set(new Date(y, m - 1, 1));
+    }
+    this.assignmentId = q.get('assignmentId');
+    if (this.assignmentId) {
+      // Read code from first receipt once loaded, or from query param if provided
+      const code = q.get('code');
+      if (code) this.filterCode.set(code);
     }
   }
 

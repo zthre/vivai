@@ -136,7 +136,7 @@ function endOfMonth(d: Date): Date {
                   Ver detalle
                   <mat-icon class="text-[16px]">arrow_forward</mat-icon>
                 </a>
-                @if (property.status === 'ocupado' && canWritePagos(property)) {
+                @if (property.status === 'ocupado' && !property.paymentFree && canWritePagos(property)) {
                   @if (hasPaymentThisMonth(property)) {
                     <button
                       (click)="openEditPaymentForm(property)"

@@ -129,6 +129,8 @@ function endOfMonth(d: Date): Date {
                   <div class="flex-shrink-0">
                     @if (hasPaymentThisMonth(prop)) {
                       <span class="text-[10px] px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">Pagado</span>
+                    } @else if (prop.paymentFree && prop.status === 'ocupado') {
+                      <span class="text-[10px] px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full font-medium">Sin cobro</span>
                     } @else if (prop.status === 'ocupado') {
                       <span class="text-[10px] px-2 py-0.5 bg-red-100 text-red-600 rounded-full font-medium">Pendiente</span>
                     }
@@ -136,7 +138,7 @@ function endOfMonth(d: Date): Date {
                 </div>
 
                 <!-- Payment CTA -->
-                @if (prop.status === 'ocupado' && canWritePagos(prop)) {
+                @if (prop.status === 'ocupado' && !prop.paymentFree && canWritePagos(prop)) {
                   @if (hasPaymentThisMonth(prop)) {
                     <button (click)="openEditPayment(prop)"
                       class="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-50 text-green-700 border border-green-200 rounded-lg text-sm font-medium hover:bg-green-100 transition-colors">
@@ -276,6 +278,8 @@ function endOfMonth(d: Date): Date {
                     <td class="px-5 py-3 text-center">
                       @if (prop.status !== 'ocupado') {
                         <span class="text-warm-300">—</span>
+                      } @else if (prop.paymentFree) {
+                        <span class="text-xs px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full font-medium">Sin cobro</span>
                       } @else if (hasPaymentThisMonth(prop)) {
                         <button (click)="openEditPayment(prop)"
                           class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-lg text-xs font-medium hover:bg-green-100 transition-colors"
@@ -449,7 +453,9 @@ export class DashboardComponent {
   availableCount = computed(() => this.totalProperties() - this.occupiedCount());
   paidThisMonth = computed(() => {
     const map = this.paymentByProperty();
-    return this.properties().filter(p => p.status === 'ocupado' && map.has(p.id!)).length;
+    return this.properties().filter(p =>
+      p.status === 'ocupado' && (p.paymentFree || map.has(p.id!))
+    ).length;
   });
 
   firstName = computed(() => {

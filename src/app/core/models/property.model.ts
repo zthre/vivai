@@ -57,7 +57,8 @@ export interface Property {
   // Contrato
   contract?: ContractFile | null;
 
-  // Notificaciones
+  // Pagos
+  paymentFree?: boolean;        // Inquilino sin cobro de arriendo (no aparece como pendiente)
   paymentDueDay?: number | null;
   notificationsEnabled?: boolean;
 
