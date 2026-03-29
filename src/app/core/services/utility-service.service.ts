@@ -16,17 +16,21 @@ import {
 import { Observable, switchMap } from 'rxjs';
 import { Service } from '../models/service.model';
 import { AuthService } from '../auth/auth.service';
+import { PropertyService } from './property.service';
 
 @Injectable({ providedIn: 'root' })
 export class UtilityServiceService {
   private firestore = inject(Firestore);
   private auth = inject(AuthService);
+  private propertyService = inject(PropertyService);
 
   getAll(): Observable<Service[]> {
-    return this.auth.uid$.pipe(
-      switchMap(uid => {
+    return this.propertyService.getAll().pipe(
+      switchMap(properties => {
+        const uid = this.auth.uid()!;
+        const ownerUids = [...new Set([uid, ...properties.map(p => p.ownerId)])].filter(Boolean);
         const ref = collection(this.firestore, 'services');
-        const q = query(ref, where('ownerId', '==', uid), orderBy('createdAt', 'desc'));
+        const q = query(ref, where('ownerId', 'in', ownerUids), orderBy('createdAt', 'desc'));
         return collectionData(q, { idField: 'id' }) as Observable<Service[]>;
       })
     );

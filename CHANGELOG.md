@@ -4,6 +4,29 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ---
 
+## [v1.2.1] — Servicios visibles y configurables para colaboradores
+
+### Nuevo
+- **Servicios accesibles para colaboradores**: Los colaboradores ahora ven todos los servicios del propietario en `/services`. Antes `getAll()` filtraba por `ownerId == uid`, devolviendo lista vacía para colaboradores.
+- **Códigos de distribución visibles**: `getByService()` ya no filtra por `ownerId`, los colaboradores ven todos los códigos de distribución del servicio.
+- **Recibos visibles**: `getByServiceAndMonth()` y `getByAssignmentAndMonth()` eliminan el filtro `ownerId`, los recibos son visibles para todos los usuarios con acceso al servicio.
+- **Control de escritura por permiso `servicios`**: En `service-detail` y `service-receipts`, los botones de editar, agregar código, generar recibos, eliminar y los campos editables (monto, pagado, notas) se muestran u ocultan según el computed `canWrite`. Los colaboradores con `servicios !== false` en alguna propiedad tienen acceso completo; sin permiso, ven solo lectura.
+
+### Cambios
+- **`UtilityServiceService.getAll()`**: Ahora usa `PropertyService.getAll()` para obtener los UIDs de los propietarios de propiedades colaboradas y consulta servicios con `ownerId in [uids]`.
+- **`ServiceAssignmentService.getByService()`**: Filtro simplificado a solo `serviceId`, sin `ownerId`.
+- **`ServiceReceiptService`**: `getByServiceAndMonth` y `getByAssignmentAndMonth` sin filtro `ownerId`.
+- **`service-receipts`**: Cuando `canWrite` es `false`, los campos de monto y notas se muestran como texto y el botón de pagado como ícono estático.
+
+### Firestore Rules
+- `serviceAssignments`: `update/delete` permitido al creador (`ownerId`) o a colaboradores de la primera propiedad del assignment (`propertyIds[0]`). `create` abierto a cualquier usuario autenticado.
+- `serviceReceipts`: `update/delete` permitido al creador o a colaboradores de la propiedad del recibo (`propertyId`). `create` abierto a cualquier usuario autenticado.
+
+### Fix
+- **Versión en panel**: Corregida a `v1.2.0` (era `v1.1.3` por error de sincronización).
+
+---
+
 ## [v1.2.0] — Servicios Multi-Código + Sin Cobro de Arriendo + Analytics Top 5
 
 ### Nuevo

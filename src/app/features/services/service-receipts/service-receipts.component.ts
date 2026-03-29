@@ -9,6 +9,7 @@ import { switchMap, combineLatest, of } from 'rxjs';
 import { ServiceReceiptService } from '../../../core/services/service-receipt.service';
 import { UtilityServiceService } from '../../../core/services/utility-service.service';
 import { PropertyService } from '../../../core/services/property.service';
+import { AuthService } from '../../../core/auth/auth.service';
 import { ServiceReceipt } from '../../../core/models/service-receipt.model';
 
 function startOfMonth(d: Date): Date {
@@ -103,32 +104,48 @@ function formatMonth(d: Date): string {
                     <td class="px-4 py-3 text-center text-warm-500">{{ r.residentCount }}</td>
                     <td class="px-4 py-3 text-right text-warm-500">{{ r.totalAmount | currency:'COP':'symbol-narrow':'1.0-0' }}</td>
                     <td class="px-4 py-3 text-right">
-                      <div class="relative inline-block">
-                        <span class="absolute left-1.5 top-1/2 -translate-y-1/2 text-warm-400 text-xs">$</span>
-                        <input
-                          type="number"
-                          [ngModel]="r.propertyAmount"
-                          (blur)="updateAmount(r, $event)"
-                          class="w-28 pl-5 pr-2 py-1.5 border border-warm-200 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-primary-500">
-                      </div>
+                      @if (canWrite()) {
+                        <div class="relative inline-block">
+                          <span class="absolute left-1.5 top-1/2 -translate-y-1/2 text-warm-400 text-xs">$</span>
+                          <input
+                            type="number"
+                            [ngModel]="r.propertyAmount"
+                            (blur)="updateAmount(r, $event)"
+                            class="w-28 pl-5 pr-2 py-1.5 border border-warm-200 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-primary-500">
+                        </div>
+                      } @else {
+                        <span class="text-sm font-medium text-warm-900">{{ r.propertyAmount | currency:'COP':'symbol-narrow':'1.0-0' }}</span>
+                      }
                     </td>
                     <td class="px-4 py-3 text-center">
-                      <button (click)="togglePaid(r)"
-                        class="w-7 h-7 rounded-full flex items-center justify-center transition-colors"
-                        [class.bg-green-100]="r.isPaid"
-                        [class.text-green-600]="r.isPaid"
-                        [class.bg-warm-100]="!r.isPaid"
-                        [class.text-warm-400]="!r.isPaid">
-                        <mat-icon class="text-[16px]">{{ r.isPaid ? 'check_circle' : 'radio_button_unchecked' }}</mat-icon>
-                      </button>
+                      @if (canWrite()) {
+                        <button (click)="togglePaid(r)"
+                          class="w-7 h-7 rounded-full flex items-center justify-center transition-colors"
+                          [class.bg-green-100]="r.isPaid"
+                          [class.text-green-600]="r.isPaid"
+                          [class.bg-warm-100]="!r.isPaid"
+                          [class.text-warm-400]="!r.isPaid">
+                          <mat-icon class="text-[16px]">{{ r.isPaid ? 'check_circle' : 'radio_button_unchecked' }}</mat-icon>
+                        </button>
+                      } @else {
+                        <mat-icon class="text-[18px]"
+                          [class.text-green-500]="r.isPaid"
+                          [class.text-warm-300]="!r.isPaid">
+                          {{ r.isPaid ? 'check_circle' : 'radio_button_unchecked' }}
+                        </mat-icon>
+                      }
                     </td>
                     <td class="px-4 py-3">
-                      <input
-                        type="text"
-                        [ngModel]="r.notes ?? ''"
-                        (blur)="updateNotes(r, $event)"
-                        placeholder="Agregar nota..."
-                        class="w-full px-2 py-1.5 border border-warm-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                      @if (canWrite()) {
+                        <input
+                          type="text"
+                          [ngModel]="r.notes ?? ''"
+                          (blur)="updateNotes(r, $event)"
+                          placeholder="Agregar nota..."
+                          class="w-full px-2 py-1.5 border border-warm-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                      } @else {
+                        <span class="text-sm text-warm-500">{{ r.notes || '—' }}</span>
+                      }
                     </td>
                   </tr>
                 }
@@ -152,6 +169,7 @@ export class ServiceReceiptsComponent implements OnInit {
   private receiptService = inject(ServiceReceiptService);
   private svcService = inject(UtilityServiceService);
   private propertyService = inject(PropertyService);
+  private authService = inject(AuthService);
   private route = inject(ActivatedRoute);
   private snackBar = inject(MatSnackBar);
 
@@ -169,6 +187,17 @@ export class ServiceReceiptsComponent implements OnInit {
   );
 
   allProperties = toSignal(this.propertyService.getAll(), { initialValue: [] });
+
+  canWrite = computed(() => {
+    const uid = this.authService.uid();
+    const svc = this.service();
+    if (!uid) return false;
+    if (svc?.ownerId === uid) return true;
+    return this.allProperties().some(p => {
+      const perms = p.collaboratorPermissions?.[uid];
+      return !perms || perms.servicios !== false;
+    });
+  });
 
   selectedMonth = computed(() => formatMonth(this.selectedMonthDate()));
   monthLabel = computed(() => {
