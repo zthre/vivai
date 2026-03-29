@@ -28,7 +28,13 @@ export class UtilityServiceService {
     return this.propertyService.getAll().pipe(
       switchMap(properties => {
         const uid = this.auth.uid()!;
-        const ownerUids = [...new Set([uid, ...properties.map(p => p.ownerId)])].filter(Boolean);
+        // UIDs de propietarios de propiedades colaboradas (para que colaboradores vean servicios del dueño)
+        const collabOwnerUids = properties.filter(p => p.ownerId !== uid).map(p => p.ownerId);
+        // UIDs de colaboradores en propiedades propias (para que el dueño vea servicios creados por colaboradores)
+        const collabWorkerUids = properties
+          .filter(p => p.ownerId === uid)
+          .flatMap(p => p.collaboratorUids ?? []);
+        const ownerUids = [...new Set([uid, ...collabOwnerUids, ...collabWorkerUids])].filter(Boolean);
         const ref = collection(this.firestore, 'services');
         const q = query(ref, where('ownerId', 'in', ownerUids), orderBy('createdAt', 'desc'));
         return collectionData(q, { idField: 'id' }) as Observable<Service[]>;

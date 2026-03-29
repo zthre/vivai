@@ -4,6 +4,13 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ---
 
+## [v1.2.2] — Fix: servicios creados por colaborador visibles para propietario
+
+### Fix
+- **Servicios de colaboradores invisibles para el propietario**: `UtilityServiceService.getAll()` construía `ownerUids` solo desde `properties.map(p => p.ownerId)`, que para el propietario siempre devuelve su propio UID. Los servicios creados por colaboradores (con `ownerId = colaborador_uid`) quedaban fuera. Ahora también se recolectan los `collaboratorUids` de las propiedades propias para incluirlos en la consulta `ownerId in [...]`.
+
+---
+
 ## [v1.2.1] — Servicios visibles y configurables para colaboradores
 
 ### Nuevo
