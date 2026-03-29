@@ -58,10 +58,12 @@ type DistMethod = 'por_persona' | 'partes_iguales' | 'manual';
             } @else {
               <span class="text-xs px-2.5 py-0.5 bg-warm-100 text-warm-500 rounded-full font-medium">Inactivo</span>
             }
-            <a [routerLink]="['/services', serviceId, 'edit']"
-              class="p-1.5 text-warm-400 hover:text-warm-700 hover:bg-warm-100 rounded-lg transition-colors">
-              <mat-icon class="text-[20px]">edit</mat-icon>
-            </a>
+            @if (canWrite()) {
+              <a [routerLink]="['/services', serviceId, 'edit']"
+                class="p-1.5 text-warm-400 hover:text-warm-700 hover:bg-warm-100 rounded-lg transition-colors">
+                <mat-icon class="text-[20px]">edit</mat-icon>
+              </a>
+            }
           </div>
         </div>
       </div>
@@ -76,7 +78,7 @@ type DistMethod = 'por_persona' | 'partes_iguales' | 'manual';
               <h2 class="font-semibold text-warm-900">Códigos de distribución</h2>
               <p class="text-xs text-warm-400 mt-0.5">Cada código agrupa propiedades con su propia factura mensual</p>
             </div>
-            @if (!showForm()) {
+            @if (!showForm() && canWrite()) {
               <button (click)="openAddForm()"
                 class="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-primary-500 text-white rounded-lg text-sm font-medium hover:bg-primary-600 transition-colors">
                 <mat-icon class="text-[16px]">add</mat-icon>
@@ -211,20 +213,22 @@ type DistMethod = 'por_persona' | 'partes_iguales' | 'manual';
                         </div>
                       </div>
                       <!-- Action buttons -->
-                      <div class="flex items-center gap-0.5 flex-shrink-0" (click)="$event.stopPropagation()">
-                        <button (click)="openEditForm(a)" title="Editar"
-                          class="p-1.5 text-warm-400 hover:text-warm-700 hover:bg-warm-100 rounded-lg transition-colors">
-                          <mat-icon class="text-[16px]">edit</mat-icon>
-                        </button>
-                        <button (click)="deleteAssignment(a)" [disabled]="deletingId() === a.id" title="Eliminar"
-                          class="p-1.5 text-warm-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-40">
-                          @if (deletingId() === a.id) {
-                            <div class="w-4 h-4 border-2 border-warm-300 border-t-warm-600 rounded-full animate-spin"></div>
-                          } @else {
-                            <mat-icon class="text-[16px]">delete_outline</mat-icon>
-                          }
-                        </button>
-                      </div>
+                      @if (canWrite()) {
+                        <div class="flex items-center gap-0.5 flex-shrink-0" (click)="$event.stopPropagation()">
+                          <button (click)="openEditForm(a)" title="Editar"
+                            class="p-1.5 text-warm-400 hover:text-warm-700 hover:bg-warm-100 rounded-lg transition-colors">
+                            <mat-icon class="text-[16px]">edit</mat-icon>
+                          </button>
+                          <button (click)="deleteAssignment(a)" [disabled]="deletingId() === a.id" title="Eliminar"
+                            class="p-1.5 text-warm-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-40">
+                            @if (deletingId() === a.id) {
+                              <div class="w-4 h-4 border-2 border-warm-300 border-t-warm-600 rounded-full animate-spin"></div>
+                            } @else {
+                              <mat-icon class="text-[16px]">delete_outline</mat-icon>
+                            }
+                          </button>
+                        </div>
+                      }
                     </div>
                   </div>
                 }
@@ -266,15 +270,17 @@ type DistMethod = 'por_persona' | 'partes_iguales' | 'manual';
                 </div>
 
                 <!-- Total amount -->
-                <div>
-                  <label class="block text-sm font-medium text-warm-700 mb-1.5">Monto total del servicio</label>
-                  <div class="relative">
-                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-warm-400 text-sm">$</span>
-                    <input [ngModel]="totalAmount()" (ngModelChange)="totalAmount.set(+$event || 0)"
-                      type="number" min="0" placeholder="Ej: 150000"
-                      class="w-full pl-7 pr-3 py-2.5 border border-warm-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                @if (canWrite()) {
+                  <div>
+                    <label class="block text-sm font-medium text-warm-700 mb-1.5">Monto total del servicio</label>
+                    <div class="relative">
+                      <span class="absolute left-3 top-1/2 -translate-y-1/2 text-warm-400 text-sm">$</span>
+                      <input [ngModel]="totalAmount()" (ngModelChange)="totalAmount.set(+$event || 0)"
+                        type="number" min="0" placeholder="Ej: 150000"
+                        class="w-full pl-7 pr-3 py-2.5 border border-warm-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                    </div>
                   </div>
-                </div>
+                }
 
                 <!-- Preview -->
                 @if (totalAmount() > 0 && selectedAssignment()!.distributionMethod !== 'manual') {
@@ -310,14 +316,16 @@ type DistMethod = 'por_persona' | 'partes_iguales' | 'manual';
                   </div>
                 }
 
-                <button (click)="generateReceipts()" [disabled]="generatingReceipts() || totalAmount() <= 0"
-                  class="w-full px-4 py-2.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
-                  @if (generatingReceipts()) {
-                    <div class="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin"></div>
-                  }
-                  <mat-icon class="text-[18px]">receipt</mat-icon>
-                  Generar {{ selectedAssignment()!.propertyIds.length }} recibo(s)
-                </button>
+                @if (canWrite()) {
+                  <button (click)="generateReceipts()" [disabled]="generatingReceipts() || totalAmount() <= 0"
+                    class="w-full px-4 py-2.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                    @if (generatingReceipts()) {
+                      <div class="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin"></div>
+                    }
+                    <mat-icon class="text-[18px]">receipt</mat-icon>
+                    Generar {{ selectedAssignment()!.propertyIds.length }} recibo(s)
+                  </button>
+                }
 
                 @if (existingReceipts().length) {
                   <div class="flex gap-2">
@@ -326,15 +334,17 @@ type DistMethod = 'por_persona' | 'partes_iguales' | 'manual';
                       class="flex-1 text-center px-4 py-2.5 border border-warm-200 text-warm-600 rounded-lg text-sm font-medium hover:bg-warm-50 transition-colors">
                       Ver recibos del mes
                     </a>
-                    <button (click)="deleteReceipts()" [disabled]="deletingReceipts()"
-                      class="px-4 py-2.5 border border-red-200 text-red-600 rounded-lg text-sm font-medium hover:bg-red-50 transition-colors disabled:opacity-50 flex items-center gap-1.5">
-                      @if (deletingReceipts()) {
-                        <div class="w-4 h-4 border-2 border-red-300 border-t-red-600 rounded-full animate-spin"></div>
-                      } @else {
-                        <mat-icon class="text-[16px]">delete_outline</mat-icon>
-                      }
-                      Eliminar
-                    </button>
+                    @if (canWrite()) {
+                      <button (click)="deleteReceipts()" [disabled]="deletingReceipts()"
+                        class="px-4 py-2.5 border border-red-200 text-red-600 rounded-lg text-sm font-medium hover:bg-red-50 transition-colors disabled:opacity-50 flex items-center gap-1.5">
+                        @if (deletingReceipts()) {
+                          <div class="w-4 h-4 border-2 border-red-300 border-t-red-600 rounded-full animate-spin"></div>
+                        } @else {
+                          <mat-icon class="text-[16px]">delete_outline</mat-icon>
+                        }
+                        Eliminar
+                      </button>
+                    }
                   </div>
                 }
               </div>
@@ -373,6 +383,17 @@ export class ServiceDetailComponent {
   );
 
   allProperties = toSignal(this.propertyService.getAll(), { initialValue: [] });
+
+  canWrite = computed(() => {
+    const uid = this.authService.uid();
+    const svc = this.service();
+    if (!uid) return false;
+    if (svc?.ownerId === uid) return true;
+    return this.allProperties().some(p => {
+      const perms = p.collaboratorPermissions?.[uid];
+      return !perms || perms.servicios !== false;
+    });
+  });
 
   assignments = toSignal(
     this.route.paramMap.pipe(

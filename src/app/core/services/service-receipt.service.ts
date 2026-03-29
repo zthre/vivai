@@ -25,23 +25,15 @@ export class ServiceReceiptService {
   private auth = inject(AuthService);
 
   getByServiceAndMonth(serviceId: string, month: string): Observable<ServiceReceipt[]> {
-    return this.auth.uid$.pipe(
-      switchMap(uid => {
-        const ref = collection(this.firestore, 'serviceReceipts');
-        const q = query(ref, where('ownerId', '==', uid), where('serviceId', '==', serviceId), where('month', '==', month));
-        return collectionData(q, { idField: 'id' }) as Observable<ServiceReceipt[]>;
-      })
-    );
+    const ref = collection(this.firestore, 'serviceReceipts');
+    const q = query(ref, where('serviceId', '==', serviceId), where('month', '==', month));
+    return collectionData(q, { idField: 'id' }) as Observable<ServiceReceipt[]>;
   }
 
   getByAssignmentAndMonth(assignmentId: string, month: string): Observable<ServiceReceipt[]> {
-    return this.auth.uid$.pipe(
-      switchMap(uid => {
-        const ref = collection(this.firestore, 'serviceReceipts');
-        const q = query(ref, where('ownerId', '==', uid), where('assignmentId', '==', assignmentId), where('month', '==', month));
-        return collectionData(q, { idField: 'id' }) as Observable<ServiceReceipt[]>;
-      })
-    );
+    const ref = collection(this.firestore, 'serviceReceipts');
+    const q = query(ref, where('assignmentId', '==', assignmentId), where('month', '==', month));
+    return collectionData(q, { idField: 'id' }) as Observable<ServiceReceipt[]>;
   }
 
   getByPropertyAndMonth(propertyId: string, month: string): Observable<ServiceReceipt[]> {
