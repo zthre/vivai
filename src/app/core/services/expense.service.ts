@@ -11,6 +11,7 @@ import {
   where,
   orderBy,
   serverTimestamp,
+  getDoc,
   Timestamp,
 } from '@angular/fire/firestore';
 import { Observable, switchMap } from 'rxjs';
@@ -38,16 +39,20 @@ export class ExpenseService {
     );
   }
 
-  async create(data: ExpenseCreate): Promise<void> {
+  /** Crea un gasto y devuelve su id. Se atribuye siempre al dueño de la propiedad. */
+  async create(data: ExpenseCreate): Promise<string> {
     const uid = this.auth.uid()!;
+    const propSnap = await getDoc(doc(this.firestore, `properties/${data.propertyId}`));
+    const ownerId = propSnap.data()?.['ownerId'] ?? uid;
     const ref = collection(this.firestore, 'expenses');
-    await addDoc(ref, {
+    const docRef = await addDoc(ref, {
       ...data,
       date: Timestamp.fromDate(data.date),
-      ownerId: uid,
+      ownerId,
       createdBy: uid,
       createdAt: serverTimestamp(),
     });
+    return docRef.id;
   }
 
   async update(id: string, data: Partial<ExpenseCreate>): Promise<void> {

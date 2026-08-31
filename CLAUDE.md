@@ -61,14 +61,14 @@ All docs owned by a user have `ownerId = uid`. Key collections:
 | Collection | Key fields |
 |---|---|
 | `users` | `roles[]`, `propertyIds[]`, `collaboratingPropertyIds[]` |
-| `properties` | `ownerId`, `collaboratorUids[]`, `pendingCollaboratorEmails[]`, `collaboratorPermissions: {uid: ColaboradorPermission}`, `status: 'ocupado'\|'disponible'`, `isForRent`, `isForSale`, `isListed`, `tenantUid?`, `paymentFree?`, `paymentDueDay?`, `notificationsEnabled?`, `purchasePrice?`, `purchaseDate?` |
+| `properties` | `ownerId`, `collaboratorUids[]`, `pendingCollaboratorEmails[]`, `collaboratorPermissions: {uid: ColaboradorPermission}`, `status: 'ocupado'\|'disponible'`, `isForRent`, `isForSale`, `isListed`, `isPublic`, `publishedAt?`, `listingExpiresAt?`, `listingExpiredAt?`, `tenantUid?`, `paymentFree?`, `paymentDueDay?`, `notificationsEnabled?`, `purchasePrice?`, `purchaseDate?` |
 | `payments` | `ownerId`, `propertyId`, `date: Timestamp`, `source?: 'manual'\|'gateway'` |
 | `expenses` | `ownerId`, `propertyId`, `date: Timestamp`, `category: 'reparacion'\|'impuesto'\|'servicio'\|'otro'` |
 | `tickets` | `ownerId`, `tenantUid`, `propertyId`, `status` |
 | `notifications` | `ownerId`, `type: 'payment_reminder'\|'payment_overdue'\|'ticket_update'`, `viewedByOwner` |
 | `paymentLinks` | `propertyId`, `month: 'YYYY-MM'`, `status: 'active'\|'paid'\|'expired'`, `externalId` (Stripe session) |
 | `serviceAssignments` | `ownerId`, `serviceId`, `serviceName`, `code?`, `description?`, `propertyIds[]`, `distributionMethod` |
-| `serviceReceipts` | `ownerId`, `serviceId`, `assignmentId`, `assignmentCode?`, `propertyId`, `month: 'YYYY-MM'`, `totalAmount`, `propertyAmount`, `isPaid` |
+| `serviceReceipts` | `ownerId`, `serviceId`, `assignmentId?` (null en manuales), `assignmentCode?`, `propertyId`, `propertyName?`, `month: 'YYYY-MM'`, `origin: 'manual'\|'distribucion'`, `totalAmount`, `propertyAmount`, `isPaid`, `paidAt?`, `expenseId?` |
 | `monthlySnapshots` | `ownerId`, `propertyId`, `month: 'YYYY-MM'`, aggregated financials |
 | `mail` | Written by Cloud Functions; consumed by Firebase "Trigger Email" extension |
 
@@ -118,6 +118,9 @@ src/app/
     tenant-portal/  my-lease, payment-history, my-tickets, ticket-form, payment-status, payment-success
     notifications/  notifications-list, notification-settings
     colaboradores/  colaboradores-page (global collaborator management)
+    services/       service-list, service-detail (tabs: recibos del mes / distribución),
+                    service-form, service-receipts, month-settlement (diálogo arriendo+servicios),
+                    register-service (diálogo de registro manual)
     marketplace/    listings, listing-detail, listing-card (public, no auth)
   layout/shell/     ShellComponent — sidebar nav, role selector, notification bell
   shared/           confirm-dialog
@@ -142,6 +145,7 @@ Located in `functions/` (TypeScript, Firebase Functions v2):
 - `expirePaymentLinks` — cron daily, marks stale links as `expired`
 - `generateMonthlySnapshot` — cron 1st of month + `generateMonthlySnapshotManual` callable
 - `exportReport` — callable, generates CSV/XLSX and returns signed Storage URL
+- `expireListings` — cron diario 3:00 (America/Bogota), apaga `isPublic`/`isListed` de las publicaciones vencidas + `expireListingsManual` callable
 
 Deploy: `cd functions && npm install && cd .. && firebase deploy --only functions`
 
@@ -157,5 +161,10 @@ Required env vars for functions: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `
 - **Compound Firestore queries** with `ownerId + array-contains` require a composite index — avoid them in global collaborator methods; use single-field `ownerId` filter instead.
 - **`canWrite` input pattern** on child components (`photo-gallery`, `contract-section`, `expense-list`): `canWrite = input<boolean>(true)` to propagate permission down.
 - **`paymentFree` flag on Property**: when `true`, hides all payment CTAs ("Registrar", "Pagar") in dashboard, properties-list and property-detail, and counts the property as "al día" in the paid-this-month stat. Check `!prop.paymentFree` before showing any payment action.
-- **Service multi-code pattern**: a single `Service` can have multiple `ServiceAssignment` docs, each with its own `code`, `description`, `propertyIds[]` and `distributionMethod`. Receipts are generated per assignment (not per service). `ServiceReceipt` stores `assignmentCode` denormalized for display. Use `getByAssignmentAndMonth(assignmentId, month)` to query per-code receipts.
+- **Service multi-code pattern**: a single `Service` can have multiple `ServiceAssignment` docs, each with its own `code`, `description`, `propertyIds[]` and `distributionMethod`. Receipts are generated per assignment (not per service). `ServiceReceipt` stores `assignmentCode` denormalized for display. Use `getByAssignmentAndMonth(assignmentId, month)` to query per-code receipts. Desde v1.3.0 la distribución es el **modo avanzado** (pestaña «Códigos de distribución» en `service-detail`); el camino principal es el registro manual.
+- **Recibos manuales (v1.3.0)**: `ServiceReceiptService.createManual()` crea un `ServiceReceipt` con `origin: 'manual'` y `assignmentId: null`, sin necesidad de códigos. `deleteByMonth(assignmentId, …)` filtra por `assignmentId`, así que regenerar una distribución **nunca** borra los manuales.
+- **Recibo pagado ⇒ gasto**: `setPaid(receipt, true)` crea un `Expense` de `category: 'servicio'` y guarda su id en `receipt.expenseId`; desmarcarlo lo elimina. La fecha del gasto es hoy si el recibo es del mes en curso, o el último día del mes del recibo en caso contrario. Nunca duplica: si `expenseId` ya existe, no crea otro.
+- **Atribución al dueño**: `PaymentService.create`, `ExpenseService.create` y los recibos de servicio resuelven `ownerId` desde `properties/{id}.ownerId`, no desde el uid de quien ejecuta la acción — si no, lo creado por un colaborador quedaría invisible para el dueño.
+- **Liquidación mensual**: `MonthSettlementDialogComponent` (`features/services/month-settlement/`) reúne arriendo + servicios de una propiedad en un mes. Se abre desde dashboard, `properties-list` y `property-detail`. «Pagar todo» registra el pago de arriendo y marca todos los recibos pendientes.
+- **Vigencia de publicaciones (30 días)**: `listing.util.ts` define `LISTING_DURATION_DAYS`, `isListingActive()` y `listingState()`. Una publicación sin `listingExpiresAt` se considera **vencida** (regla aplicada a las publicaciones anteriores a v1.3.0). Al publicar se sella `publishedAt` + `listingExpiresAt`; editar una publicación viva no extiende la vigencia — hay que usar `PropertyService.republishListing()`. El marketplace filtra en memoria (evita índice compuesto) y la Cloud Function `expireListings` (cron diario 3:00 America/Bogota) apaga `isPublic`, lo que además corta la lectura pública en las reglas.
 - **Analytics Top 5**: `profitabilityRows` is capped at 5, sorted by balance desc.

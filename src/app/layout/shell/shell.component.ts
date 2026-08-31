@@ -247,7 +247,7 @@ export class ShellComponent implements OnInit {
   private static routeMeta: Record<string, { title?: string; subtitle?: string }> = {
     '/properties': { title: 'Propiedades', subtitle: 'Gestiona tus inmuebles' },
     '/finances': { title: 'Finanzas', subtitle: 'Ingresos y gastos de tu portafolio' },
-    '/services': { title: 'Servicios', subtitle: 'Distribúyelos entre tus propiedades' },
+    '/services': { title: 'Servicios', subtitle: 'Registra y paga los servicios de tus propiedades' },
     '/analytics': { title: 'Analytics', subtitle: 'Inteligencia de negocio' },
     '/reminders': { title: 'Recordatorios', subtitle: 'Mensajes automáticos a inquilinos' },
     '/colaboradores': { title: 'Colaboradores', subtitle: 'Accesos y permisos' },

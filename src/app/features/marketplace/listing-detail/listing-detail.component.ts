@@ -4,6 +4,7 @@ import { RouterLink, ActivatedRoute } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MarketplaceService } from '../../../core/services/marketplace.service';
 import { AuthService } from '../../../core/auth/auth.service';
+import { isListingActive } from '../../../core/services/listing.util';
 import { Property } from '../../../core/models/property.model';
 
 @Component({
@@ -50,7 +51,21 @@ import { Property } from '../../../core/models/property.model';
           Volver al listado
         </a>
 
-        @if (!property()) {
+        @if (expired()) {
+          <div class="bg-white rounded-xl border border-warm-200 shadow-sm p-12 text-center">
+            <mat-icon class="text-warm-300 text-[56px]">event_busy</mat-icon>
+            <h1 class="text-xl font-bold text-warm-800 mt-3">Esta publicación ya no está disponible</h1>
+            <p class="text-warm-500 text-sm mt-1 max-w-md mx-auto">
+              Las publicaciones del marketplace tienen una vigencia de 30 días. Esta ya venció
+              o fue retirada por su propietario.
+            </p>
+            <a routerLink="/"
+              class="inline-flex items-center gap-2 mt-6 px-4 py-2.5 bg-primary-500 text-white rounded-lg text-sm font-medium hover:bg-primary-600 transition-colors">
+              <mat-icon class="text-[18px]">storefront</mat-icon>
+              Ver otras propiedades
+            </a>
+          </div>
+        } @else if (!property()) {
           <div class="space-y-4">
             <div class="h-72 bg-white rounded-xl border border-warm-200 animate-pulse"></div>
             <div class="h-40 bg-white rounded-xl border border-warm-200 animate-pulse"></div>
@@ -152,13 +167,23 @@ export class ListingDetailComponent implements OnInit {
   isLoggedIn = this.authService.isLoggedIn;
   loginLoading = signal(false);
   property = signal<Property | null>(null);
+  expired = signal(false);
 
   ngOnInit() {
     const propertyId = this.route.snapshot.paramMap.get('propertyId')!;
-    this.marketplaceService.getPropertyById(propertyId).subscribe(p => {
-      if (p) {
+    this.marketplaceService.getPropertyById(propertyId).subscribe({
+      next: p => {
+        if (!p) return;
+        // La publicación pudo vencer sin que el cron la haya apagado todavía
+        if (!isListingActive(p)) {
+          this.expired.set(true);
+          return;
+        }
+        this.expired.set(false);
         this.property.set(p);
-      }
+      },
+      // El cron ya apagó isPublic: Firestore niega la lectura pública
+      error: () => this.expired.set(true),
     });
   }
 

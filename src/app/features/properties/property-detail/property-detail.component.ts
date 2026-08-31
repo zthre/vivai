@@ -14,12 +14,19 @@ import { Payment } from '../../../core/models/payment.model';
 import { PhotoGalleryComponent } from './photo-gallery/photo-gallery.component';
 import { PaymentFormComponent } from '../../payments/payment-form/payment-form.component';
 import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialog/confirm-dialog.component';
+import { ListingStatusComponent } from '../../../shared/components/listing-status/listing-status.component';
+import { MonthSettlementDialogComponent } from '../../services/month-settlement/month-settlement-dialog.component';
+import { ServiceReceiptService } from '../../../core/services/service-receipt.service';
+import { ServiceReceipt } from '../../../core/models/service-receipt.model';
+import { listingState } from '../../../core/services/listing.util';
 import { AuthService } from '../../../core/auth/auth.service';
+import { toObservable } from '@angular/core/rxjs-interop';
+import { combineLatest } from 'rxjs';
 
 @Component({
   selector: 'app-property-detail',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterLink, MatIconModule, MatDialogModule, MatSnackBarModule, PhotoGalleryComponent],
+  imports: [CommonModule, ReactiveFormsModule, RouterLink, MatIconModule, MatDialogModule, MatSnackBarModule, PhotoGalleryComponent, ListingStatusComponent],
   template: `
     <div class="space-y-6">
       <!-- Breadcrumb -->
@@ -55,6 +62,11 @@ import { AuthService } from '../../../core/auth/auth.service';
                 <mat-icon class="text-[14px]">location_on</mat-icon>
                 {{ property()?.address }}
               </p>
+              @if (property() && listingVisible()) {
+                <div class="mt-1.5">
+                  <app-listing-status [property]="property()!" [canWrite]="canWrite()" />
+                </div>
+              }
               <!-- Prices -->
               <div class="flex items-baseline gap-3 mt-1 flex-wrap">
                 @if (property()?.tenantRentPrice) {
@@ -246,8 +258,93 @@ import { AuthService } from '../../../core/auth/auth.service';
           }
         </div>
 
-        <!-- Right column: Payment history -->
+        <!-- Right column: Servicios del mes + Payment history -->
         <div class="space-y-6">
+          <!-- Servicios del mes -->
+          @if (canWriteServicios() && property()) {
+            <div class="bg-white rounded-xl border border-warm-200 shadow-sm">
+              <div class="px-5 py-4 border-b border-warm-100 flex items-center justify-between gap-3">
+                <h2 class="font-semibold text-warm-900 flex items-center gap-2">
+                  <mat-icon class="text-[20px] text-warm-500">bolt</mat-icon>
+                  Servicios del mes
+                </h2>
+                <div class="flex items-center gap-1">
+                  <button (click)="prevMonth()" class="p-1 text-warm-400 hover:text-warm-700 hover:bg-warm-100 rounded-lg transition-colors">
+                    <mat-icon class="text-[18px]">chevron_left</mat-icon>
+                  </button>
+                  <span class="text-xs font-semibold text-warm-700 min-w-[100px] text-center capitalize">{{ monthLabel() }}</span>
+                  <button (click)="nextMonth()" class="p-1 text-warm-400 hover:text-warm-700 hover:bg-warm-100 rounded-lg transition-colors">
+                    <mat-icon class="text-[18px]">chevron_right</mat-icon>
+                  </button>
+                </div>
+              </div>
+
+              @if (monthReceipts().length === 0) {
+                <div class="px-5 py-8 text-center">
+                  <mat-icon class="text-warm-300 text-[36px]">bolt</mat-icon>
+                  <p class="text-warm-400 text-sm mt-2">Sin servicios registrados este mes</p>
+                </div>
+              } @else {
+                <div class="divide-y divide-warm-100">
+                  @for (r of monthReceipts(); track r.id) {
+                    <div class="flex items-center gap-3 px-5 py-3">
+                      <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
+                        [class.bg-green-100]="r.isPaid"
+                        [class.text-green-600]="r.isPaid"
+                        [class.bg-warm-100]="!r.isPaid"
+                        [class.text-warm-400]="!r.isPaid">
+                        <mat-icon class="text-[16px]">{{ r.isPaid ? 'check_circle' : 'bolt' }}</mat-icon>
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                          <p class="text-sm font-medium text-warm-800 truncate">{{ r.serviceName }}</p>
+                          @if (r.assignmentCode) {
+                            <span class="text-[10px] px-1.5 py-0.5 bg-warm-100 rounded font-mono font-bold text-warm-600 border border-warm-200">{{ r.assignmentCode }}</span>
+                          }
+                        </div>
+                        <p class="text-xs" [class.text-green-600]="r.isPaid" [class.text-warm-400]="!r.isPaid">
+                          {{ r.isPaid ? 'Pagado' : 'Pendiente' }}
+                        </p>
+                      </div>
+                      <span class="text-sm font-bold text-warm-900 flex-shrink-0">
+                        {{ r.propertyAmount | currency:'COP':'symbol-narrow':'1.0-0' }}
+                      </span>
+                    </div>
+                  }
+                </div>
+              }
+
+              <div class="px-5 py-3 border-t border-warm-100 bg-warm-50 space-y-2">
+                @if (servicesPendingTotal() > 0) {
+                  <div class="flex items-center justify-between text-sm">
+                    <span class="text-warm-500">Pendiente en servicios</span>
+                    <span class="font-bold text-warm-900">{{ servicesPendingTotal() | currency:'COP':'symbol-narrow':'1.0-0' }}</span>
+                  </div>
+                }
+                <button (click)="openServices()"
+                  class="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                  [class.bg-blue-50]="servicesPendingTotal() > 0"
+                  [class.text-blue-700]="servicesPendingTotal() > 0"
+                  [class.border]="true"
+                  [class.border-blue-200]="servicesPendingTotal() > 0"
+                  [class.hover:bg-blue-100]="servicesPendingTotal() > 0"
+                  [class.border-warm-200]="servicesPendingTotal() === 0"
+                  [class.text-warm-600]="servicesPendingTotal() === 0"
+                  [class.hover:bg-warm-100]="servicesPendingTotal() === 0">
+                  <mat-icon class="text-[18px]">{{ servicesPendingTotal() > 0 ? 'bolt' : 'add' }}</mat-icon>
+                  {{ servicesPendingTotal() > 0 ? 'Pagar servicios' : 'Registrar servicio' }}
+                </button>
+                @if (canPayAll()) {
+                  <button (click)="openServices(true)"
+                    class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors">
+                    <mat-icon class="text-[18px]">done_all</mat-icon>
+                    Pagar todo (arriendo + servicios)
+                  </button>
+                }
+              </div>
+            </div>
+          }
+
           <div class="bg-white rounded-xl border border-warm-200 shadow-sm">
             <div class="px-5 py-4 border-b border-warm-100">
               <h2 class="font-semibold text-warm-900">Historial de pagos</h2>
@@ -306,6 +403,7 @@ import { AuthService } from '../../../core/auth/auth.service';
 export class PropertyDetailComponent implements OnInit {
   private propertyService = inject(PropertyService);
   private paymentService = inject(PaymentService);
+  private receiptService = inject(ServiceReceiptService);
   private authService = inject(AuthService);
   private dialog = inject(MatDialog);
   private snackBar = inject(MatSnackBar);
@@ -352,12 +450,98 @@ export class PropertyDetailComponent implements OnInit {
     return !perms || perms.inmueblesMedia !== false;
   });
 
+  canWriteServicios = computed(() => {
+    const uid = this.authService.uid();
+    const prop = this.property();
+    if (!uid || !prop) return false;
+    if (prop.ownerId === uid) return true;
+    const perms = prop.collaboratorPermissions?.[uid];
+    return !perms || perms.servicios !== false;
+  });
+
+  listingVisible = computed(() => {
+    const prop = this.property();
+    return !!prop && listingState(prop) !== 'none';
+  });
+
   propertyPayments = toSignal(
     this.route.paramMap.pipe(
       switchMap(params => this.paymentService.getByProperty(params.get('id')!))
     ),
     { initialValue: [] }
   );
+
+  // ── Servicios del mes ──────────────────────────────────────────────────
+  selectedMonth = signal<Date>(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+
+  monthKey = computed(() => {
+    const d = this.selectedMonth();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  });
+
+  monthLabel = computed(() =>
+    this.selectedMonth().toLocaleDateString('es-CO', { month: 'long', year: 'numeric' })
+  );
+
+  monthReceipts = toSignal(
+    combineLatest([this.route.paramMap, toObservable(this.monthKey)]).pipe(
+      switchMap(([params, month]) =>
+        this.receiptService.getByPropertyAndMonth(params.get('id')!, month)
+      )
+    ),
+    { initialValue: [] as ServiceReceipt[] }
+  );
+
+  servicesPendingTotal = computed(() =>
+    this.monthReceipts()
+      .filter(r => !r.isPaid)
+      .reduce((sum, r) => sum + (r.propertyAmount ?? 0), 0)
+  );
+
+  /** Pago de arriendo registrado en el mes seleccionado */
+  private rentPaidThisMonth = computed(() => {
+    const key = this.monthKey();
+    return this.propertyPayments().some(p => {
+      const d = p.date?.toDate?.();
+      if (!d) return false;
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` === key;
+    });
+  });
+
+  canPayAll = computed(() => {
+    const prop = this.property();
+    if (!prop) return false;
+    const rentPending =
+      prop.status === 'ocupado' && !prop.paymentFree && !this.rentPaidThisMonth();
+    const servicesPending = this.monthReceipts().some(r => !r.isPaid);
+    return rentPending && servicesPending && this.canWritePagos() && this.canWriteServicios();
+  });
+
+  prevMonth() {
+    const d = this.selectedMonth();
+    this.selectedMonth.set(new Date(d.getFullYear(), d.getMonth() - 1, 1));
+  }
+
+  nextMonth() {
+    const d = this.selectedMonth();
+    this.selectedMonth.set(new Date(d.getFullYear(), d.getMonth() + 1, 1));
+  }
+
+  openServices(startInPayAll = false) {
+    const prop = this.property();
+    if (!prop) return;
+    this.dialog.open(MonthSettlementDialogComponent, {
+      width: '520px',
+      maxHeight: '90vh',
+      data: {
+        property: prop,
+        month: this.monthKey(),
+        canWritePagos: this.canWritePagos(),
+        canWriteServicios: this.canWriteServicios(),
+        startInPayAll,
+      },
+    });
+  }
 
   ngOnInit() {
     this.propertyId = this.route.snapshot.paramMap.get('id')!;

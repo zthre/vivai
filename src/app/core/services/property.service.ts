@@ -17,10 +17,12 @@ import {
   getDocs,
   arrayUnion,
   arrayRemove,
+  Timestamp,
 } from '@angular/fire/firestore';
 import { Observable, combineLatest, map, switchMap, startWith } from 'rxjs';
 import { Property, PhotoItem, ColaboradorPermission, ContractFile } from '../models/property.model';
 import { AuthService } from '../auth/auth.service';
+import { listingExpiryFrom } from './listing.util';
 
 @Injectable({ providedIn: 'root' })
 export class PropertyService {
@@ -91,6 +93,30 @@ export class PropertyService {
   async delete(id: string): Promise<void> {
     const ref = doc(this.firestore, `properties/${id}`);
     await deleteDoc(ref);
+  }
+
+  /**
+   * Publica (o republica) la propiedad en el marketplace por LISTING_DURATION_DAYS días.
+   * No hay renovación automática: siempre es una acción explícita del usuario.
+   */
+  async republishListing(id: string): Promise<void> {
+    const now = new Date();
+    await updateDoc(doc(this.firestore, `properties/${id}`), {
+      isPublic: true,
+      publishedAt: Timestamp.fromDate(now),
+      listingExpiresAt: Timestamp.fromDate(listingExpiryFrom(now)),
+      listingExpiredAt: null,
+      updatedAt: serverTimestamp(),
+    });
+  }
+
+  /** Retira la publicación del marketplace sin borrar la propiedad. */
+  async unpublishListing(id: string): Promise<void> {
+    await updateDoc(doc(this.firestore, `properties/${id}`), {
+      isPublic: false,
+      listingExpiredAt: Timestamp.now(),
+      updatedAt: serverTimestamp(),
+    });
   }
 
   async addPhoto(propertyId: string, photo: PhotoItem): Promise<void> {

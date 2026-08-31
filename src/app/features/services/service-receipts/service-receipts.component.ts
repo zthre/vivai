@@ -154,11 +154,26 @@ function formatMonth(d: Date): string {
           </div>
 
           <!-- Summary -->
-          <div class="px-4 py-3 bg-warm-50 border-t border-warm-200 flex items-center justify-between">
-            <span class="text-xs text-warm-500">{{ receipts()!.length }} recibo(s)</span>
-            <span class="text-sm font-bold text-warm-900">
-              Total: {{ totalPropertyAmounts() | currency:'COP':'symbol-narrow':'1.0-0' }}
+          <div class="px-4 py-3 bg-warm-50 border-t border-warm-200 flex items-center justify-between gap-3 flex-wrap">
+            <span class="text-xs text-warm-500">
+              {{ receipts()!.length }} recibo(s) · {{ pendingCount() }} pendiente(s)
             </span>
+            <div class="flex items-center gap-3">
+              @if (canWrite() && pendingCount() > 0) {
+                <button (click)="markAllPaid()" [disabled]="markingAll()"
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-700 transition-colors disabled:opacity-50">
+                  @if (markingAll()) {
+                    <div class="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin"></div>
+                  } @else {
+                    <mat-icon class="text-[15px]">done_all</mat-icon>
+                  }
+                  Pagar todos
+                </button>
+              }
+              <span class="text-sm font-bold text-warm-900">
+                Total: {{ totalPropertyAmounts() | currency:'COP':'symbol-narrow':'1.0-0' }}
+              </span>
+            </div>
           </div>
         </div>
       }
@@ -206,6 +221,7 @@ export class ServiceReceiptsComponent implements OnInit {
   });
 
   filterCode = signal('');
+  markingAll = signal(false);
 
   private month$ = toObservable(this.selectedMonth);
   receipts = toSignal(
@@ -224,6 +240,8 @@ export class ServiceReceiptsComponent implements OnInit {
   totalPropertyAmounts = computed(() =>
     (this.receipts() ?? []).reduce((sum, r) => sum + (r.propertyAmount ?? 0), 0)
   );
+
+  pendingCount = computed(() => (this.receipts() ?? []).filter(r => !r.isPaid).length);
 
   ngOnInit() {
     const q = this.route.snapshot.queryParamMap;
@@ -264,7 +282,7 @@ export class ServiceReceiptsComponent implements OnInit {
     const value = parseFloat((event.target as HTMLInputElement).value);
     if (isNaN(value) || value === receipt.propertyAmount) return;
     try {
-      await this.receiptService.update(receipt.id!, { propertyAmount: value });
+      await this.receiptService.updateAmount(receipt, value);
     } catch {
       this.snackBar.open('Error al actualizar monto.', 'OK', { duration: 3000 });
     }
@@ -272,9 +290,23 @@ export class ServiceReceiptsComponent implements OnInit {
 
   async togglePaid(receipt: ServiceReceipt) {
     try {
-      await this.receiptService.update(receipt.id!, { isPaid: !receipt.isPaid });
+      await this.receiptService.setPaid(receipt, !receipt.isPaid);
     } catch {
       this.snackBar.open('Error al actualizar estado.', 'OK', { duration: 3000 });
+    }
+  }
+
+  async markAllPaid() {
+    const pending = (this.receipts() ?? []).filter(r => !r.isPaid);
+    if (pending.length === 0) return;
+    this.markingAll.set(true);
+    try {
+      await this.receiptService.markManyPaid(pending);
+      this.snackBar.open(`${pending.length} recibo(s) marcados como pagados.`, 'OK', { duration: 3000 });
+    } catch {
+      this.snackBar.open('Error al marcar los recibos.', 'OK', { duration: 3000 });
+    } finally {
+      this.markingAll.set(false);
     }
   }
 
