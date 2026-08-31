@@ -22,7 +22,13 @@ jobs:
       
       - name: Build project
         run: npm run build
-      
+
+      - name: Deploy Firestore rules
+        run: |
+          echo '${{ secrets.VIVAI_FIREBASE }}' > "$RUNNER_TEMP/firebase-key.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-key.json"
+          npx firebase-tools@13 deploy --only firestore:rules --project vivai-now
+
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
