@@ -14,7 +14,7 @@ import {
   limit,
   getDoc,
 } from '@angular/fire/firestore';
-import { Observable, switchMap } from 'rxjs';
+import { Observable, of, switchMap, catchError } from 'rxjs';
 import { Payment } from '../models/payment.model';
 import { AuthService } from '../auth/auth.service';
 import { Timestamp } from '@angular/fire/firestore';
@@ -62,7 +62,13 @@ export class PaymentService {
       where('propertyId', '==', propertyId),
       orderBy('date', 'desc')
     );
-    return collectionData(q, { idField: 'id' }) as Observable<Payment[]>;
+    return (collectionData(q, { idField: 'id' }) as Observable<Payment[]>).pipe(
+      // Un error aquí llegaría a `toSignal` y rompería la vista que lo lee
+      catchError(err => {
+        console.error('[PaymentService.getByProperty]', err);
+        return of([] as Payment[]);
+      })
+    );
   }
 
   async create(data: { propertyId: string; amount: number; date: Date; notes: string | null }): Promise<void> {

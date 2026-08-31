@@ -13,7 +13,7 @@ import {
   orderBy,
   serverTimestamp,
 } from '@angular/fire/firestore';
-import { Observable, switchMap } from 'rxjs';
+import { Observable, of, switchMap, map, catchError } from 'rxjs';
 import { Service } from '../models/service.model';
 import { AuthService } from '../auth/auth.service';
 import { PropertyService } from './property.service';
@@ -27,17 +27,39 @@ export class UtilityServiceService {
   getAll(): Observable<Service[]> {
     return this.propertyService.getAll().pipe(
       switchMap(properties => {
-        const uid = this.auth.uid()!;
+        const uid = this.auth.uid();
+        if (!uid) return of([] as Service[]);
+
         // UIDs de propietarios de propiedades colaboradas (para que colaboradores vean servicios del dueño)
         const collabOwnerUids = properties.filter(p => p.ownerId !== uid).map(p => p.ownerId);
         // UIDs de colaboradores en propiedades propias (para que el dueño vea servicios creados por colaboradores)
         const collabWorkerUids = properties
           .filter(p => p.ownerId === uid)
           .flatMap(p => p.collaboratorUids ?? []);
-        const ownerUids = [...new Set([uid, ...collabOwnerUids, ...collabWorkerUids])].filter(Boolean);
+
+        // `in` admite como máximo 10 valores y falla en seco con un array vacío.
+        // El uid propio va primero para que nunca se pierda al truncar.
+        const ownerUids = [...new Set([uid, ...collabOwnerUids, ...collabWorkerUids])]
+          .filter(Boolean)
+          .slice(0, 10);
+
         const ref = collection(this.firestore, 'services');
-        const q = query(ref, where('ownerId', 'in', ownerUids), orderBy('createdAt', 'desc'));
-        return collectionData(q, { idField: 'id' }) as Observable<Service[]>;
+        // Sin orderBy: `in` + orderBy sobre otro campo exigiría un índice compuesto.
+        // El orden se resuelve en memoria.
+        const q = query(ref, where('ownerId', 'in', ownerUids));
+        return (collectionData(q, { idField: 'id' }) as Observable<Service[]>).pipe(
+          map(services =>
+            [...services].sort(
+              (a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0)
+            )
+          )
+        );
+      }),
+      // Una consulta caída no puede envenenar la señal: `toSignal` relanzaría el
+      // error en cada lectura y rompería la detección de cambios de la pantalla.
+      catchError(err => {
+        console.error('[UtilityServiceService.getAll]', err);
+        return of([] as Service[]);
       })
     );
   }
