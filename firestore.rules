@@ -54,12 +54,25 @@ service cloud.firestore {
       );
     }
 
-    // Expenses: only the owner can read/write
+    // Expenses: owner or colaborador de la propiedad puede leer/escribir.
+    // Los gastos se atribuyen siempre al dueño de la propiedad, incluso cuando
+    // los crea un colaborador (o el pago automático de un recibo de servicio).
     match /expenses/{expenseId} {
-      allow read, write: if request.auth != null
-                         && request.auth.uid == resource.data.ownerId;
-      allow create: if request.auth != null
-                    && request.auth.uid == request.resource.data.ownerId;
+      function isCollaboratorOnExpense() {
+        return request.auth != null
+               && request.auth.uid in get(/databases/$(database)/documents/properties/$(resource.data.propertyId))
+                                      .data.get('collaboratorUids', []);
+      }
+
+      allow read, write: if request.auth != null && (
+        request.auth.uid == resource.data.ownerId
+        || isCollaboratorOnExpense()
+      );
+      allow create: if request.auth != null && (
+        request.auth.uid == request.resource.data.ownerId
+        || request.auth.uid in get(/databases/$(database)/documents/properties/$(request.resource.data.propertyId))
+                               .data.get('collaboratorUids', [])
+      );
     }
 
     // Tickets: owner or colaborador can read/update; tenant can read/create their own.
@@ -126,7 +139,8 @@ service cloud.firestore {
       }
 
       allow read: if request.auth != null;
-      allow create: if request.auth != null;
+      allow create: if request.auth != null
+                    && request.auth.uid == request.resource.data.ownerId;
       allow update, delete: if request.auth != null && (
         request.auth.uid == resource.data.ownerId
         || isCollaboratorOnAssignment()
@@ -135,12 +149,23 @@ service cloud.firestore {
 
     // Service Receipts: owner or collaborator on the receipt's property can read/write.
     match /serviceReceipts/{receiptId} {
+      function receiptProperty() {
+        return get(/databases/$(database)/documents/properties/$(resource.data.propertyId)).data;
+      }
       function isCollaboratorOnReceiptProperty() {
-        return request.auth.uid in get(/databases/$(database)/documents/properties/$(resource.data.propertyId)).data.get('collaboratorUids', []);
+        return request.auth.uid in receiptProperty().get('collaboratorUids', []);
       }
 
-      allow read: if request.auth != null;
-      allow create: if request.auth != null;
+      allow read: if request.auth != null && (
+        request.auth.uid == resource.data.ownerId
+        || request.auth.uid == receiptProperty().ownerId
+        || isCollaboratorOnReceiptProperty()
+      );
+      allow create: if request.auth != null && (
+        request.auth.uid == get(/databases/$(database)/documents/properties/$(request.resource.data.propertyId)).data.ownerId
+        || request.auth.uid in get(/databases/$(database)/documents/properties/$(request.resource.data.propertyId))
+                               .data.get('collaboratorUids', [])
+      );
       allow update, delete: if request.auth != null && (
         request.auth.uid == resource.data.ownerId
         || isCollaboratorOnReceiptProperty()

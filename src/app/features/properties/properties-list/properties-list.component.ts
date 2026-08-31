@@ -13,7 +13,12 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { Property } from '../../../core/models/property.model';
 import { Payment } from '../../../core/models/payment.model';
 import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialog/confirm-dialog.component';
+import { ListingStatusComponent } from '../../../shared/components/listing-status/listing-status.component';
 import { PaymentFormComponent } from '../../payments/payment-form/payment-form.component';
+import { MonthSettlementDialogComponent } from '../../services/month-settlement/month-settlement-dialog.component';
+import { ServiceReceiptService } from '../../../core/services/service-receipt.service';
+import { ServiceReceipt } from '../../../core/models/service-receipt.model';
+import { listingState } from '../../../core/services/listing.util';
 
 function startOfMonth(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -21,11 +26,16 @@ function startOfMonth(d: Date): Date {
 function endOfMonth(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
 }
+/** Mes actual en formato 'YYYY-MM' */
+function currentMonthKey(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
 
 @Component({
   selector: 'app-properties-list',
   standalone: true,
-  imports: [CommonModule, RouterLink, MatIconModule, MatDialogModule, MatSnackBarModule],
+  imports: [CommonModule, RouterLink, MatIconModule, MatDialogModule, MatSnackBarModule, ListingStatusComponent],
   template: `
     <div class="space-y-4">
       @if (canCreate()) {
@@ -116,6 +126,13 @@ function endOfMonth(d: Date): Date {
                 }
               </div>
 
+              <!-- Estado de la publicación en el marketplace -->
+              @if (listingVisible(property)) {
+                <div class="mt-3">
+                  <app-listing-status [property]="property" [canWrite]="canWrite(property)" />
+                </div>
+              }
+
               <!-- Tags -->
               @if (property.tags?.length) {
                 <div class="mt-3 flex flex-wrap gap-1.5">
@@ -155,6 +172,25 @@ function endOfMonth(d: Date): Date {
                     </button>
                   }
                 }
+                @if (canWriteServicios(property)) {
+                  <button
+                    (click)="openServices(property)"
+                    class="text-sm font-medium flex items-center gap-1"
+                    [class.text-blue-600]="servicesPending(property) > 0"
+                    [class.hover:text-blue-700]="servicesPending(property) > 0"
+                    [class.text-warm-500]="servicesPending(property) === 0"
+                    [class.hover:text-warm-700]="servicesPending(property) === 0"
+                  >
+                    <mat-icon class="text-[16px]">bolt</mat-icon>
+                    @if (servicesPending(property) > 0) {
+                      Pagar servicios ({{ servicesPending(property) }})
+                    } @else if (receiptSummary(property).total > 0) {
+                      Servicios al día
+                    } @else {
+                      Registrar servicio
+                    }
+                  </button>
+                }
               </div>
               @if (canWrite(property)) {
                 <div class="flex items-center gap-1">
@@ -182,6 +218,7 @@ function endOfMonth(d: Date): Date {
 export class PropertiesListComponent {
   private propertyService = inject(PropertyService);
   private paymentService = inject(PaymentService);
+  private receiptService = inject(ServiceReceiptService);
   private authService = inject(AuthService);
   private dialog = inject(MatDialog);
   private snackBar = inject(MatSnackBar);
@@ -209,6 +246,31 @@ export class PropertiesListComponent {
     ),
     { initialValue: [] }
   );
+
+  /** Recibos de servicios del mes en curso, consultados por propiedad */
+  private currentMonthReceipts = toSignal(
+    toObservable(this.properties).pipe(
+      switchMap(props =>
+        this.receiptService.getByPropertiesAndMonth(
+          props.filter(p => p.id).map(p => p.id!),
+          currentMonthKey()
+        )
+      )
+    ),
+    { initialValue: [] as ServiceReceipt[] }
+  );
+
+  /** Map of propertyId → { total, paid } */
+  private receiptSummaryByProperty = computed(() => {
+    const m = new Map<string, { total: number; paid: number }>();
+    for (const r of this.currentMonthReceipts()) {
+      const entry = m.get(r.propertyId) ?? { total: 0, paid: 0 };
+      entry.total++;
+      if (r.isPaid) entry.paid++;
+      m.set(r.propertyId, entry);
+    }
+    return m;
+  });
 
   /** Map of propertyId → Payment for the current month */
   private paymentByProperty = computed(() => {
@@ -262,6 +324,40 @@ export class PropertiesListComponent {
     if (property.ownerId === uid) return true;
     const perms = property.collaboratorPermissions?.[uid];
     return !perms || perms.inmueblesPagos !== false;
+  }
+
+  canWriteServicios(property: Property): boolean {
+    const uid = this.authService.uid();
+    if (!uid) return false;
+    if (property.ownerId === uid) return true;
+    const perms = property.collaboratorPermissions?.[uid];
+    return !perms || perms.servicios !== false;
+  }
+
+  listingVisible(property: Property): boolean {
+    return listingState(property) !== 'none';
+  }
+
+  receiptSummary(property: Property): { total: number; paid: number } {
+    return this.receiptSummaryByProperty().get(property.id!) ?? { total: 0, paid: 0 };
+  }
+
+  servicesPending(property: Property): number {
+    const s = this.receiptSummary(property);
+    return s.total - s.paid;
+  }
+
+  openServices(property: Property) {
+    this.dialog.open(MonthSettlementDialogComponent, {
+      width: '520px',
+      maxHeight: '90vh',
+      data: {
+        property,
+        month: currentMonthKey(),
+        canWritePagos: this.canWritePagos(property),
+        canWriteServicios: this.canWriteServicios(property),
+      },
+    });
   }
 
   iconForType(type: string): string {

@@ -67,6 +67,13 @@ export interface Property {
   whatsappPhone?: string | null;
   tags?: string[];
 
+  /** Momento en que se publicó (o republicó) en el marketplace */
+  publishedAt?: Timestamp | null;
+  /** publishedAt + LISTING_DURATION_DAYS. Pasada esta fecha la publicación deja de mostrarse */
+  listingExpiresAt?: Timestamp | null;
+  /** Momento en que la publicación fue caducada (por el cron o manualmente) */
+  listingExpiredAt?: Timestamp | null;
+
   // Colaboradores
   collaboratorUids?: string[];
   pendingCollaboratorEmails?: string[];

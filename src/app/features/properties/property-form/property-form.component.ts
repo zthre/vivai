@@ -5,6 +5,15 @@ import { Router, ActivatedRoute, RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { PropertyService } from '../../../core/services/property.service';
+import {
+  LISTING_DURATION_DAYS,
+  ListingState,
+  isListingActive,
+  listingDaysLeft,
+  listingExpiryFrom,
+  listingState,
+} from '../../../core/services/listing.util';
+import { Timestamp } from '@angular/fire/firestore';
 
 type PropertyType = 'apartamento' | 'casa' | 'local' | 'bodega';
 
@@ -179,6 +188,35 @@ type PropertyType = 'apartamento' | 'casa' | 'local' | 'bodega';
             </label>
 
             @if (form.get('isPublic')?.value) {
+              @if (currentListing().state === 'active' || currentListing().state === 'expiring') {
+                <div class="flex items-start gap-2 p-3 rounded-lg border"
+                  [class.border-green-200]="currentListing().state === 'active'"
+                  [class.bg-green-50]="currentListing().state === 'active'"
+                  [class.border-amber-200]="currentListing().state === 'expiring'"
+                  [class.bg-amber-50]="currentListing().state === 'expiring'">
+                  <mat-icon class="text-[18px] flex-shrink-0 mt-0.5"
+                    [class.text-green-600]="currentListing().state === 'active'"
+                    [class.text-amber-600]="currentListing().state === 'expiring'">schedule</mat-icon>
+                  <p class="text-xs"
+                    [class.text-green-700]="currentListing().state === 'active'"
+                    [class.text-amber-700]="currentListing().state === 'expiring'">
+                    Publicación vigente — vence en {{ currentListing().daysLeft }} día(s).
+                    Guardar cambios no extiende la vigencia; para renovarla usa
+                    <span class="font-semibold">Publicar de nuevo</span> desde el detalle de la propiedad.
+                  </p>
+                </div>
+              } @else {
+                <div class="flex items-start gap-2 p-3 rounded-lg border border-blue-200 bg-blue-50">
+                  <mat-icon class="text-blue-600 text-[18px] flex-shrink-0 mt-0.5">schedule</mat-icon>
+                  <p class="text-xs text-blue-700">
+                    Al guardar, la publicación estará activa {{ listingDurationDays }} días.
+                    Después vence y hay que publicarla de nuevo.
+                  </p>
+                </div>
+              }
+            }
+
+            @if (form.get('isPublic')?.value) {
               <div class="space-y-4">
                 <div>
                   <label class="block text-sm font-medium text-warm-700 mb-1.5">
@@ -277,8 +315,12 @@ export class PropertyFormComponent implements OnInit {
   isEdit = signal(false);
   loading = signal(false);
   tags = signal<string[]>([]);
+  listingDurationDays = LISTING_DURATION_DAYS;
+  /** Estado de la publicación cargada, para saber si hay que sellar una nueva vigencia */
+  currentListing = signal<{ state: ListingState; daysLeft: number | null }>({ state: 'none', daysLeft: null });
   private propertyId: string | null = null;
   private wasOccupied = false;
+  private hadActiveListing = false;
 
   propertyTypes = [
     { value: 'apartamento', label: 'Apartamento', icon: 'apartment' },
@@ -324,6 +366,8 @@ export class PropertyFormComponent implements OnInit {
       this.propertyService.getById(this.propertyId).subscribe(p => {
         if (p) {
           this.wasOccupied = p.status === 'ocupado';
+          this.hadActiveListing = isListingActive(p);
+          this.currentListing.set({ state: listingState(p), daysLeft: listingDaysLeft(p) });
           this.form.patchValue({ ...p, isOccupied: this.wasOccupied } as any);
           if (p.tags?.length) this.tags.set(p.tags.slice(0, 3));
         }
@@ -377,6 +421,17 @@ export class PropertyFormComponent implements OnInit {
         publicDescription: (isForRent || isForSale) ? (v.publicDescription || null) : null,
         tags: this.tags(),
       };
+
+      // Vigencia de la publicación: solo se sella al publicar o republicar.
+      // Editar una publicación viva no extiende su fecha de vencimiento.
+      if (payload.isPublic && !this.hadActiveListing) {
+        const now = new Date();
+        payload.publishedAt = Timestamp.fromDate(now);
+        payload.listingExpiresAt = Timestamp.fromDate(listingExpiryFrom(now));
+        payload.listingExpiredAt = null;
+      } else if (!payload.isPublic && this.hadActiveListing) {
+        payload.listingExpiredAt = Timestamp.now();
+      }
 
       if (this.isEdit() && this.propertyId) {
         // If transitioning from occupied to available, clean up tenant user data

@@ -1,8 +1,9 @@
-import { Component, inject, signal, computed } from '@angular/core';
+import { Component, inject, signal, computed, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink, ActivatedRoute } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { toSignal, toObservable } from '@angular/core/rxjs-interop';
 import { switchMap, of, combineLatest } from 'rxjs';
@@ -12,6 +13,8 @@ import { ServiceReceiptService } from '../../../core/services/service-receipt.se
 import { PropertyService } from '../../../core/services/property.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ServiceAssignment } from '../../../core/models/service-assignment.model';
+import { ServiceReceipt } from '../../../core/models/service-receipt.model';
+import { RegisterServiceDialogComponent } from '../register-service/register-service-dialog.component';
 
 function startOfMonth(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -28,7 +31,7 @@ type DistMethod = 'por_persona' | 'partes_iguales' | 'manual';
 @Component({
   selector: 'app-service-detail',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, MatIconModule, MatSnackBarModule],
+  imports: [CommonModule, FormsModule, RouterLink, MatIconModule, MatDialogModule, MatSnackBarModule],
   template: `
     <div class="space-y-6">
       <!-- Breadcrumb -->
@@ -68,7 +71,135 @@ type DistMethod = 'por_persona' | 'partes_iguales' | 'manual';
         </div>
       </div>
 
-      <!-- Two-column layout -->
+      <!-- Tabs -->
+      <div class="flex items-center gap-1 border-b border-warm-200">
+        <button (click)="tab.set('recibos')"
+          class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors"
+          [class.border-primary-500]="tab() === 'recibos'"
+          [class.text-primary-600]="tab() === 'recibos'"
+          [class.border-transparent]="tab() !== 'recibos'"
+          [class.text-warm-500]="tab() !== 'recibos'">
+          Recibos del mes
+          @if (monthPendingCount() > 0) {
+            <span class="ml-1.5 text-[10px] px-1.5 py-0.5 bg-red-100 text-red-700 rounded-full">{{ monthPendingCount() }}</span>
+          }
+        </button>
+        <button (click)="tab.set('distribucion')"
+          class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors"
+          [class.border-primary-500]="tab() === 'distribucion'"
+          [class.text-primary-600]="tab() === 'distribucion'"
+          [class.border-transparent]="tab() !== 'distribucion'"
+          [class.text-warm-500]="tab() !== 'distribucion'">
+          Códigos de distribución
+          <span class="ml-1 text-[10px] text-warm-400">avanzado</span>
+        </button>
+      </div>
+
+      <!-- ── Pestaña: recibos del mes ───────────────────────────────── -->
+      @if (tab() === 'recibos') {
+        <div class="bg-white rounded-xl border border-warm-200 shadow-sm">
+          <div class="px-5 py-4 border-b border-warm-100 flex items-center justify-between gap-3 flex-wrap">
+            <div class="flex items-center gap-3">
+              <button (click)="prevMonth()" class="p-1.5 text-warm-400 hover:text-warm-700 hover:bg-warm-100 rounded-lg transition-colors">
+                <mat-icon>chevron_left</mat-icon>
+              </button>
+              <span class="text-sm font-semibold text-warm-800 min-w-[130px] text-center capitalize">{{ monthLabel() }}</span>
+              <button (click)="nextMonth()" class="p-1.5 text-warm-400 hover:text-warm-700 hover:bg-warm-100 rounded-lg transition-colors">
+                <mat-icon>chevron_right</mat-icon>
+              </button>
+            </div>
+            @if (canWrite()) {
+              <div class="flex items-center gap-2">
+                @if (monthPendingCount() > 0) {
+                  <button (click)="markAllPaid()" [disabled]="markingAll()"
+                    class="inline-flex items-center gap-1.5 px-3 py-2 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-700 transition-colors disabled:opacity-50">
+                    @if (markingAll()) {
+                      <div class="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin"></div>
+                    } @else {
+                      <mat-icon class="text-[15px]">done_all</mat-icon>
+                    }
+                    Pagar todos
+                  </button>
+                }
+                <button (click)="openRegister()"
+                  class="inline-flex items-center gap-1.5 px-3 py-2 bg-primary-500 text-white rounded-lg text-xs font-medium hover:bg-primary-600 transition-colors">
+                  <mat-icon class="text-[15px]">add</mat-icon>
+                  Registrar
+                </button>
+              </div>
+            }
+          </div>
+
+          @if (monthReceipts().length === 0) {
+            <div class="px-5 py-12 text-center">
+              <mat-icon class="text-warm-300 text-[40px]">receipt</mat-icon>
+              <p class="text-warm-500 text-sm mt-2 font-medium">Sin recibos este mes</p>
+              <p class="text-warm-400 text-xs mt-1">
+                Registra el servicio sobre una propiedad, o genera recibos desde un código de distribución
+              </p>
+            </div>
+          } @else {
+            <div class="divide-y divide-warm-100">
+              @for (r of monthReceipts(); track r.id) {
+                <div class="flex items-center gap-3 px-5 py-3">
+                  <button (click)="togglePaid(r)" [disabled]="!canWrite() || busy()"
+                    class="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-colors disabled:opacity-60"
+                    [class.bg-green-100]="r.isPaid"
+                    [class.text-green-600]="r.isPaid"
+                    [class.bg-warm-100]="!r.isPaid"
+                    [class.text-warm-400]="!r.isPaid"
+                    [title]="r.isPaid ? 'Marcar como no pagado' : 'Pagar recibo'">
+                    <mat-icon class="text-[18px]">{{ r.isPaid ? 'check_circle' : 'radio_button_unchecked' }}</mat-icon>
+                  </button>
+
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                      <p class="text-sm font-medium text-warm-800 truncate">{{ r.propertyName || propertyName(r.propertyId) }}</p>
+                      @if (r.assignmentCode) {
+                        <span class="text-[10px] px-1.5 py-0.5 bg-warm-100 rounded font-mono font-bold text-warm-600 border border-warm-200">{{ r.assignmentCode }}</span>
+                      } @else {
+                        <span class="text-[10px] px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded-full font-medium">manual</span>
+                      }
+                    </div>
+                    <p class="text-xs text-warm-400">{{ r.notes || (r.isPaid ? 'Pagado' : 'Pendiente') }}</p>
+                  </div>
+
+                  @if (canWrite()) {
+                    <div class="relative flex-shrink-0">
+                      <span class="absolute left-1.5 top-1/2 -translate-y-1/2 text-warm-400 text-xs">$</span>
+                      <input type="number" [ngModel]="r.propertyAmount" (blur)="updateAmount(r, $event)"
+                        class="w-28 pl-5 pr-2 py-1.5 border border-warm-200 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-primary-500">
+                    </div>
+                  } @else {
+                    <span class="text-sm font-bold text-warm-900 flex-shrink-0">
+                      {{ r.propertyAmount | currency:'COP':'symbol-narrow':'1.0-0' }}
+                    </span>
+                  }
+
+                  @if (canWrite() && r.origin === 'manual') {
+                    <button (click)="removeReceipt(r)" [disabled]="busy()" title="Eliminar recibo"
+                      class="flex-shrink-0 p-1 text-warm-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors disabled:opacity-50">
+                      <mat-icon class="text-[16px]">delete_outline</mat-icon>
+                    </button>
+                  }
+                </div>
+              }
+            </div>
+
+            <div class="px-5 py-3 bg-warm-50 border-t border-warm-200 flex items-center justify-between">
+              <span class="text-xs text-warm-500">
+                {{ monthReceipts().length }} recibo(s) · {{ monthPendingCount() }} pendiente(s)
+              </span>
+              <span class="text-sm font-bold text-warm-900">
+                Total: {{ monthTotal() | currency:'COP':'symbol-narrow':'1.0-0' }}
+              </span>
+            </div>
+          }
+        </div>
+      }
+
+      <!-- ── Pestaña: códigos de distribución ───────────────────────── -->
+      @if (tab() === 'distribucion') {
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
         <!-- Left: Códigos de distribución -->
@@ -359,19 +490,29 @@ type DistMethod = 'por_persona' | 'partes_iguales' | 'manual';
         </div>
 
       </div>
+      }
     </div>
   `,
 })
-export class ServiceDetailComponent {
+export class ServiceDetailComponent implements OnInit {
   private svcService = inject(UtilityServiceService);
   private assignmentService = inject(ServiceAssignmentService);
   private receiptService = inject(ServiceReceiptService);
   private propertyService = inject(PropertyService);
   private authService = inject(AuthService);
   private route = inject(ActivatedRoute);
+  private dialog = inject(MatDialog);
   private snackBar = inject(MatSnackBar);
 
   serviceId = '';
+
+  ngOnInit() {
+    const qMonth = this.route.snapshot.queryParamMap.get('month');
+    if (qMonth) {
+      const [y, m] = qMonth.split('-').map(Number);
+      if (y && m) this.selectedMonthDate.set(new Date(y, m - 1, 1));
+    }
+  }
 
   service = toSignal(
     this.route.paramMap.pipe(
@@ -402,6 +543,93 @@ export class ServiceDetailComponent {
     { initialValue: [] }
   );
 
+  // ── Mes seleccionado (compartido por ambas pestañas) ──────────────────────
+  selectedMonthDate = signal<Date>(startOfMonth(new Date()));
+  selectedMonth = computed(() => formatMonth(this.selectedMonthDate()));
+  monthLabel = computed(() => {
+    const d = this.selectedMonthDate();
+    return d.toLocaleDateString('es-CO', { month: 'long', year: 'numeric' });
+  });
+
+  // ── Pestañas ─────────────────────────────────────────────────────────────
+  tab = signal<'recibos' | 'distribucion'>('recibos');
+  busy = signal(false);
+  markingAll = signal(false);
+
+  /** Todos los recibos de este servicio en el mes seleccionado (manuales + distribuidos) */
+  monthReceipts = toSignal(
+    combineLatest([this.route.paramMap, toObservable(this.selectedMonth)]).pipe(
+      switchMap(([params, month]) =>
+        this.receiptService.getByServiceAndMonth(params.get('id')!, month)
+      )
+    ),
+    { initialValue: [] }
+  );
+
+  monthTotal = computed(() =>
+    this.monthReceipts().reduce((s, r) => s + (r.propertyAmount ?? 0), 0)
+  );
+  monthPendingCount = computed(() => this.monthReceipts().filter(r => !r.isPaid).length);
+
+  async togglePaid(receipt: ServiceReceipt) {
+    this.busy.set(true);
+    try {
+      await this.receiptService.setPaid(receipt, !receipt.isPaid);
+    } catch {
+      this.snackBar.open('Error al actualizar el recibo.', 'OK', { duration: 3000 });
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  async updateAmount(receipt: ServiceReceipt, event: Event) {
+    const value = parseFloat((event.target as HTMLInputElement).value);
+    if (isNaN(value) || value === receipt.propertyAmount) return;
+    try {
+      await this.receiptService.updateAmount(receipt, value);
+    } catch {
+      this.snackBar.open('Error al actualizar el monto.', 'OK', { duration: 3000 });
+    }
+  }
+
+  async removeReceipt(receipt: ServiceReceipt) {
+    if (!confirm(`¿Eliminar el recibo de ${receipt.propertyName || this.propertyName(receipt.propertyId)}?`)) return;
+    this.busy.set(true);
+    try {
+      await this.receiptService.delete(receipt);
+    } catch {
+      this.snackBar.open('Error al eliminar el recibo.', 'OK', { duration: 3000 });
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  async markAllPaid() {
+    const pending = this.monthReceipts().filter(r => !r.isPaid);
+    if (pending.length === 0) return;
+    this.markingAll.set(true);
+    try {
+      await this.receiptService.markManyPaid(pending);
+      this.snackBar.open(`${pending.length} recibo(s) marcados como pagados.`, 'OK', { duration: 3000 });
+    } catch {
+      this.snackBar.open('Error al marcar los recibos.', 'OK', { duration: 3000 });
+    } finally {
+      this.markingAll.set(false);
+    }
+  }
+
+  openRegister() {
+    this.dialog.open(RegisterServiceDialogComponent, {
+      width: '460px',
+      maxHeight: '90vh',
+      data: {
+        month: this.selectedMonth(),
+        serviceId: this.serviceId,
+        serviceName: this.service()?.name,
+      },
+    });
+  }
+
   // ── Form state ──────────────────────────────────────────────────────────
   showForm = signal(false);
   editingId: string | null = null;
@@ -421,15 +649,8 @@ export class ServiceDetailComponent {
   // ── Receipt generation state ─────────────────────────────────────────────
   selectedAssignment = signal<ServiceAssignment | null>(null);
   totalAmount = signal(0);
-  selectedMonthDate = signal<Date>(startOfMonth(new Date()));
   generatingReceipts = signal(false);
   deletingReceipts = signal(false);
-
-  selectedMonth = computed(() => formatMonth(this.selectedMonthDate()));
-  monthLabel = computed(() => {
-    const d = this.selectedMonthDate();
-    return d.toLocaleDateString('es-CO', { month: 'long', year: 'numeric' });
-  });
 
   private selectedAssignment$ = toObservable(this.selectedAssignment);
   private selectedMonth$ = toObservable(this.selectedMonth);

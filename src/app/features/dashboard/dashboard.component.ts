@@ -13,8 +13,10 @@ import { AuthService } from '../../core/auth/auth.service';
 import { Property } from '../../core/models/property.model';
 import { Payment } from '../../core/models/payment.model';
 import { ServiceReceipt } from '../../core/models/service-receipt.model';
+import { isListingActive, listingState } from '../../core/services/listing.util';
 import { PaymentFormComponent } from '../payments/payment-form/payment-form.component';
-import { PropertyReceiptsDialogComponent } from '../services/property-receipts-dialog/property-receipts-dialog.component';
+import { MonthSettlementDialogComponent } from '../services/month-settlement/month-settlement-dialog.component';
+import { ListingStatusComponent } from '../../shared/components/listing-status/listing-status.component';
 
 function startOfMonth(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -26,7 +28,7 @@ function endOfMonth(d: Date): Date {
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, RouterLink, MatIconModule, MatDialogModule],
+  imports: [CommonModule, RouterLink, MatIconModule, MatDialogModule, ListingStatusComponent],
   template: `
     <div class="space-y-4">
       <!-- Stats cards -->
@@ -70,6 +72,12 @@ function endOfMonth(d: Date): Date {
             </div>
           </div>
           <p class="text-3xl font-bold text-warm-900">{{ paidThisMonth() }}<span class="text-lg text-warm-400">/{{ occupiedCount() }}</span></p>
+          @if (pendingServicesTotal() > 0) {
+            <p class="text-xs text-blue-600 mt-1 font-medium">
+              {{ pendingServicesCount() }} servicio(s) pendiente(s) ·
+              {{ pendingServicesTotal() | currency:'COP':'symbol-narrow':'1.0-0' }}
+            </p>
+          }
         </div>
       </div>
 
@@ -175,10 +183,23 @@ function endOfMonth(d: Date): Date {
                   } @else {
                     <button (click)="openServiceReceipts(prop)"
                       class="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-warm-50 text-warm-500 border border-warm-200 rounded-lg text-sm font-medium hover:bg-warm-100 transition-colors">
-                      <mat-icon class="text-[18px]">bolt</mat-icon>
-                      Sin servicios este mes
+                      <mat-icon class="text-[18px]">add</mat-icon>
+                      Registrar servicio
                     </button>
                   }
+                }
+
+                <!-- Pagar todo (arriendo + servicios) -->
+                @if (canPayAll(prop)) {
+                  <button (click)="openServiceReceipts(prop, true)"
+                    class="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors shadow-sm">
+                    <mat-icon class="text-[18px]">done_all</mat-icon>
+                    Pagar todo
+                  </button>
+                }
+
+                @if (listingVisible(prop)) {
+                  <app-listing-status [property]="prop" [canWrite]="canEdit(prop)" />
                 }
 
                 <div class="flex items-center gap-2 flex-wrap">
@@ -186,7 +207,7 @@ function endOfMonth(d: Date): Date {
                     class="text-xs text-primary-600 hover:text-primary-700 font-medium flex items-center gap-0.5">
                     <mat-icon class="text-[14px]">visibility</mat-icon> Detalle
                   </a>
-                  @if (prop.isPublic) {
+                  @if (isListingLive(prop)) {
                     <a [routerLink]="['/inmueble', prop.id]"
                       class="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-0.5">
                       <mat-icon class="text-[14px]">storefront</mat-icon> Marketplace
@@ -236,6 +257,11 @@ function endOfMonth(d: Date): Date {
                               @for (tag of prop.tags; track tag) {
                                 <span class="text-[10px] px-1.5 py-0.5 bg-primary-100 text-primary-700 rounded-full">{{ tag }}</span>
                               }
+                            </div>
+                          }
+                          @if (listingVisible(prop)) {
+                            <div class="mt-1">
+                              <app-listing-status [property]="prop" [canWrite]="canEdit(prop)" />
                             </div>
                           }
                         </div>
@@ -300,22 +326,27 @@ function endOfMonth(d: Date): Date {
                     <!-- Servicios -->
                     <td class="px-5 py-3 text-center">
                       @if (canWriteServicios(prop)) {
-                        @if (receiptSummary(prop).total > 0) {
-                          @if (receiptSummary(prop).paid === receiptSummary(prop).total) {
-                            <button (click)="openServiceReceipts(prop)"
-                              class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-lg text-xs font-medium hover:bg-green-100 transition-colors">
-                              <mat-icon class="text-[16px]">check_circle</mat-icon>
-                              {{ receiptSummary(prop).total }} al día
-                            </button>
-                          } @else {
-                            <button (click)="openServiceReceipts(prop)"
-                              class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-xs font-medium hover:bg-blue-100 transition-colors">
-                              <mat-icon class="text-[16px]">bolt</mat-icon>
-                              {{ receiptSummary(prop).paid }}/{{ receiptSummary(prop).total }}
-                            </button>
-                          }
+                        @if (receiptSummary(prop).total === 0) {
+                          <button (click)="openServiceReceipts(prop)"
+                            class="inline-flex items-center gap-1.5 px-3 py-1.5 border border-warm-200 text-warm-500 rounded-lg text-xs font-medium hover:bg-warm-100 transition-colors">
+                            <mat-icon class="text-[16px]">add</mat-icon>
+                            Registrar servicio
+                          </button>
+                        } @else if (receiptSummary(prop).paid === receiptSummary(prop).total) {
+                          <button (click)="openServiceReceipts(prop)"
+                            class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-lg text-xs font-medium hover:bg-green-100 transition-colors">
+                            <mat-icon class="text-[16px]">check_circle</mat-icon>
+                            Servicios al día
+                          </button>
                         } @else {
-                          <span class="text-warm-300 text-xs">Sin recibos</span>
+                          <button (click)="openServiceReceipts(prop)"
+                            class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-xs font-medium hover:bg-blue-100 transition-colors">
+                            <mat-icon class="text-[16px]">bolt</mat-icon>
+                            Pagar servicios
+                            <span class="text-[10px] px-1.5 py-0.5 bg-red-100 text-red-700 rounded-full">
+                              {{ receiptSummary(prop).total - receiptSummary(prop).paid }}
+                            </span>
+                          </button>
                         }
                       } @else {
                         <span class="text-warm-300">—</span>
@@ -324,12 +355,20 @@ function endOfMonth(d: Date): Date {
                     <!-- Acciones -->
                     <td class="px-5 py-3">
                       <div class="flex items-center justify-end gap-1">
+                        @if (canPayAll(prop)) {
+                          <button (click)="openServiceReceipts(prop, true)"
+                            class="inline-flex items-center gap-1 px-2.5 py-1.5 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-700 transition-colors mr-1"
+                            title="Registrar arriendo y servicios del mes">
+                            <mat-icon class="text-[15px]">done_all</mat-icon>
+                            Pagar todo
+                          </button>
+                        }
                         <a [routerLink]="['/properties', prop.id]"
                           class="p-1.5 text-warm-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
                           title="Ver detalle">
                           <mat-icon class="text-[18px]">visibility</mat-icon>
                         </a>
-                        @if (prop.isPublic) {
+                        @if (isListingLive(prop)) {
                           <a [routerLink]="['/inmueble', prop.id]"
                             class="p-1.5 text-warm-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                             title="Ver en marketplace">
@@ -448,6 +487,15 @@ export class DashboardComponent {
     return m;
   });
 
+  pendingServicesCount = computed(
+    () => this.currentMonthReceipts().filter(r => !r.isPaid).length
+  );
+  pendingServicesTotal = computed(() =>
+    this.currentMonthReceipts()
+      .filter(r => !r.isPaid)
+      .reduce((sum, r) => sum + (r.propertyAmount ?? 0), 0)
+  );
+
   totalProperties = computed(() => this.properties().length);
   occupiedCount = computed(() => this.properties().filter(p => p.status === 'ocupado').length);
   availableCount = computed(() => this.totalProperties() - this.occupiedCount());
@@ -507,6 +555,16 @@ export class DashboardComponent {
     return this.receiptSummaryByProperty().get(prop.id!) ?? { total: 0, paid: 0 };
   }
 
+  /** La publicación está vigente ahora mismo (visible en el marketplace). */
+  isListingLive(prop: Property): boolean {
+    return isListingActive(prop);
+  }
+
+  /** Hay algo que mostrar sobre la publicación (vigente, por vencer o vencida). */
+  listingVisible(prop: Property): boolean {
+    return listingState(prop) !== 'none';
+  }
+
   canWriteServicios(prop: Property): boolean {
     const uid = this.authService.uid();
     if (!uid) return false;
@@ -525,15 +583,27 @@ export class DashboardComponent {
     this.selectedMonth.set(new Date(d.getFullYear(), d.getMonth() + 1, 1));
   }
 
-  openServiceReceipts(prop: Property) {
-    this.dialog.open(PropertyReceiptsDialogComponent, {
-      width: '480px',
+  openServiceReceipts(prop: Property, startInPayAll = false) {
+    this.dialog.open(MonthSettlementDialogComponent, {
+      width: '520px',
+      maxHeight: '90vh',
       data: {
-        propertyId: prop.id,
-        propertyName: prop.name,
+        property: prop,
         month: this.selectedMonthStr(),
+        canWritePagos: this.canWritePagos(prop),
+        canWriteServicios: this.canWriteServicios(prop),
+        startInPayAll,
       },
     });
+  }
+
+  /** True si hay arriendo pendiente y además servicios pendientes en el mes. */
+  canPayAll(prop: Property): boolean {
+    const summary = this.receiptSummary(prop);
+    const servicesPending = summary.total - summary.paid > 0;
+    const rentPending =
+      prop.status === 'ocupado' && !prop.paymentFree && !this.hasPaymentThisMonth(prop);
+    return servicesPending && rentPending && this.canWritePagos(prop) && this.canWriteServicios(prop);
   }
 
   openPayment(prop: Property) {
