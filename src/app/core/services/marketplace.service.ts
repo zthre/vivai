@@ -25,7 +25,7 @@ export class MarketplaceService {
 
   getListings(): Observable<Property[]> {
     const ref = collection(this.firestore, 'properties');
-    const q = query(ref, where('isListed', '==', true), where('isPublic', '==', true));
+    const q = query(ref, where('isPublic', '==', true));
     return collectionData(q, { idField: 'id' }) as Observable<Property[]>;
   }
 
