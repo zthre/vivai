@@ -72,7 +72,11 @@ All docs owned by a user have `ownerId = uid`. Key collections:
 | `monthlySnapshots` | `ownerId`, `propertyId`, `month: 'YYYY-MM'`, aggregated financials |
 | `mail` | Written by Cloud Functions; consumed by Firebase "Trigger Email" extension |
 
-Firestore rules are in `firestore.rules` — **must be manually pasted in Firebase Console** (no CLI deployment configured). Marketplace items are publicly readable when `isPublic == true` on property.
+Firestore rules are in `firestore.rules` and **se despliegan solas**: `.github/workflows/firebase-hosting-merge.yml` corre `firebase deploy --only firestore:rules` en cada push a `main`, antes del hosting. No hay que pegarlas a mano en la consola, y lo pegado a mano se sobrescribe en el siguiente merge a `main`. Para desplegarlas fuera de ese flujo: `npx firebase-tools@13 deploy --only firestore:rules --project vivai-now`.
+
+Marketplace items are publicly readable when `isPublic == true` on property.
+
+**Gotcha de reglas**: `get()` sobre un path con ID vacío (p. ej. `properties/$(resource.data.get('campoInexistente',''))`) es un path inválido y hace fallar la evaluación, lo que **deniega** — y un `allow` posterior más permisivo no lo rescata. En consultas de listado basta un documento que caiga en esa rama para tumbar el listado entero con `Missing or insufficient permissions`. Evita `get()` en reglas de lectura de colecciones que se consultan en lote; hay además un tope de accesos a documentos por consulta.
 
 ### Colaborador Permission System
 
