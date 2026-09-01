@@ -1,7 +1,7 @@
 import { Component, inject, signal, computed, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterLink, ActivatedRoute } from '@angular/router';
+import { RouterLink, ActivatedRoute, Router } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
@@ -66,6 +66,14 @@ type DistMethod = 'por_persona' | 'partes_iguales' | 'manual';
                 class="p-1.5 text-warm-400 hover:text-warm-700 hover:bg-warm-100 rounded-lg transition-colors">
                 <mat-icon class="text-[20px]">edit</mat-icon>
               </a>
+              <button (click)="deleteService()" [disabled]="deletingService()" title="Eliminar servicio"
+                class="p-1.5 text-warm-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50">
+                @if (deletingService()) {
+                  <div class="w-5 h-5 border-2 border-red-200 border-t-red-500 rounded-full animate-spin"></div>
+                } @else {
+                  <mat-icon class="text-[20px]">delete_outline</mat-icon>
+                }
+              </button>
             }
           </div>
         </div>
@@ -139,9 +147,22 @@ type DistMethod = 'por_persona' | 'partes_iguales' | 'manual';
               </p>
             </div>
           } @else {
+            <!-- Cabecera de columnas (desktop) -->
+            <div class="hidden sm:flex items-center gap-3 px-5 py-2 bg-warm-50 border-b border-warm-100">
+              <span class="w-8 flex-shrink-0"></span>
+              <span class="flex-1 min-w-0 text-[11px] font-semibold text-warm-500 uppercase tracking-wide">Propiedad</span>
+              @if (canWrite()) {
+                <span class="w-[8.5rem] flex-shrink-0 text-[11px] font-semibold text-warm-500 uppercase tracking-wide">Mes</span>
+              }
+              <span class="w-32 flex-shrink-0 text-right text-[11px] font-semibold text-warm-500 uppercase tracking-wide">Monto</span>
+              @if (canWrite()) {
+                <span class="w-7 flex-shrink-0"></span>
+              }
+            </div>
+
             <div class="divide-y divide-warm-100">
               @for (r of monthReceipts(); track r.id) {
-                <div class="flex items-center gap-3 px-5 py-3">
+                <div class="flex flex-wrap sm:flex-nowrap items-center gap-3 px-5 py-3 hover:bg-warm-50/60 transition-colors">
                   <button (click)="togglePaid(r)" [disabled]="!canWrite() || busy()"
                     class="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-colors disabled:opacity-60"
                     [class.bg-green-100]="r.isPaid"
@@ -152,6 +173,7 @@ type DistMethod = 'por_persona' | 'partes_iguales' | 'manual';
                     <mat-icon class="text-[18px]">{{ r.isPaid ? 'check_circle' : 'radio_button_unchecked' }}</mat-icon>
                   </button>
 
+                  <!-- Propiedad + nota -->
                   <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-1.5 flex-wrap">
                       <p class="text-sm font-medium text-warm-800 truncate">{{ r.propertyName || propertyName(r.propertyId) }}</p>
@@ -161,30 +183,50 @@ type DistMethod = 'por_persona' | 'partes_iguales' | 'manual';
                         <span class="text-[10px] px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded-full font-medium">manual</span>
                       }
                     </div>
-                    @if (canWrite()) {
-                      <input type="text" [ngModel]="r.notes ?? ''" (blur)="updateNotes(r, $event)"
-                        placeholder="Agregar nota…"
-                        class="mt-1 w-full px-2 py-1 border border-warm-200 rounded text-xs focus:outline-none focus:ring-2 focus:ring-primary-500">
-                    } @else {
-                      <p class="text-xs text-warm-400">{{ r.notes || (r.isPaid ? 'Pagado' : 'Pendiente') }}</p>
+
+                    <!-- La nota solo ocupa espacio cuando se está editando -->
+                    @if (canWrite() && editingNoteId() === r.id) {
+                      <input type="text" [ngModel]="r.notes ?? ''"
+                        (blur)="saveNote(r, $event)" (keydown.enter)="saveNote(r, $event)"
+                        (keydown.escape)="editingNoteId.set(null)"
+                        placeholder="Ej: factura 4432" autofocus
+                        class="mt-1 w-full max-w-xs px-2 py-1 border border-primary-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-primary-500">
+                    } @else if (canWrite()) {
+                      <button (click)="editingNoteId.set(r.id!)"
+                        class="mt-0.5 text-xs text-left transition-colors"
+                        [class.text-warm-500]="r.notes"
+                        [class.text-warm-300]="!r.notes"
+                        [class.hover:text-primary-600]="true">
+                        {{ r.notes || '+ nota' }}
+                      </button>
+                    } @else if (r.notes) {
+                      <p class="text-xs text-warm-400 truncate">{{ r.notes }}</p>
                     }
                   </div>
 
+                  <!-- Mes -->
                   @if (canWrite()) {
-                    <div class="relative flex-shrink-0">
-                      <span class="absolute left-1.5 top-1/2 -translate-y-1/2 text-warm-400 text-xs">$</span>
+                    <input type="month" [ngModel]="r.month" (change)="moveMonth(r, $event)"
+                      title="Mes al que corresponde — cámbialo si lo anotaste en el mes equivocado"
+                      class="w-[8.5rem] flex-shrink-0 px-2 py-1.5 border border-warm-200 rounded-lg text-xs text-warm-600 focus:outline-none focus:ring-2 focus:ring-primary-500">
+                  }
+
+                  <!-- Monto -->
+                  @if (canWrite()) {
+                    <div class="relative w-32 flex-shrink-0">
+                      <span class="absolute left-2 top-1/2 -translate-y-1/2 text-warm-400 text-xs">$</span>
                       <input type="number" [ngModel]="r.propertyAmount" (blur)="updateAmount(r, $event)"
-                        class="w-28 pl-5 pr-2 py-1.5 border border-warm-200 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-primary-500">
+                        class="w-full pl-5 pr-2 py-1.5 border border-warm-200 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-primary-500">
                     </div>
                   } @else {
-                    <span class="text-sm font-bold text-warm-900 flex-shrink-0">
+                    <span class="w-32 flex-shrink-0 text-right text-sm font-bold text-warm-900">
                       {{ r.propertyAmount | currency:'COP':'symbol-narrow':'1.0-0' }}
                     </span>
                   }
 
                   @if (canWrite()) {
                     <button (click)="removeReceipt(r)" [disabled]="busy()" title="Eliminar recibo"
-                      class="flex-shrink-0 p-1 text-warm-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors disabled:opacity-50">
+                      class="w-7 flex-shrink-0 p-1 text-warm-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors disabled:opacity-50">
                       <mat-icon class="text-[16px]">delete_outline</mat-icon>
                     </button>
                   }
@@ -507,6 +549,7 @@ export class ServiceDetailComponent implements OnInit {
   private propertyService = inject(PropertyService);
   private authService = inject(AuthService);
   private route = inject(ActivatedRoute);
+  private router = inject(Router);
   private dialog = inject(MatDialog);
   private snackBar = inject(MatSnackBar);
 
@@ -561,6 +604,47 @@ export class ServiceDetailComponent implements OnInit {
   tab = signal<'recibos' | 'distribucion'>('recibos');
   busy = signal(false);
   markingAll = signal(false);
+  deletingService = signal(false);
+
+  /**
+   * Elimina el servicio y sus códigos de distribución. Los recibos ya generados
+   * se conservan como histórico (pueden tener un gasto asociado en Finanzas) y,
+   * al no quedar códigos, no se vuelve a generar ninguno.
+   */
+  async deleteService() {
+    const nombre = this.service()?.name ?? 'este servicio';
+    this.deletingService.set(true);
+    try {
+      const recibos = await this.svcService.countReceipts(this.serviceId);
+      const codigos = this.assignments().length;
+
+      const detalle = [
+        codigos > 0 ? `Se eliminarán sus ${codigos} código(s) de distribución.` : '',
+        recibos > 0
+          ? `Los ${recibos} recibo(s) ya generados SE CONSERVAN como histórico y no se volverán a generar.`
+          : '',
+      ].filter(Boolean).join('\n\n');
+
+      if (!confirm(`¿Eliminar "${nombre}"?\n\n${detalle}`.trim())) {
+        this.deletingService.set(false);
+        return;
+      }
+
+      const res = await this.svcService.deleteWithAssignments(this.serviceId);
+      this.snackBar.open(
+        res.receiptsKept > 0
+          ? `Servicio eliminado. Se conservaron ${res.receiptsKept} recibo(s).`
+          : 'Servicio eliminado.',
+        'OK',
+        { duration: 4000 }
+      );
+      await this.router.navigate(['/services']);
+    } catch {
+      this.snackBar.open('No se pudo eliminar el servicio.', 'OK', { duration: 3000 });
+    } finally {
+      this.deletingService.set(false);
+    }
+  }
 
   /** Todos los recibos de este servicio en el mes seleccionado (manuales + distribuidos) */
   monthReceipts = toSignal(
@@ -598,8 +682,24 @@ export class ServiceDetailComponent implements OnInit {
     }
   }
 
-  async updateNotes(receipt: ServiceReceipt, event: Event) {
+  /** Corrige el mes de un recibo anotado en el mes equivocado. */
+  async moveMonth(receipt: ServiceReceipt, event: Event) {
+    const nuevo = (event.target as HTMLInputElement).value;
+    if (!nuevo || nuevo === receipt.month) return;
+    try {
+      await this.receiptService.changeMonth(receipt, nuevo);
+      this.snackBar.open(`Recibo movido a ${nuevo}.`, 'OK', { duration: 3000 });
+    } catch {
+      this.snackBar.open('No se pudo cambiar el mes del recibo.', 'OK', { duration: 3000 });
+    }
+  }
+
+  /** Fila cuya nota se está editando; fuera de edición la nota es solo texto. */
+  editingNoteId = signal<string | null>(null);
+
+  async saveNote(receipt: ServiceReceipt, event: Event) {
     const value = (event.target as HTMLInputElement).value;
+    this.editingNoteId.set(null);
     if (value === (receipt.notes ?? '')) return;
     try {
       await this.receiptService.update(receipt.id!, { notes: value });

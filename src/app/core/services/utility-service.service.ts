@@ -11,11 +11,12 @@ import {
   query,
   where,
   orderBy,
+  getDocs,
   serverTimestamp,
 } from '@angular/fire/firestore';
 import { Observable, of, switchMap, map } from 'rxjs';
 import { Service } from '../models/service.model';
-import { guardQuery } from './firestore-error.util';
+import { guardQuery, loggedWrite } from './firestore-error.util';
 import { AuthService } from '../auth/auth.service';
 import { PropertyService } from './property.service';
 
@@ -91,5 +92,49 @@ export class UtilityServiceService {
   async delete(id: string): Promise<void> {
     const ref = doc(this.firestore, `services/${id}`);
     await deleteDoc(ref);
+  }
+
+  /** Cuántos recibos existen para un servicio, en cualquier mes. */
+  async countReceipts(serviceId: string): Promise<number> {
+    const q = query(
+      collection(this.firestore, 'serviceReceipts'),
+      where('serviceId', '==', serviceId)
+    );
+    return (await getDocs(q)).size;
+  }
+
+  /**
+   * Elimina un servicio y sus códigos de distribución.
+   *
+   * Los recibos ya generados **se conservan**: son histórico contable y pueden
+   * tener un gasto asociado en Finanzas. Como `serviceName` va denormalizado en
+   * cada recibo, siguen mostrándose bien aunque el servicio ya no exista.
+   * Al borrar los códigos, no se vuelve a generar ningún recibo nuevo.
+   */
+  async deleteWithAssignments(
+    serviceId: string
+  ): Promise<{ assignmentsDeleted: number; receiptsKept: number }> {
+    const receiptsKept = await this.countReceipts(serviceId);
+
+    const assignmentsSnap = await getDocs(
+      query(collection(this.firestore, 'serviceAssignments'), where('serviceId', '==', serviceId))
+    );
+    await loggedWrite(
+      'UtilityServiceService.deleteWithAssignments:assignments',
+      () => Promise.all(
+        assignmentsSnap.docs.map(d =>
+          deleteDoc(doc(this.firestore, `serviceAssignments/${d.id}`))
+        )
+      ),
+      { collection: 'serviceAssignments', query: `delete donde serviceId == ${serviceId}` }
+    );
+
+    await loggedWrite(
+      'UtilityServiceService.deleteWithAssignments:service',
+      () => deleteDoc(doc(this.firestore, `services/${serviceId}`)),
+      { collection: 'services', query: `delete services/${serviceId}` }
+    );
+
+    return { assignmentsDeleted: assignmentsSnap.size, receiptsKept };
   }
 }

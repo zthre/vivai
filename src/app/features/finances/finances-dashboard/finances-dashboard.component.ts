@@ -10,7 +10,9 @@ import { combineLatest, of } from 'rxjs';
 import { PropertyService } from '../../../core/services/property.service';
 import { PaymentService } from '../../../core/services/payment.service';
 import { ExpenseService } from '../../../core/services/expense.service';
+import { ServiceReceiptService } from '../../../core/services/service-receipt.service';
 import { Expense } from '../../../core/models/expense.model';
+import { ServiceReceipt } from '../../../core/models/service-receipt.model';
 import { MonthSelectorComponent } from './month-selector/month-selector.component';
 import { KpiCardComponent, KpiVariant } from './kpi-card/kpi-card.component';
 import { PaymentListComponent } from './payment-list/payment-list.component';
@@ -24,6 +26,11 @@ function startOfMonth(d: Date): Date {
 
 function endOfMonth(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
+}
+
+/** 'YYYY-MM', el formato con que se guardan los recibos de servicios */
+function monthKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
 function toMonthParam(d: Date): string {
@@ -73,14 +80,39 @@ function fromMonthParam(param: string): Date | null {
 
       <!-- KPI cards -->
       <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <app-kpi-card label="Total Esperado" [amount]="totalExpected()" />
+        <app-kpi-card
+          label="Total Esperado"
+          [amount]="totalExpected()"
+          [hint]="expectedHint()"
+        />
         <app-kpi-card label="Total Recaudado" [amount]="totalCollected()" />
-        <app-kpi-card label="Total Gastos" [amount]="totalExpensesAmount()" />
+        <app-kpi-card
+          label="Total Gastos"
+          [amount]="totalExpensesAmount()"
+          [hint]="expensesHint()"
+        />
         <app-kpi-card
           label="Balance Neto"
           [amount]="netBalance()"
           [variant]="balanceVariant()"
         />
+      </div>
+
+      <!-- Servicios del mes -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <app-kpi-card
+          label="Servicios del mes"
+          [amount]="servicesTotal()"
+          [hint]="servicesHint()"
+          [hintVariant]="servicesPendingTotal() > 0 ? 'negative' : 'positive'"
+        />
+        <div class="col-span-1 lg:col-span-3 bg-white rounded-xl p-5 border border-warm-200 shadow-sm flex items-center">
+          <div class="text-sm text-warm-500 leading-relaxed">
+            «Total Esperado» es solo el arriendo de las propiedades ocupadas.
+            Los servicios no son ingreso: entran en «Total Gastos» cuando marcas
+            el recibo como pagado, y por eso afectan al balance, no a lo esperado.
+          </div>
+        </div>
       </div>
 
       <!-- Lists -->
@@ -107,6 +139,7 @@ export class FinancesDashboardComponent implements OnInit {
   private propertyService = inject(PropertyService);
   private paymentService = inject(PaymentService);
   private expenseService = inject(ExpenseService);
+  private receiptService = inject(ServiceReceiptService);
   private authService = inject(AuthService);
   private dialog = inject(MatDialog);
   private router = inject(Router);
@@ -148,6 +181,33 @@ export class FinancesDashboardComponent implements OnInit {
     { initialValue: [] }
   );
 
+  /** Recibos de servicios del mes, consultados por propiedad (sirve a dueños y colaboradores) */
+  private receiptsInMonth = toSignal(
+    combineLatest([toObservable(this.properties), this.month$]).pipe(
+      switchMap(([props, m]) =>
+        this.receiptService.getByPropertiesAndMonth(
+          props.filter(p => p.id).map(p => p.id!),
+          monthKey(m)
+        )
+      )
+    ),
+    { initialValue: [] as ServiceReceipt[] }
+  );
+
+  /** Recibos del mes, respetando el filtro de propiedad */
+  private filteredReceipts = computed(() => {
+    const pid = this.selectedPropertyId();
+    const all = this.receiptsInMonth();
+    return pid ? all.filter(r => r.propertyId === pid) : all;
+  });
+
+  servicesTotal = computed(() =>
+    this.filteredReceipts().reduce((s, r) => s + (r.propertyAmount ?? 0), 0)
+  );
+  servicesPendingTotal = computed(() =>
+    this.filteredReceipts().filter(r => !r.isPaid).reduce((s, r) => s + (r.propertyAmount ?? 0), 0)
+  );
+
   filteredPayments = computed(() => {
     const pid = this.selectedPropertyId();
     return pid
@@ -178,6 +238,38 @@ export class FinancesDashboardComponent implements OnInit {
     this.filteredExpenses().reduce((s, e) => s + e.amount, 0)
   );
   netBalance = computed(() => this.totalCollected() - this.totalExpensesAmount());
+
+  /** Formatea un monto en pesos sin decimales, para las líneas secundarias */
+  private cop(n: number): string {
+    return new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency: 'COP',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(n);
+  }
+
+  /** Arriendo + servicios del mes, para ver el movimiento total esperado */
+  expectedHint = computed(() => {
+    const servicios = this.servicesTotal();
+    if (servicios === 0) return '';
+    return `+ ${this.cop(servicios)} en servicios = ${this.cop(this.totalExpected() + servicios)}`;
+  });
+
+  /** Cuánto de los gastos del mes corresponde a servicios ya pagados */
+  expensesHint = computed(() => {
+    const deServicios = this.filteredExpenses()
+      .filter(e => e.category === 'servicio')
+      .reduce((s, e) => s + e.amount, 0);
+    if (deServicios === 0) return '';
+    return `${this.cop(deServicios)} son servicios`;
+  });
+
+  servicesHint = computed(() => {
+    const pendiente = this.servicesPendingTotal();
+    if (this.filteredReceipts().length === 0) return 'Sin recibos este mes';
+    return pendiente > 0 ? `${this.cop(pendiente)} pendiente` : 'Todo pagado';
+  });
   balanceVariant = computed((): KpiVariant => {
     const b = this.netBalance();
     return b > 0 ? 'positive' : b < 0 ? 'negative' : 'neutral';
