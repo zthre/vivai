@@ -387,16 +387,36 @@ type DistMethod = 'por_persona' | 'partes_iguales' | 'manual';
                           <p class="text-sm text-warm-700 font-medium truncate">{{ a.description }}</p>
                         }
                         <p class="text-xs text-warm-400 mt-0.5">
-                          {{ a.propertyIds.length }} propiedad(es) · {{ distLabel(a.distributionMethod) }}
+                          {{ livePropertyIds(a).length }} propiedad(es) · {{ distLabel(a.distributionMethod) }}
                         </p>
                         <div class="flex flex-wrap gap-1 mt-1.5">
-                          @for (pid of a.propertyIds.slice(0, 3); track pid) {
+                          @for (pid of livePropertyIds(a).slice(0, 3); track pid) {
                             <span class="text-xs px-1.5 py-0.5 bg-warm-100 rounded text-warm-500">{{ propertyName(pid) }}</span>
                           }
-                          @if (a.propertyIds.length > 3) {
-                            <span class="text-xs text-warm-400">+{{ a.propertyIds.length - 3 }} más</span>
+                          @if (livePropertyIds(a).length > 3) {
+                            <span class="text-xs text-warm-400">+{{ livePropertyIds(a).length - 3 }} más</span>
                           }
                         </div>
+
+                        <!-- Referencias a propiedades borradas: falsean el reparto -->
+                        @if (danglingPropertyIds(a).length > 0) {
+                          <div class="mt-2 flex items-start gap-2 p-2 bg-amber-50 border border-amber-200 rounded-lg"
+                            (click)="$event.stopPropagation()">
+                            <mat-icon class="text-amber-500 text-[16px] flex-shrink-0 mt-0.5">warning</mat-icon>
+                            <div class="flex-1 min-w-0">
+                              <p class="text-xs text-amber-800">
+                                {{ danglingPropertyIds(a).length }} propiedad(es) de este código ya no existen.
+                                Falsean el reparto: se llevan su parte y las reales reciben de menos.
+                              </p>
+                              @if (canWrite()) {
+                                <button (click)="cleanAssignment(a)" [disabled]="cleaningId() === a.id"
+                                  class="mt-1 text-xs font-semibold text-amber-800 hover:text-amber-900 underline disabled:opacity-50">
+                                  {{ cleaningId() === a.id ? 'Quitando…' : 'Quitar del código' }}
+                                </button>
+                              }
+                            </div>
+                          </div>
+                        }
                       </div>
                       <!-- Action buttons -->
                       @if (canWrite()) {
@@ -509,7 +529,7 @@ type DistMethod = 'por_persona' | 'partes_iguales' | 'manual';
                       <div class="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin"></div>
                     }
                     <mat-icon class="text-[18px]">receipt</mat-icon>
-                    Generar {{ selectedAssignment()!.propertyIds.length }} recibo(s)
+                    Generar {{ livePropertyIds(selectedAssignment()!).length }} recibo(s)
                   </button>
                 }
 
@@ -884,7 +904,49 @@ export class ServiceDetailComponent implements OnInit {
   }
 
   propertyName(id: string): string {
-    return this.allProperties()?.find(p => p.id === id)?.name ?? id;
+    // Nunca devolver el id crudo: si la propiedad no existe se dice explícitamente
+    return this.allProperties()?.find(p => p.id === id)?.name ?? 'Propiedad eliminada';
+  }
+
+  /**
+   * Ids de `propertyIds` que ya no corresponden a ninguna propiedad viva.
+   * Solo se evalúa con las propiedades cargadas, para no confundir el estado
+   * inicial (lista vacía) con referencias rotas.
+   */
+  danglingPropertyIds(a: ServiceAssignment): string[] {
+    const props = this.allProperties();
+    if (props.length === 0) return [];
+    return a.propertyIds.filter(pid => !props.some(p => p.id === pid));
+  }
+
+  livePropertyIds(a: ServiceAssignment): string[] {
+    const props = this.allProperties();
+    if (props.length === 0) return a.propertyIds;
+    return a.propertyIds.filter(pid => props.some(p => p.id === pid));
+  }
+
+  cleaningId = signal<string | null>(null);
+
+  /** Quita del código las referencias a propiedades borradas. */
+  async cleanAssignment(a: ServiceAssignment) {
+    const muertas = this.danglingPropertyIds(a);
+    if (muertas.length === 0) return;
+    const quedan = this.livePropertyIds(a);
+    if (!confirm(
+      `¿Quitar ${muertas.length} propiedad(es) eliminada(s) del código ${a.code ?? ''}?\n\n` +
+      `Quedará(n) ${quedan.length}. Los recibos ya generados no cambian; el reparto correcto ` +
+      `se aplica la próxima vez que generes.`
+    )) return;
+
+    this.cleaningId.set(a.id!);
+    try {
+      await this.assignmentService.save({ propertyIds: quedan }, a.id!);
+      this.snackBar.open('Referencias eliminadas del código.', 'OK', { duration: 3000 });
+    } catch {
+      this.snackBar.open('No se pudo actualizar el código.', 'OK', { duration: 3000 });
+    } finally {
+      this.cleaningId.set(null);
+    }
   }
 
   async saveAssignment() {
@@ -957,9 +1019,15 @@ export class ServiceDetailComponent implements OnInit {
     this.generatingReceipts.set(true);
     try {
       await this.receiptService.generateReceipts(assignment, this.selectedMonth(), this.totalAmount());
-      this.snackBar.open(`${assignment.propertyIds.length} recibo(s) generados.`, 'OK', { duration: 3000 });
-    } catch {
-      this.snackBar.open('Error al generar recibos.', 'OK', { duration: 3000 });
+      this.snackBar.open(
+        `${this.livePropertyIds(assignment).length} recibo(s) generados.`,
+        'OK',
+        { duration: 3000 }
+      );
+    } catch (e) {
+      // generateReceipts avisa explícitamente si ninguna propiedad del código existe ya
+      const msg = e instanceof Error && e.message ? e.message : 'Error al generar recibos.';
+      this.snackBar.open(msg, 'OK', { duration: 5000 });
     } finally {
       this.generatingReceipts.set(false);
     }

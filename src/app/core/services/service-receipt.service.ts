@@ -160,12 +160,25 @@ export class ServiceReceiptService {
     for (const pid of assignment.propertyIds) {
       const snap = await getDoc(doc(this.firestore, `properties/${pid}`));
       const data = snap.data() as Property | undefined;
+
+      // Una propiedad borrada que sigue referenciada en propertyIds falseaba el
+      // reparto: entraba al cálculo y se llevaba su parte, así que las propiedades
+      // reales recibían de menos (con 'partes iguales' entre 2 donde solo queda 1,
+      // cada una salía al 50%). Se omite del reparto y no genera recibo.
+      if (!snap.exists() || !data) continue;
+
       properties.push({
         id: pid,
-        name: data?.name ?? pid,
-        residentCount: data?.residentCount ?? 1,
-        ownerId: data?.ownerId ?? this.auth.uid()!,
+        name: data.name ?? pid,
+        residentCount: data.residentCount ?? 1,
+        ownerId: data.ownerId ?? this.auth.uid()!,
       });
+    }
+
+    if (properties.length === 0) {
+      throw new Error(
+        'Ninguna de las propiedades de este código existe ya. Edita el código y selecciona propiedades vigentes.'
+      );
     }
 
     const amounts: Record<string, number> = {};
