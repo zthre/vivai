@@ -15,7 +15,7 @@ import {
   limit,
   serverTimestamp,
 } from '@angular/fire/firestore';
-import { Observable, of, switchMap, map } from 'rxjs';
+import { Observable, of, switchMap, map, combineLatest } from 'rxjs';
 import { Service } from '../models/service.model';
 import { guardQuery, loggedWrite } from './firestore-error.util';
 import { AuthService } from '../auth/auth.service';
@@ -40,22 +40,39 @@ export class UtilityServiceService {
           .filter(p => p.ownerId === uid)
           .flatMap(p => p.collaboratorUids ?? []);
 
-        // `in` admite como máximo 10 valores y falla en seco con un array vacío.
-        // El uid propio va primero para que nunca se pierda al truncar.
         const ownerUids = [...new Set([uid, ...collabOwnerUids, ...collabWorkerUids])]
-          .filter(Boolean)
-          .slice(0, 10);
+          .filter(Boolean);
+        if (ownerUids.length === 0) return of([] as Service[]);
+
+        // `in` admite como máximo 10 valores. Truncar ahí hacía desaparecer servicios
+        // en silencio (y con ellos su tarjeta en /services, aunque sus recibos siguieran
+        // existiendo y sumando). Se parte en lotes de 10 y se combinan los resultados.
+        const chunks: string[][] = [];
+        for (let i = 0; i < ownerUids.length; i += 10) {
+          chunks.push(ownerUids.slice(i, i + 10));
+        }
 
         const ref = collection(this.firestore, 'services');
         // Sin orderBy: `in` + orderBy sobre otro campo exigiría un índice compuesto.
         // El orden se resuelve en memoria.
-        const q = query(ref, where('ownerId', 'in', ownerUids));
-        return (collectionData(q, { idField: 'id' }) as Observable<Service[]>).pipe(
-          map(services =>
-            [...services].sort(
+        const queries = chunks.map(
+          c => collectionData(query(ref, where('ownerId', 'in', c)), { idField: 'id' }) as Observable<Service[]>
+        );
+
+        return combineLatest(queries).pipe(
+          map(arrays => {
+            const seen = new Set<string>();
+            const merged: Service[] = [];
+            for (const s of arrays.flat()) {
+              if (s.id && !seen.has(s.id)) {
+                seen.add(s.id);
+                merged.push(s);
+              }
+            }
+            return merged.sort(
               (a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0)
-            )
-          )
+            );
+          })
         );
       }),
       // Una consulta caída no puede envenenar la señal: `toSignal` relanzaría el
