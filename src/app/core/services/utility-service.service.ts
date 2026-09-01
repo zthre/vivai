@@ -12,6 +12,7 @@ import {
   where,
   orderBy,
   getDocs,
+  limit,
   serverTimestamp,
 } from '@angular/fire/firestore';
 import { Observable, of, switchMap, map } from 'rxjs';
@@ -71,16 +72,43 @@ export class UtilityServiceService {
     return docData(ref, { idField: 'id' }) as Observable<Service>;
   }
 
+  /**
+   * Resuelve a quién pertenece un servicio nuevo.
+   *
+   * Igual que en pagos, gastos y recibos: se atribuye al DUEÑO de las propiedades,
+   * no a quien hace clic. Si no, un servicio creado por un colaborador lleva su uid
+   * en `ownerId` y el dueño no puede editarlo ni eliminarlo.
+   */
+  private async resolveOwnerId(uid: string): Promise<string> {
+    const props = collection(this.firestore, 'properties');
+
+    // ¿Es dueño de alguna propiedad? Entonces el servicio es suyo.
+    const owned = await getDocs(query(props, where('ownerId', '==', uid), limit(1)));
+    if (!owned.empty) return uid;
+
+    // Si no, es colaborador: el servicio pertenece al dueño para el que trabaja.
+    const collab = await getDocs(
+      query(props, where('collaboratorUids', 'array-contains', uid), limit(1))
+    );
+    return (collab.docs[0]?.data()?.['ownerId'] as string | undefined) ?? uid;
+  }
+
   async create(data: Partial<Service>): Promise<string> {
     const uid = this.auth.uid()!;
+    const ownerId = await this.resolveOwnerId(uid);
     const ref = collection(this.firestore, 'services');
-    const docRef = await addDoc(ref, {
-      ...data,
-      ownerId: uid,
-      isActive: data.isActive ?? true,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
+    const docRef = await loggedWrite(
+      'UtilityServiceService.create',
+      () => addDoc(ref, {
+        ...data,
+        ownerId,
+        createdBy: uid,
+        isActive: data.isActive ?? true,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }),
+      { collection: 'services', query: `create (ownerId ${ownerId}, createdBy ${uid})` }
+    );
     return docRef.id;
   }
 
