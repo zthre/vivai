@@ -199,6 +199,21 @@ function paymentDateForMonth(month: string): Date {
                     <input [(ngModel)]="editNotes" placeholder="Ej: factura 4432"
                       class="w-full px-3 py-2 border border-warm-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-500">
                   </div>
+                  <div>
+                    <label class="block text-xs font-medium text-warm-600 mb-1">
+                      Mes al que corresponde
+                    </label>
+                    <input type="month" [(ngModel)]="editMonth"
+                      class="w-full px-3 py-2 border border-warm-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-500">
+                    @if (editMonth !== data.month) {
+                      <p class="text-[11px] text-amber-700 mt-1">
+                        Se moverá a otro mes y dejará de verse en esta ventana.
+                        @if (r.isPaid && r.expenseId) {
+                          Su gasto en Finanzas se mueve con él.
+                        }
+                      </p>
+                    }
+                  </div>
                   @if (r.origin !== 'manual') {
                     <p class="text-[11px] text-amber-700">
                       Recibo generado por distribución. Si regeneras el código
@@ -504,11 +519,13 @@ export class MonthSettlementDialogComponent {
   editingId = signal<string | null>(null);
   editAmount = signal(0);
   editNotes = '';
+  editMonth = '';
 
   startEdit(receipt: ServiceReceipt) {
     this.editingId.set(receipt.id!);
     this.editAmount.set(receipt.propertyAmount);
     this.editNotes = receipt.notes ?? '';
+    this.editMonth = receipt.month;
   }
 
   cancelEdit() {
@@ -526,8 +543,16 @@ export class MonthSettlementDialogComponent {
       if (this.editNotes !== (receipt.notes ?? '')) {
         await this.receiptService.update(receipt.id!, { notes: this.editNotes });
       }
+      const movido = this.editMonth !== receipt.month;
+      if (movido) {
+        await this.receiptService.changeMonth(receipt, this.editMonth);
+      }
       this.editingId.set(null);
-      this.snackBar.open('Recibo actualizado.', 'OK', { duration: 3000, panelClass: 'snackbar-success' });
+      this.snackBar.open(
+        movido ? `Recibo movido a ${this.editMonth}.` : 'Recibo actualizado.',
+        'OK',
+        { duration: 3000, panelClass: 'snackbar-success' }
+      );
     } catch {
       this.snackBar.open('No se pudo actualizar el recibo.', 'OK', { duration: 3000, panelClass: 'snackbar-error' });
     } finally {

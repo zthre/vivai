@@ -287,6 +287,26 @@ export class ServiceReceiptService {
     }
   }
 
+  /**
+   * Mueve un recibo a otro mes (para corregir uno anotado en el mes equivocado).
+   * Si ya está pagado, arrastra la fecha de su gasto asociado, porque si no
+   * el recibo quedaría en un mes y el gasto seguiría contando en el otro.
+   */
+  async changeMonth(receipt: ServiceReceipt, newMonth: string): Promise<void> {
+    if (!/^\d{4}-\d{2}$/.test(newMonth)) {
+      throw new Error(`Mes inválido: ${newMonth}. Se espera 'YYYY-MM'.`);
+    }
+    if (newMonth === receipt.month) return;
+
+    await this.update(receipt.id!, { month: newMonth });
+
+    if (receipt.expenseId) {
+      await this.expenseService
+        .update(receipt.expenseId, { date: expenseDateForMonth(newMonth) })
+        .catch(() => void 0);
+    }
+  }
+
   async delete(receipt: ServiceReceipt): Promise<void> {
     if (receipt.expenseId) {
       await this.expenseService.delete(receipt.expenseId).catch(() => void 0);

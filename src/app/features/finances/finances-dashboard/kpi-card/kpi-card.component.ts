@@ -18,6 +18,14 @@ export type KpiVariant = 'neutral' | 'positive' | 'negative';
       >
         {{ amount() | currency:'COP':'symbol-narrow':'1.0-0' }}
       </p>
+      @if (hint()) {
+        <p class="text-xs mt-1"
+          [class.text-warm-400]="hintVariant() === 'neutral'"
+          [class.text-green-600]="hintVariant() === 'positive'"
+          [class.text-red-600]="hintVariant() === 'negative'">
+          {{ hint() }}
+        </p>
+      }
     </div>
   `,
 })
@@ -25,4 +33,7 @@ export class KpiCardComponent {
   label = input.required<string>();
   amount = input.required<number>();
   variant = input<KpiVariant>('neutral');
+  /** Línea secundaria opcional bajo la cifra principal */
+  hint = input<string>('');
+  hintVariant = input<KpiVariant>('neutral');
 }
