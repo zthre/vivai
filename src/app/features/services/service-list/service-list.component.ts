@@ -139,6 +139,47 @@ function startOfMonth(d: Date): Date {
           }
         </div>
       }
+
+      <!-- Recibos cuyo servicio fue eliminado: siguen contando en el total del mes -->
+      @if (orphanGroups().length > 0) {
+        <div class="bg-white rounded-xl border border-warm-200 shadow-sm">
+          <div class="px-5 py-4 border-b border-warm-100">
+            <h2 class="font-semibold text-warm-900 flex items-center gap-2">
+              <mat-icon class="text-[20px] text-warm-400">history</mat-icon>
+              Servicios eliminados
+            </h2>
+            <p class="text-xs text-warm-400 mt-0.5">
+              Estos recibos se conservaron al eliminar su servicio. Siguen contando en el
+              total del mes y en Finanzas, pero ya no se genera ninguno nuevo.
+            </p>
+          </div>
+          <div class="divide-y divide-warm-100">
+            @for (g of orphanGroups(); track g.serviceId) {
+              <a [routerLink]="['/services', g.serviceId]" [queryParams]="{ month: monthKey() }"
+                class="flex items-center gap-3 px-5 py-3 hover:bg-warm-50 transition-colors">
+                <div class="w-9 h-9 rounded-lg bg-warm-100 flex items-center justify-center flex-shrink-0">
+                  <mat-icon class="text-warm-400 text-[20px]">receipt_long</mat-icon>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-1.5 flex-wrap">
+                    <p class="text-sm font-medium text-warm-800 truncate">{{ g.serviceName }}</p>
+                    <span class="text-[10px] px-1.5 py-0.5 bg-warm-100 text-warm-500 rounded-full font-medium">eliminado</span>
+                  </div>
+                  <p class="text-xs text-warm-400">
+                    {{ g.total }} recibo(s)
+                    @if (g.pending > 0) {
+                      · <span class="text-red-600 font-medium">{{ g.pending }} por pagar</span>
+                    }
+                  </p>
+                </div>
+                <span class="text-sm font-bold text-warm-900 flex-shrink-0">
+                  {{ g.amount | currency:'COP':'symbol-narrow':'1.0-0' }}
+                </span>
+              </a>
+            }
+          </div>
+        </div>
+      }
     </div>
   `,
 })
@@ -196,6 +237,33 @@ export class ServiceListComponent {
   summaryFor(serviceId: string): { total: number; pending: number; amount: number } {
     return this.summaryByService().get(serviceId) ?? { total: 0, pending: 0, amount: 0 };
   }
+
+  /**
+   * Recibos del mes cuyo servicio ya no existe (se eliminó conservando el histórico).
+   * Sin esto quedaban invisibles aquí — no hay tarjeta que los muestre — pero seguían
+   * apareciendo en el dashboard y sumando en el total del mes, que era justo la
+   * discrepancia reportada. `serviceName` va denormalizado en cada recibo, así que
+   * se siguen identificando.
+   */
+  orphanGroups = computed(() => {
+    const known = new Set((this.services() ?? []).map(s => s.id));
+    const groups = new Map<string, { serviceId: string; serviceName: string; total: number; pending: number; amount: number }>();
+    for (const r of this.receipts()) {
+      if (known.has(r.serviceId)) continue;
+      const g = groups.get(r.serviceId) ?? {
+        serviceId: r.serviceId,
+        serviceName: r.serviceName || 'Servicio sin nombre',
+        total: 0,
+        pending: 0,
+        amount: 0,
+      };
+      g.total++;
+      if (!r.isPaid) g.pending++;
+      g.amount += r.propertyAmount ?? 0;
+      groups.set(r.serviceId, g);
+    }
+    return [...groups.values()];
+  });
 
   prevMonth() {
     const d = this.selectedMonth();

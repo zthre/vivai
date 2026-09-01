@@ -38,7 +38,7 @@ type DistMethod = 'por_persona' | 'partes_iguales' | 'manual';
       <div class="flex items-center gap-2 text-sm text-warm-400">
         <a routerLink="/services" class="hover:text-warm-600 transition-colors">Servicios</a>
         <mat-icon class="text-[16px]">chevron_right</mat-icon>
-        <span class="text-warm-700 font-medium">{{ service()?.name }}</span>
+        <span class="text-warm-700 font-medium">{{ displayName() }}</span>
       </div>
 
       <!-- Service header -->
@@ -49,19 +49,26 @@ type DistMethod = 'por_persona' | 'partes_iguales' | 'manual';
               <mat-icon class="text-primary-600 text-[28px]">{{ service()?.icon || 'receipt_long' }}</mat-icon>
             </div>
             <div>
-              <h1 class="text-2xl font-bold text-warm-900">{{ service()?.name }}</h1>
-              @if (service()?.description) {
+              <h1 class="text-2xl font-bold text-warm-900">{{ displayName() }}</h1>
+              @if (serviceDeleted()) {
+                <p class="text-warm-400 text-sm mt-0.5">
+                  Este servicio fue eliminado. Sus recibos se conservan como histórico
+                  y no se generarán nuevos.
+                </p>
+              } @else if (service()?.description) {
                 <p class="text-warm-400 text-sm mt-0.5">{{ service()?.description }}</p>
               }
             </div>
           </div>
           <div class="flex items-center gap-2">
-            @if (service()?.isActive) {
+            @if (serviceDeleted()) {
+              <span class="text-xs px-2.5 py-0.5 bg-warm-100 text-warm-500 rounded-full font-medium">Eliminado</span>
+            } @else if (service()?.isActive) {
               <span class="text-xs px-2.5 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">Activo</span>
             } @else {
               <span class="text-xs px-2.5 py-0.5 bg-warm-100 text-warm-500 rounded-full font-medium">Inactivo</span>
             }
-            @if (canWrite()) {
+            @if (canWrite() && !serviceDeleted()) {
               <a [routerLink]="['/services', serviceId, 'edit']"
                 class="p-1.5 text-warm-400 hover:text-warm-700 hover:bg-warm-100 rounded-lg transition-colors">
                 <mat-icon class="text-[20px]">edit</mat-icon>
@@ -605,6 +612,18 @@ export class ServiceDetailComponent implements OnInit {
   busy = signal(false);
   markingAll = signal(false);
   deletingService = signal(false);
+
+  /**
+   * El servicio ya no existe pero sus recibos sí (se eliminó conservando el
+   * histórico). Se distingue de "aún cargando": `docData` emite undefined en
+   * ambos casos, así que solo se da por eliminado cuando ya hay recibos cargados.
+   */
+  serviceDeleted = computed(() => !this.service() && this.monthReceipts().length > 0);
+
+  /** Nombre a mostrar: del servicio, o el denormalizado en sus recibos si fue eliminado */
+  displayName = computed(
+    () => this.service()?.name ?? this.monthReceipts()[0]?.serviceName ?? ''
+  );
 
   /**
    * Elimina el servicio y sus códigos de distribución. Los recibos ya generados
