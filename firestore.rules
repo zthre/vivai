@@ -74,15 +74,24 @@ service cloud.firestore {
     // Los gastos se atribuyen siempre al dueño de la propiedad, incluso cuando
     // los crea un colaborador (o el pago automático de un recibo de servicio).
     match /expenses/{expenseId} {
-      function isCollaboratorOnExpense() {
-        return request.auth != null
-               && request.auth.uid in get(/databases/$(database)/documents/properties/$(resource.data.propertyId))
-                                      .data.get('collaboratorUids', []);
+      function expensePropertyOk() {
+        return resource.data.get('propertyId', '') is string
+               && resource.data.get('propertyId', '') != ''
+               && exists(/databases/$(database)/documents/properties/$(resource.data.propertyId));
+      }
+      function expenseProperty() {
+        return get(/databases/$(database)/documents/properties/$(resource.data.propertyId)).data;
       }
 
+      // Igual que en payments y serviceReceipts: sin la clausula de dueno de la
+      // propiedad, un gasto creado por un colaborador (o el gasto automatico de un
+      // recibo suyo) quedaba ilegible e imborrable para el dueno.
       allow read, write: if request.auth != null && (
-        request.auth.uid == resource.data.ownerId
-        || isCollaboratorOnExpense()
+        request.auth.uid == resource.data.get('ownerId', '')
+        || (expensePropertyOk() && (
+             request.auth.uid == expenseProperty().ownerId
+             || request.auth.uid in expenseProperty().get('collaboratorUids', [])
+           ))
       );
       allow create: if request.auth != null && (
         request.auth.uid == request.resource.data.ownerId
@@ -166,11 +175,23 @@ service cloud.firestore {
 
     // Service Receipts: owner or collaborator on the receipt's property can read/write.
     match /serviceReceipts/{receiptId} {
+      function receiptPropertyOk() {
+        return resource.data.get('propertyId', '') is string
+               && resource.data.get('propertyId', '') != ''
+               && exists(/databases/$(database)/documents/properties/$(resource.data.propertyId));
+      }
       function receiptProperty() {
         return get(/databases/$(database)/documents/properties/$(resource.data.propertyId)).data;
       }
-      function isCollaboratorOnReceiptProperty() {
-        return request.auth.uid in receiptProperty().get('collaboratorUids', []);
+      // Dueno de la propiedad o colaborador. Los recibos generados por un colaborador
+      // llevan su uid en ownerId, asi que sin la clausula de dueno de la propiedad el
+      // dueno no podia editarlos ni borrarlos.
+      function canWriteReceipt() {
+        return request.auth.uid == resource.data.get('ownerId', '')
+               || (receiptPropertyOk() && (
+                    request.auth.uid == receiptProperty().ownerId
+                    || request.auth.uid in receiptProperty().get('collaboratorUids', [])
+                  ));
       }
 
       // Lectura permisiva a proposito. Endurecerla con get() por documento arriesga
@@ -184,10 +205,7 @@ service cloud.firestore {
         || request.auth.uid in get(/databases/$(database)/documents/properties/$(request.resource.data.propertyId))
                                .data.get('collaboratorUids', [])
       );
-      allow update, delete: if request.auth != null && (
-        request.auth.uid == resource.data.ownerId
-        || isCollaboratorOnReceiptProperty()
-      );
+      allow update, delete: if request.auth != null && canWriteReceipt();
     }
 
     // Mail: write-only from Cloud Functions (Admin SDK). No client access needed.
