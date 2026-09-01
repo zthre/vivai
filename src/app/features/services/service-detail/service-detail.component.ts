@@ -161,7 +161,13 @@ type DistMethod = 'por_persona' | 'partes_iguales' | 'manual';
                         <span class="text-[10px] px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded-full font-medium">manual</span>
                       }
                     </div>
-                    <p class="text-xs text-warm-400">{{ r.notes || (r.isPaid ? 'Pagado' : 'Pendiente') }}</p>
+                    @if (canWrite()) {
+                      <input type="text" [ngModel]="r.notes ?? ''" (blur)="updateNotes(r, $event)"
+                        placeholder="Agregar nota…"
+                        class="mt-1 w-full px-2 py-1 border border-warm-200 rounded text-xs focus:outline-none focus:ring-2 focus:ring-primary-500">
+                    } @else {
+                      <p class="text-xs text-warm-400">{{ r.notes || (r.isPaid ? 'Pagado' : 'Pendiente') }}</p>
+                    }
                   </div>
 
                   @if (canWrite()) {
@@ -176,7 +182,7 @@ type DistMethod = 'por_persona' | 'partes_iguales' | 'manual';
                     </span>
                   }
 
-                  @if (canWrite() && r.origin === 'manual') {
+                  @if (canWrite()) {
                     <button (click)="removeReceipt(r)" [disabled]="busy()" title="Eliminar recibo"
                       class="flex-shrink-0 p-1 text-warm-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors disabled:opacity-50">
                       <mat-icon class="text-[16px]">delete_outline</mat-icon>
@@ -592,11 +598,29 @@ export class ServiceDetailComponent implements OnInit {
     }
   }
 
+  async updateNotes(receipt: ServiceReceipt, event: Event) {
+    const value = (event.target as HTMLInputElement).value;
+    if (value === (receipt.notes ?? '')) return;
+    try {
+      await this.receiptService.update(receipt.id!, { notes: value });
+    } catch {
+      this.snackBar.open('Error al actualizar la nota.', 'OK', { duration: 3000 });
+    }
+  }
+
   async removeReceipt(receipt: ServiceReceipt) {
-    if (!confirm(`¿Eliminar el recibo de ${receipt.propertyName || this.propertyName(receipt.propertyId)}?`)) return;
+    const nombre = receipt.propertyName || this.propertyName(receipt.propertyId);
+    const extra = receipt.origin !== 'manual' && receipt.assignmentCode
+      ? `\n\nEs un recibo generado por el código ${receipt.assignmentCode}. Si regeneras ese código para este mes, volverá a crearse.`
+      : '';
+    const gasto = receipt.isPaid && receipt.expenseId
+      ? '\n\nSe eliminará también el gasto asociado en Finanzas.'
+      : '';
+    if (!confirm(`¿Eliminar el recibo de ${nombre}?${extra}${gasto}`)) return;
     this.busy.set(true);
     try {
       await this.receiptService.delete(receipt);
+      this.snackBar.open('Recibo eliminado.', 'OK', { duration: 3000 });
     } catch {
       this.snackBar.open('Error al eliminar el recibo.', 'OK', { duration: 3000 });
     } finally {

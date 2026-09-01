@@ -8,6 +8,7 @@ import { switchMap, of, combineLatest, filter, map, startWith } from 'rxjs';
 import { AuthService, UserRole } from '../../core/auth/auth.service';
 import { TicketService } from '../../core/services/ticket.service';
 import { PropertyService } from '../../core/services/property.service';
+import { APP_VERSION } from '../../core/app-version';
 
 interface NavItem {
   label: string;
@@ -160,7 +161,7 @@ interface NavItem {
         <!-- Version -->
         @if (sidebarOpen()) {
           <div class="px-4 pb-2">
-            <span class="text-xs text-warm-600 font-mono">v1.2.2</span>
+            <span class="text-xs text-warm-600 font-mono">v{{ appVersion }}</span>
           </div>
         }
 
@@ -227,6 +228,9 @@ interface NavItem {
   `,
 })
 export class ShellComponent implements OnInit {
+  /** Se lee de package.json: una sola fuente de verdad para la versión */
+  appVersion = APP_VERSION;
+
   private authService = inject(AuthService);
   private ticketService = inject(TicketService);
   private propertyService = inject(PropertyService);

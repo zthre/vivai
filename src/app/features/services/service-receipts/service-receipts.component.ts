@@ -88,6 +88,9 @@ function formatMonth(d: Date): string {
                   <th class="text-right px-4 py-3 text-xs font-semibold text-warm-500 uppercase">Monto</th>
                   <th class="text-center px-4 py-3 text-xs font-semibold text-warm-500 uppercase">Pagado</th>
                   <th class="text-left px-4 py-3 text-xs font-semibold text-warm-500 uppercase">Notas</th>
+                  @if (canWrite()) {
+                    <th class="px-4 py-3 w-10"></th>
+                  }
                 </tr>
               </thead>
               <tbody class="divide-y divide-warm-100">
@@ -147,6 +150,18 @@ function formatMonth(d: Date): string {
                         <span class="text-sm text-warm-500">{{ r.notes || '—' }}</span>
                       }
                     </td>
+                    @if (canWrite()) {
+                      <td class="px-4 py-3 text-right">
+                        <button (click)="removeReceipt(r)" [disabled]="deletingId() === r.id" title="Eliminar recibo"
+                          class="p-1.5 text-warm-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-40">
+                          @if (deletingId() === r.id) {
+                            <div class="w-4 h-4 border-2 border-warm-300 border-t-warm-600 rounded-full animate-spin"></div>
+                          } @else {
+                            <mat-icon class="text-[16px]">delete_outline</mat-icon>
+                          }
+                        </button>
+                      </td>
+                    }
                   </tr>
                 }
               </tbody>
@@ -222,6 +237,7 @@ export class ServiceReceiptsComponent implements OnInit {
 
   filterCode = signal('');
   markingAll = signal(false);
+  deletingId = signal<string | null>(null);
 
   private month$ = toObservable(this.selectedMonth);
   receipts = toSignal(
@@ -293,6 +309,26 @@ export class ServiceReceiptsComponent implements OnInit {
       await this.receiptService.setPaid(receipt, !receipt.isPaid);
     } catch {
       this.snackBar.open('Error al actualizar estado.', 'OK', { duration: 3000 });
+    }
+  }
+
+  async removeReceipt(receipt: ServiceReceipt) {
+    const nombre = receipt.propertyName || this.propertyName(receipt.propertyId);
+    const extra = receipt.origin !== 'manual' && receipt.assignmentCode
+      ? `\n\nEs un recibo generado por el código ${receipt.assignmentCode}. Si regeneras ese código para este mes, volverá a crearse.`
+      : '';
+    const gasto = receipt.isPaid && receipt.expenseId
+      ? '\n\nSe eliminará también el gasto asociado en Finanzas.'
+      : '';
+    if (!confirm(`¿Eliminar el recibo de ${nombre}?${extra}${gasto}`)) return;
+    this.deletingId.set(receipt.id!);
+    try {
+      await this.receiptService.delete(receipt);
+      this.snackBar.open('Recibo eliminado.', 'OK', { duration: 3000 });
+    } catch {
+      this.snackBar.open('Error al eliminar el recibo.', 'OK', { duration: 3000 });
+    } finally {
+      this.deletingId.set(null);
     }
   }
 

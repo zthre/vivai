@@ -169,13 +169,54 @@ function paymentDateForMonth(month: string): Date {
                   {{ r.propertyAmount | currency:'COP':'symbol-narrow':'1.0-0' }}
                 </span>
 
-                @if (data.canWriteServicios && r.origin === 'manual') {
-                  <button (click)="removeReceipt(r)" [disabled]="busy()" title="Eliminar recibo"
-                    class="flex-shrink-0 p-1 text-warm-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors disabled:opacity-50">
-                    <mat-icon class="text-[16px]">delete_outline</mat-icon>
-                  </button>
+                @if (data.canWriteServicios) {
+                  <div class="flex items-center gap-0.5 flex-shrink-0">
+                    <button (click)="startEdit(r)" [disabled]="busy()" title="Editar recibo"
+                      class="p-1 text-warm-300 hover:text-primary-600 hover:bg-primary-50 rounded transition-colors disabled:opacity-50">
+                      <mat-icon class="text-[16px]">edit</mat-icon>
+                    </button>
+                    <button (click)="removeReceipt(r)" [disabled]="busy()" title="Eliminar recibo"
+                      class="p-1 text-warm-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors disabled:opacity-50">
+                      <mat-icon class="text-[16px]">delete_outline</mat-icon>
+                    </button>
+                  </div>
                 }
               </div>
+
+              <!-- Edición en línea -->
+              @if (editingId() === r.id) {
+                <div class="p-3 border border-primary-200 bg-primary-50 rounded-lg space-y-2 -mt-1">
+                  <div>
+                    <label class="block text-xs font-medium text-warm-600 mb-1">Monto</label>
+                    <div class="relative">
+                      <span class="absolute left-3 top-1/2 -translate-y-1/2 text-warm-400 text-sm">$</span>
+                      <input type="number" min="0" [ngModel]="editAmount()" (ngModelChange)="editAmount.set(+$event || 0)"
+                        class="w-full pl-7 pr-3 py-2 border border-warm-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-500">
+                    </div>
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-warm-600 mb-1">Nota</label>
+                    <input [(ngModel)]="editNotes" placeholder="Ej: factura 4432"
+                      class="w-full px-3 py-2 border border-warm-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-500">
+                  </div>
+                  @if (r.origin !== 'manual') {
+                    <p class="text-[11px] text-amber-700">
+                      Recibo generado por distribución. Si regeneras el código
+                      <span class="font-mono font-semibold">{{ r.assignmentCode }}</span> de este mes, se reemplazará.
+                    </p>
+                  }
+                  <div class="flex gap-2">
+                    <button (click)="cancelEdit()"
+                      class="flex-1 px-3 py-2 border border-warm-200 bg-white text-warm-600 rounded-lg text-sm font-medium hover:bg-warm-50 transition-colors">
+                      Cancelar
+                    </button>
+                    <button (click)="saveEdit(r)" [disabled]="busy() || editAmount() <= 0"
+                      class="flex-1 px-3 py-2 bg-primary-500 text-white rounded-lg text-sm font-medium hover:bg-primary-600 transition-colors disabled:opacity-50">
+                      Guardar
+                    </button>
+                  </div>
+                </div>
+              }
             }
           </div>
         }
@@ -459,11 +500,54 @@ export class MonthSettlementDialogComponent {
     }
   }
 
+  // ── Edición en línea ───────────────────────────────────────────────────
+  editingId = signal<string | null>(null);
+  editAmount = signal(0);
+  editNotes = '';
+
+  startEdit(receipt: ServiceReceipt) {
+    this.editingId.set(receipt.id!);
+    this.editAmount.set(receipt.propertyAmount);
+    this.editNotes = receipt.notes ?? '';
+  }
+
+  cancelEdit() {
+    this.editingId.set(null);
+  }
+
+  async saveEdit(receipt: ServiceReceipt) {
+    if (this.editAmount() <= 0) return;
+    this.busy.set(true);
+    try {
+      if (this.editAmount() !== receipt.propertyAmount) {
+        // Propaga el nuevo monto al gasto asociado si el recibo ya estaba pagado
+        await this.receiptService.updateAmount(receipt, this.editAmount());
+      }
+      if (this.editNotes !== (receipt.notes ?? '')) {
+        await this.receiptService.update(receipt.id!, { notes: this.editNotes });
+      }
+      this.editingId.set(null);
+      this.snackBar.open('Recibo actualizado.', 'OK', { duration: 3000, panelClass: 'snackbar-success' });
+    } catch {
+      this.snackBar.open('No se pudo actualizar el recibo.', 'OK', { duration: 3000, panelClass: 'snackbar-error' });
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
   async removeReceipt(receipt: ServiceReceipt) {
-    if (!confirm(`¿Eliminar el recibo de ${receipt.serviceName}?`)) return;
+    const extra = receipt.origin !== 'manual' && receipt.assignmentCode
+      ? `\n\nEs un recibo generado por el código ${receipt.assignmentCode}. Si regeneras ese código para este mes, volverá a crearse.`
+      : '';
+    const gasto = receipt.isPaid && receipt.expenseId
+      ? '\n\nSe eliminará también el gasto asociado en Finanzas.'
+      : '';
+    if (!confirm(`¿Eliminar el recibo de ${receipt.serviceName}?${extra}${gasto}`)) return;
     this.busy.set(true);
     try {
       await this.receiptService.delete(receipt);
+      if (this.editingId() === receipt.id) this.editingId.set(null);
+      this.snackBar.open('Recibo eliminado.', 'OK', { duration: 3000, panelClass: 'snackbar-success' });
     } catch {
       this.snackBar.open('No se pudo eliminar el recibo.', 'OK', { duration: 3000, panelClass: 'snackbar-error' });
     } finally {
