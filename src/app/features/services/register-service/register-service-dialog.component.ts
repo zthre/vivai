@@ -56,6 +56,11 @@ function monthLabel(month: string): string {
               <option [value]="p.id">{{ p.name }}</option>
             }
           </select>
+          @if (properties().length === 0) {
+            <p class="text-xs text-amber-600 mt-1">
+              No hay propiedades disponibles sobre las que puedas gestionar servicios.
+            </p>
+          }
         </div>
 
         <!-- Servicio -->
@@ -86,6 +91,11 @@ function monthLabel(month: string): string {
               class="mt-1 text-xs text-primary-600 hover:text-primary-700 font-medium">
               + Crear un servicio nuevo
             </button>
+            @if (activeServices().length === 0) {
+              <p class="text-xs text-warm-500 mt-1">
+                Aún no tienes servicios. Crea el primero con el enlace de arriba.
+              </p>
+            }
           }
         </div>
 

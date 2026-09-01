@@ -19,7 +19,7 @@ import {
   arrayRemove,
   Timestamp,
 } from '@angular/fire/firestore';
-import { Observable, combineLatest, map, switchMap, startWith } from 'rxjs';
+import { Observable, combineLatest, map, of, switchMap, startWith, catchError } from 'rxjs';
 import { Property, PhotoItem, ColaboradorPermission, ContractFile } from '../models/property.model';
 import { AuthService } from '../auth/auth.service';
 import { listingExpiryFrom } from './listing.util';
@@ -36,10 +36,29 @@ export class PropertyService {
         const ownerQuery = query(ref, where('ownerId', '==', uid), orderBy('createdAt', 'desc'));
         const collabQuery = query(ref, where('collaboratorUids', 'array-contains', uid));
 
-        return combineLatest([
-          (collectionData(ownerQuery, { idField: 'id' }) as Observable<Property[]>).pipe(startWith([] as Property[])),
-          (collectionData(collabQuery, { idField: 'id' }) as Observable<Property[]>).pipe(startWith([] as Property[])),
-        ]).pipe(
+        // Si una de las dos consultas falla, la otra debe seguir sirviendo:
+        // un error propagado hasta `toSignal` rompe la pantalla completa.
+        const owned$: Observable<Property[]> = (
+          collectionData(ownerQuery, { idField: 'id' }) as Observable<Property[]>
+        ).pipe(
+          catchError(err => {
+            console.error('[PropertyService.getAll:owned]', err);
+            return of([] as Property[]);
+          }),
+          startWith([] as Property[])
+        );
+
+        const collab$: Observable<Property[]> = (
+          collectionData(collabQuery, { idField: 'id' }) as Observable<Property[]>
+        ).pipe(
+          catchError(err => {
+            console.error('[PropertyService.getAll:collab]', err);
+            return of([] as Property[]);
+          }),
+          startWith([] as Property[])
+        );
+
+        return combineLatest([owned$, collab$]).pipe(
           map(([owned, collab]) => {
             const seen = new Set<string>();
             const result: Property[] = [];

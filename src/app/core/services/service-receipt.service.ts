@@ -13,8 +13,10 @@ import {
   serverTimestamp,
   getDoc,
   Timestamp,
+  Query,
+  DocumentData,
 } from '@angular/fire/firestore';
-import { Observable, combineLatest, of, map } from 'rxjs';
+import { Observable, combineLatest, of, map, catchError } from 'rxjs';
 import { ServiceReceipt } from '../models/service-receipt.model';
 import { ServiceAssignment } from '../models/service-assignment.model';
 import { Property } from '../models/property.model';
@@ -50,22 +52,42 @@ export class ServiceReceiptService {
   private auth = inject(AuthService);
   private expenseService = inject(ExpenseService);
 
+  /**
+   * Una consulta caída no puede envenenar la señal que la consume: `toSignal`
+   * relanza el error en cada lectura y eso aborta la detección de cambios de
+   * toda la pantalla. Ante un fallo se degrada a lista vacía.
+   */
+  private safe(q: Query<DocumentData>, label: string): Observable<ServiceReceipt[]> {
+    return (collectionData(q, { idField: 'id' }) as Observable<ServiceReceipt[]>).pipe(
+      catchError(err => {
+        console.error(`[ServiceReceiptService.${label}]`, err);
+        return of([] as ServiceReceipt[]);
+      })
+    );
+  }
+
   getByServiceAndMonth(serviceId: string, month: string): Observable<ServiceReceipt[]> {
     const ref = collection(this.firestore, 'serviceReceipts');
-    const q = query(ref, where('serviceId', '==', serviceId), where('month', '==', month));
-    return collectionData(q, { idField: 'id' }) as Observable<ServiceReceipt[]>;
+    return this.safe(
+      query(ref, where('serviceId', '==', serviceId), where('month', '==', month)),
+      'getByServiceAndMonth'
+    );
   }
 
   getByAssignmentAndMonth(assignmentId: string, month: string): Observable<ServiceReceipt[]> {
     const ref = collection(this.firestore, 'serviceReceipts');
-    const q = query(ref, where('assignmentId', '==', assignmentId), where('month', '==', month));
-    return collectionData(q, { idField: 'id' }) as Observable<ServiceReceipt[]>;
+    return this.safe(
+      query(ref, where('assignmentId', '==', assignmentId), where('month', '==', month)),
+      'getByAssignmentAndMonth'
+    );
   }
 
   getByPropertyAndMonth(propertyId: string, month: string): Observable<ServiceReceipt[]> {
     const ref = collection(this.firestore, 'serviceReceipts');
-    const q = query(ref, where('propertyId', '==', propertyId), where('month', '==', month));
-    return collectionData(q, { idField: 'id' }) as Observable<ServiceReceipt[]>;
+    return this.safe(
+      query(ref, where('propertyId', '==', propertyId), where('month', '==', month)),
+      'getByPropertyAndMonth'
+    );
   }
 
   /**

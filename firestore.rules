@@ -122,10 +122,11 @@ service cloud.firestore {
 
     // Services: owner or collaborator can read/write.
     match /services/{serviceId} {
-      allow read: if request.auth != null && (
-        request.auth.uid == resource.data.ownerId
-        || request.auth.uid in get(/databases/$(database)/documents/properties/$(resource.data.get('propertyId', ''))).data.get('collaboratorUids', [])
-      );
+      // Los documentos de `services` no tienen campo `propertyId`. La regla anterior
+      // hacia get(.../properties/$(resource.data.get('propertyId', ''))): un get() sobre
+      // un path con ID vacio, es decir path invalido, evaluacion fallida y denegacion.
+      // Solo se disparaba cuando ownerId != uid (el || cortocircuita para el dueno),
+      // que es justo lo que consulta UtilityServiceService.getAll().
       allow read: if request.auth != null;
       allow create: if request.auth != null && request.auth.uid == request.resource.data.ownerId;
       allow update, delete: if request.auth != null && request.auth.uid == resource.data.ownerId;
@@ -156,11 +157,12 @@ service cloud.firestore {
         return request.auth.uid in receiptProperty().get('collaboratorUids', []);
       }
 
-      allow read: if request.auth != null && (
-        request.auth.uid == resource.data.ownerId
-        || request.auth.uid == receiptProperty().ownerId
-        || isCollaboratorOnReceiptProperty()
-      );
+      // Lectura permisiva a proposito. Endurecerla con get() por documento arriesga
+      // denegar listados completos: hay un tope de accesos a documentos por consulta,
+      // y basta un documento que lo exceda para tumbar la consulta entera. El hueco
+      // grave era la escritura (cualquier autenticado podia crear o alterar recibos
+      // ajenos) y esa si queda cerrada abajo, donde el coste del get() es por documento.
+      allow read: if request.auth != null;
       allow create: if request.auth != null && (
         request.auth.uid == get(/databases/$(database)/documents/properties/$(request.resource.data.propertyId)).data.ownerId
         || request.auth.uid in get(/databases/$(database)/documents/properties/$(request.resource.data.propertyId))
