@@ -16,7 +16,8 @@ import {
   Query,
   DocumentData,
 } from '@angular/fire/firestore';
-import { Observable, combineLatest, of, map, catchError } from 'rxjs';
+import { Observable, combineLatest, of, map } from 'rxjs';
+import { guardQuery, loggedWrite } from './firestore-error.util';
 import { ServiceReceipt } from '../models/service-receipt.model';
 import { ServiceAssignment } from '../models/service-assignment.model';
 import { Property } from '../models/property.model';
@@ -57,11 +58,11 @@ export class ServiceReceiptService {
    * relanza el error en cada lectura y eso aborta la detección de cambios de
    * toda la pantalla. Ante un fallo se degrada a lista vacía.
    */
-  private safe(q: Query<DocumentData>, label: string): Observable<ServiceReceipt[]> {
+  private safe(q: Query<DocumentData>, label: string, queryDesc: string): Observable<ServiceReceipt[]> {
     return (collectionData(q, { idField: 'id' }) as Observable<ServiceReceipt[]>).pipe(
-      catchError(err => {
-        console.error(`[ServiceReceiptService.${label}]`, err);
-        return of([] as ServiceReceipt[]);
+      guardQuery(`ServiceReceiptService.${label}`, [] as ServiceReceipt[], {
+        collection: 'serviceReceipts',
+        query: queryDesc,
       })
     );
   }
@@ -70,7 +71,8 @@ export class ServiceReceiptService {
     const ref = collection(this.firestore, 'serviceReceipts');
     return this.safe(
       query(ref, where('serviceId', '==', serviceId), where('month', '==', month)),
-      'getByServiceAndMonth'
+      'getByServiceAndMonth',
+      `serviceId == ${serviceId}, month == ${month}`
     );
   }
 
@@ -78,7 +80,8 @@ export class ServiceReceiptService {
     const ref = collection(this.firestore, 'serviceReceipts');
     return this.safe(
       query(ref, where('assignmentId', '==', assignmentId), where('month', '==', month)),
-      'getByAssignmentAndMonth'
+      'getByAssignmentAndMonth',
+      `assignmentId == ${assignmentId}, month == ${month}`
     );
   }
 
@@ -86,7 +89,8 @@ export class ServiceReceiptService {
     const ref = collection(this.firestore, 'serviceReceipts');
     return this.safe(
       query(ref, where('propertyId', '==', propertyId), where('month', '==', month)),
-      'getByPropertyAndMonth'
+      'getByPropertyAndMonth',
+      `propertyId == ${propertyId}, month == ${month}`
     );
   }
 
@@ -128,11 +132,18 @@ export class ServiceReceiptService {
     };
 
     const ref = collection(this.firestore, 'serviceReceipts');
-    const docRef = await addDoc(ref, {
-      ...receipt,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    } as any);
+    const docRef = await loggedWrite(
+      'ServiceReceiptService.createManual',
+      () => addDoc(ref, {
+        ...receipt,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      } as any),
+      {
+        collection: 'serviceReceipts',
+        query: `create manual sobre propertyId ${input.propertyId} (ownerId ${ownerId}), mes ${input.month}`,
+      }
+    );
 
     if (input.markPaid) {
       await this.setPaid({ ...receipt, id: docRef.id }, true);
@@ -258,7 +269,11 @@ export class ServiceReceiptService {
 
   async update(id: string, data: Partial<ServiceReceipt>): Promise<void> {
     const ref = doc(this.firestore, `serviceReceipts/${id}`);
-    await updateDoc(ref, { ...data, updatedAt: serverTimestamp() });
+    await loggedWrite(
+      'ServiceReceiptService.update',
+      () => updateDoc(ref, { ...data, updatedAt: serverTimestamp() }),
+      { collection: 'serviceReceipts', query: `update serviceReceipts/${id}` }
+    );
   }
 
   /** Actualiza el monto de un recibo, propagándolo al gasto asociado si ya estaba pagado. */

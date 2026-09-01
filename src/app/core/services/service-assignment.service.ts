@@ -15,8 +15,9 @@ import {
   Query,
   DocumentData,
 } from '@angular/fire/firestore';
-import { Observable, of, switchMap, catchError } from 'rxjs';
+import { Observable, switchMap } from 'rxjs';
 import { ServiceAssignment } from '../models/service-assignment.model';
+import { guardQuery } from './firestore-error.util';
 import { AuthService } from '../auth/auth.service';
 
 @Injectable({ providedIn: 'root' })
@@ -25,25 +26,30 @@ export class ServiceAssignmentService {
   private auth = inject(AuthService);
 
   /** Degrada a lista vacía ante un fallo: un error propagado a `toSignal` rompe la vista. */
-  private safe(q: Query<DocumentData>, label: string): Observable<ServiceAssignment[]> {
+  private safe(q: Query<DocumentData>, label: string, queryDesc: string): Observable<ServiceAssignment[]> {
     return (collectionData(q, { idField: 'id' }) as Observable<ServiceAssignment[]>).pipe(
-      catchError(err => {
-        console.error(`[ServiceAssignmentService.${label}]`, err);
-        return of([] as ServiceAssignment[]);
+      guardQuery(`ServiceAssignmentService.${label}`, [] as ServiceAssignment[], {
+        collection: 'serviceAssignments',
+        query: queryDesc,
       })
     );
   }
 
   getByService(serviceId: string): Observable<ServiceAssignment[]> {
     const ref = collection(this.firestore, 'serviceAssignments');
-    return this.safe(query(ref, where('serviceId', '==', serviceId)), 'getByService');
+    return this.safe(
+      query(ref, where('serviceId', '==', serviceId)),
+      'getByService',
+      `serviceId == ${serviceId}`
+    );
   }
 
   getByProperty(propertyId: string): Observable<ServiceAssignment[]> {
     const ref = collection(this.firestore, 'serviceAssignments');
     return this.safe(
       query(ref, where('propertyIds', 'array-contains', propertyId)),
-      'getByProperty'
+      'getByProperty',
+      `propertyIds array-contains ${propertyId}`
     );
   }
 

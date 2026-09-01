@@ -14,8 +14,9 @@ import {
   limit,
   getDoc,
 } from '@angular/fire/firestore';
-import { Observable, of, switchMap, catchError } from 'rxjs';
+import { Observable, switchMap } from 'rxjs';
 import { Payment } from '../models/payment.model';
+import { guardQuery, loggedWrite } from './firestore-error.util';
 import { AuthService } from '../auth/auth.service';
 import { Timestamp } from '@angular/fire/firestore';
 
@@ -35,7 +36,12 @@ export class PaymentService {
           where('date', '<=', Timestamp.fromDate(endDate)),
           orderBy('date', 'desc')
         );
-        return collectionData(q, { idField: 'id' }) as Observable<Payment[]>;
+        return (collectionData(q, { idField: 'id' }) as Observable<Payment[]>).pipe(
+          guardQuery('PaymentService.getByMonth', [] as Payment[], {
+            collection: 'payments',
+            query: `ownerId == ${uid}, date entre ${startDate.toISOString()} y ${endDate.toISOString()}`,
+          })
+        );
       })
     );
   }
@@ -50,7 +56,12 @@ export class PaymentService {
           orderBy('createdAt', 'desc'),
           limit(limitCount)
         );
-        return collectionData(q, { idField: 'id' }) as Observable<Payment[]>;
+        return (collectionData(q, { idField: 'id' }) as Observable<Payment[]>).pipe(
+          guardQuery('PaymentService.getRecent', [] as Payment[], {
+            collection: 'payments',
+            query: `ownerId == ${uid}, orderBy createdAt desc, limit ${limitCount}`,
+          })
+        );
       })
     );
   }
@@ -63,10 +74,9 @@ export class PaymentService {
       orderBy('date', 'desc')
     );
     return (collectionData(q, { idField: 'id' }) as Observable<Payment[]>).pipe(
-      // Un error aquí llegaría a `toSignal` y rompería la vista que lo lee
-      catchError(err => {
-        console.error('[PaymentService.getByProperty]', err);
-        return of([] as Payment[]);
+      guardQuery('PaymentService.getByProperty', [] as Payment[], {
+        collection: 'payments',
+        query: `propertyId == ${propertyId}, orderBy date desc`,
       })
     );
   }
@@ -77,26 +87,38 @@ export class PaymentService {
     const propSnap = await getDoc(doc(this.firestore, `properties/${data.propertyId}`));
     const ownerId = propSnap.data()?.['ownerId'] ?? uid;
     const ref = collection(this.firestore, 'payments');
-    await addDoc(ref, {
-      ...data,
-      date: Timestamp.fromDate(data.date),
-      ownerId,
-      createdBy: uid,
-      createdAt: serverTimestamp(),
-    });
+    await loggedWrite(
+      'PaymentService.create',
+      () => addDoc(ref, {
+        ...data,
+        date: Timestamp.fromDate(data.date),
+        ownerId,
+        createdBy: uid,
+        createdAt: serverTimestamp(),
+      }),
+      { collection: 'payments', query: `create sobre propertyId ${data.propertyId} (ownerId ${ownerId})` }
+    );
   }
 
   async update(id: string, data: { amount: number; date: Date; notes: string | null }): Promise<void> {
     const ref = doc(this.firestore, `payments/${id}`);
-    await updateDoc(ref, {
-      amount: data.amount,
-      date: Timestamp.fromDate(data.date),
-      notes: data.notes,
-    });
+    await loggedWrite(
+      'PaymentService.update',
+      () => updateDoc(ref, {
+        amount: data.amount,
+        date: Timestamp.fromDate(data.date),
+        notes: data.notes,
+      }),
+      { collection: 'payments', query: `update payments/${id}` }
+    );
   }
 
   async delete(id: string): Promise<void> {
     const ref = doc(this.firestore, `payments/${id}`);
-    await deleteDoc(ref);
+    await loggedWrite(
+      'PaymentService.delete',
+      () => deleteDoc(ref),
+      { collection: 'payments', query: `delete payments/${id}` }
+    );
   }
 }

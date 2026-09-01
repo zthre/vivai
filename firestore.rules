@@ -32,20 +32,36 @@ service cloud.firestore {
 
     // Payments: owner or colaborador can read/write; tenant can read payments for their property.
     match /payments/{paymentId} {
-      function isCollaboratorOnPayment() {
-        return request.auth != null
-               && request.auth.uid in get(/databases/$(database)/documents/properties/$(resource.data.propertyId))
-                                      .data.get('collaboratorUids', []);
+      // El propertyId debe existir y apuntar a un documento real: un get() sobre un
+      // path con ID vacio, o sobre una propiedad borrada, hace fallar la evaluacion
+      // y eso DENIEGA. En un listado basta un documento asi para tumbar la consulta.
+      function paymentPropertyOk() {
+        return resource.data.get('propertyId', '') is string
+               && resource.data.get('propertyId', '') != ''
+               && exists(/databases/$(database)/documents/properties/$(resource.data.propertyId));
+      }
+      function paymentProperty() {
+        return get(/databases/$(database)/documents/properties/$(resource.data.propertyId)).data;
       }
 
+      // La primera condicion cortocircuita y evita cualquier get() en el caso normal.
+      // `getByProperty` consulta por propertyId SIN filtrar ownerId, asi que trae pagos
+      // de cualquier origen (colaborador, webhook de Stripe, datos antiguos). Sin la
+      // clausula de dueno de la propiedad, un solo pago con otro ownerId denegaba todo.
       allow read: if request.auth != null && (
-        request.auth.uid == resource.data.ownerId
-        || isCollaboratorOnPayment()
-        || request.auth.uid == get(/databases/$(database)/documents/properties/$(resource.data.propertyId)).data.tenantUid
+        request.auth.uid == resource.data.get('ownerId', '')
+        || (paymentPropertyOk() && (
+             request.auth.uid == paymentProperty().ownerId
+             || request.auth.uid in paymentProperty().get('collaboratorUids', [])
+             || request.auth.uid == paymentProperty().get('tenantUid', '')
+           ))
       );
       allow write: if request.auth != null && (
-        request.auth.uid == resource.data.ownerId
-        || isCollaboratorOnPayment()
+        request.auth.uid == resource.data.get('ownerId', '')
+        || (paymentPropertyOk() && (
+             request.auth.uid == paymentProperty().ownerId
+             || request.auth.uid in paymentProperty().get('collaboratorUids', [])
+           ))
       );
       allow create: if request.auth != null && (
         request.auth.uid == request.resource.data.ownerId
