@@ -13,8 +13,9 @@ import {
   orderBy,
   serverTimestamp,
 } from '@angular/fire/firestore';
-import { Observable, of, switchMap, map, catchError } from 'rxjs';
+import { Observable, of, switchMap, map } from 'rxjs';
 import { Service } from '../models/service.model';
+import { guardQuery } from './firestore-error.util';
 import { AuthService } from '../auth/auth.service';
 import { PropertyService } from './property.service';
 
@@ -57,9 +58,9 @@ export class UtilityServiceService {
       }),
       // Una consulta caída no puede envenenar la señal: `toSignal` relanzaría el
       // error en cada lectura y rompería la detección de cambios de la pantalla.
-      catchError(err => {
-        console.error('[UtilityServiceService.getAll]', err);
-        return of([] as Service[]);
+      guardQuery('UtilityServiceService.getAll', [] as Service[], {
+        collection: 'services',
+        query: "ownerId in [uid + colaboradores + otros dueños] (máx. 10)",
       })
     );
   }

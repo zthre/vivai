@@ -16,6 +16,7 @@ import {
 } from '@angular/fire/firestore';
 import { Observable, switchMap } from 'rxjs';
 import { Expense, ExpenseCreate } from '../models/expense.model';
+import { guardQuery, loggedWrite } from './firestore-error.util';
 import { AuthService } from '../auth/auth.service';
 
 @Injectable({ providedIn: 'root' })
@@ -34,7 +35,12 @@ export class ExpenseService {
           where('date', '<=', Timestamp.fromDate(endDate)),
           orderBy('date', 'desc')
         );
-        return collectionData(q, { idField: 'id' }) as Observable<Expense[]>;
+        return (collectionData(q, { idField: 'id' }) as Observable<Expense[]>).pipe(
+          guardQuery('ExpenseService.getByMonth', [] as Expense[], {
+            collection: 'expenses',
+            query: `ownerId == ${uid}, date entre ${startDate.toISOString()} y ${endDate.toISOString()}`,
+          })
+        );
       })
     );
   }
@@ -45,13 +51,17 @@ export class ExpenseService {
     const propSnap = await getDoc(doc(this.firestore, `properties/${data.propertyId}`));
     const ownerId = propSnap.data()?.['ownerId'] ?? uid;
     const ref = collection(this.firestore, 'expenses');
-    const docRef = await addDoc(ref, {
-      ...data,
-      date: Timestamp.fromDate(data.date),
-      ownerId,
-      createdBy: uid,
-      createdAt: serverTimestamp(),
-    });
+    const docRef = await loggedWrite(
+      'ExpenseService.create',
+      () => addDoc(ref, {
+        ...data,
+        date: Timestamp.fromDate(data.date),
+        ownerId,
+        createdBy: uid,
+        createdAt: serverTimestamp(),
+      }),
+      { collection: 'expenses', query: `create sobre propertyId ${data.propertyId} (ownerId ${ownerId})` }
+    );
     return docRef.id;
   }
 

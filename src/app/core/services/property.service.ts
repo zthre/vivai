@@ -19,7 +19,8 @@ import {
   arrayRemove,
   Timestamp,
 } from '@angular/fire/firestore';
-import { Observable, combineLatest, map, of, switchMap, startWith, catchError } from 'rxjs';
+import { Observable, combineLatest, map, switchMap, startWith } from 'rxjs';
+import { guardQuery } from './firestore-error.util';
 import { Property, PhotoItem, ColaboradorPermission, ContractFile } from '../models/property.model';
 import { AuthService } from '../auth/auth.service';
 import { listingExpiryFrom } from './listing.util';
@@ -41,9 +42,9 @@ export class PropertyService {
         const owned$: Observable<Property[]> = (
           collectionData(ownerQuery, { idField: 'id' }) as Observable<Property[]>
         ).pipe(
-          catchError(err => {
-            console.error('[PropertyService.getAll:owned]', err);
-            return of([] as Property[]);
+          guardQuery('PropertyService.getAll:owned', [] as Property[], {
+            collection: 'properties',
+            query: `ownerId == ${uid}, orderBy createdAt desc`,
           }),
           startWith([] as Property[])
         );
@@ -51,9 +52,9 @@ export class PropertyService {
         const collab$: Observable<Property[]> = (
           collectionData(collabQuery, { idField: 'id' }) as Observable<Property[]>
         ).pipe(
-          catchError(err => {
-            console.error('[PropertyService.getAll:collab]', err);
-            return of([] as Property[]);
+          guardQuery('PropertyService.getAll:collab', [] as Property[], {
+            collection: 'properties',
+            query: `collaboratorUids array-contains ${uid}`,
           }),
           startWith([] as Property[])
         );
