@@ -18,6 +18,7 @@ import { map } from 'rxjs/operators';
 import { Ticket } from '../models/ticket.model';
 import { AuthService } from '../auth/auth.service';
 import { PropertyService } from './property.service';
+import { collection$ } from './firestore-query.util';
 
 @Injectable({ providedIn: 'root' })
 export class TicketService {
@@ -28,7 +29,11 @@ export class TicketService {
   getByOwner$(ownerId: string): Observable<Ticket[]> {
     const ref = collection(this.firestore, 'tickets');
     const q = query(ref, where('ownerId', '==', ownerId));
-    return (collectionData(q, { idField: 'id' }) as Observable<Ticket[]>).pipe(
+    return collection$<Ticket>(q, {
+      label: 'TicketService.getByOwner$',
+      collection: 'tickets',
+      query: `ownerId == ${ownerId}`,
+    }).pipe(
       map(tickets =>
         tickets.sort((a, b) => {
           const aMs = (a.createdAt as any)?.toMillis?.() ?? 0;
@@ -42,7 +47,11 @@ export class TicketService {
   getByTenant$(tenantUid: string): Observable<Ticket[]> {
     const ref = collection(this.firestore, 'tickets');
     const q = query(ref, where('tenantUid', '==', tenantUid));
-    return (collectionData(q, { idField: 'id' }) as Observable<Ticket[]>).pipe(
+    return collection$<Ticket>(q, {
+      label: 'TicketService.getByTenant$',
+      collection: 'tickets',
+      query: `tenantUid == ${tenantUid}`,
+    }).pipe(
       map(tickets =>
         tickets.sort((a, b) => {
           const aMs = (a.createdAt as any)?.toMillis?.() ?? 0;
@@ -56,9 +65,11 @@ export class TicketService {
   getPendingCount$(ownerId: string): Observable<number> {
     const ref = collection(this.firestore, 'tickets');
     const q = query(ref, where('ownerId', '==', ownerId), where('status', '==', 'pendiente'));
-    return (collectionData(q, { idField: 'id' }) as Observable<Ticket[]>).pipe(
-      map(t => t.length)
-    );
+    return collection$<Ticket>(q, {
+      label: 'TicketService.getPendingCount$',
+      collection: 'tickets',
+      query: `ownerId == ${ownerId}, status == pendiente`,
+    }).pipe(map(t => t.length));
   }
 
   /** Query tickets for a list of propertyIds (Firestore 'in' batches of 30) */
@@ -70,7 +81,11 @@ export class TicketService {
     for (let i = 0; i < propertyIds.length; i += 30) {
       const chunk = propertyIds.slice(i, i + 30);
       const q = query(ref, where('propertyId', 'in', chunk));
-      batches.push(collectionData(q, { idField: 'id' }) as Observable<Ticket[]>);
+      batches.push(collection$<Ticket>(q, {
+        label: 'TicketService.getByPropertyIds$',
+        collection: 'tickets',
+        query: `propertyId in [${chunk.join(', ')}]`,
+      }));
     }
     return combineLatest(batches).pipe(
       map(results => {

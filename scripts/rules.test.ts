@@ -32,9 +32,14 @@ const OWNER = 'uid-owner';
 const COLLAB = 'uid-collab';
 const TENANT = 'uid-tenant';
 const STRANGER = 'uid-stranger';
+const INVITED_TENANT = 'uid-invited-tenant';
+const INVITED_COLLAB = 'uid-invited-collab';
+const INVITED_TENANT_EMAIL = 'invitado@example.com';
+const INVITED_COLLAB_EMAIL = 'pendiente@example.com';
 
 const PROPERTY = 'prop-1';
 const LEGACY_PROPERTY = 'prop-legacy';
+const INVITE_PROPERTY = 'prop-invite';
 const CIRCLE = [OWNER, COLLAB];
 
 let passes = 0;
@@ -190,6 +195,29 @@ async function seedLegacy(): Promise<void> {
   });
 }
 
+/**
+ * Propiedad con invitaciones por correo aun sin vincular.
+ *
+ * Es el estado en el que el dueno ya escribio el correo del inquilino o del
+ * colaborador, pero esa persona todavia no ha entrado por primera vez: no tiene
+ * `tenantUid` puesto ni figura en `collaboratorUids`.
+ *
+ * `AuthService` busca justo esto al iniciar sesion —properties por `tenantEmail`
+ * y por `pendingCollaboratorEmails`— para vincularse. Si las reglas no dejan
+ * LEER esa propiedad, la consulta se deniega y el vinculo nunca ocurre.
+ */
+async function seedInvites(): Promise<void> {
+  await put(`properties/${INVITE_PROPERTY}`, {
+    ownerId: OWNER,
+    collaboratorUids: [],
+    memberUids: [OWNER],
+    tenantEmail: INVITED_TENANT_EMAIL,
+    pendingCollaboratorEmails: [INVITED_COLLAB_EMAIL],
+    name: 'Apto 303 (invitaciones sin vincular)',
+    isPublic: false,
+  });
+}
+
 /** Todo lleva `memberUids`, que es el estado despues del backfill. */
 async function seed(): Promise<void> {
   await put(`properties/${PROPERTY}`, {
@@ -274,6 +302,19 @@ async function suite(strict: boolean): Promise<void> {
     read(owner, 'serviceReceipts/rec-legacy')
   );
 
+  // ── Vinculacion por correo en el primer inicio de sesion ────────────────
+  // Sin esto, `AuthService` no puede encontrar la propiedad a la que fue
+  // invitado y la consulta revienta con permission-denied en cada login.
+  const invitedTenant = token(INVITED_TENANT, INVITED_TENANT_EMAIL);
+  const invitedCollab = token(INVITED_COLLAB, INVITED_COLLAB_EMAIL);
+
+  await allowed('inquilino invitado lee la propiedad para vincularse',
+    read(invitedTenant, `properties/${INVITE_PROPERTY}`));
+  await allowed('colaborador pendiente lee la propiedad para vincularse',
+    read(invitedCollab, `properties/${INVITE_PROPERTY}`));
+  await denied('extraño sin invitación NO lee esa propiedad',
+    read(stranger, `properties/${INVITE_PROPERTY}`));
+
   // El motivo de esta suite: hoy pasan, endurecidas deben denegar.
   const assertFn = strict ? denied : allowed;
   const verb = strict ? 'NO lee' : 'lee (agujero actual)';
@@ -293,6 +334,7 @@ async function main(): Promise<void> {
     await clear();
     await seed();
     await seedLegacy();
+    await seedInvites();
     await suite(strict);
   }
 

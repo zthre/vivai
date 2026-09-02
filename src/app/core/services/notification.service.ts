@@ -15,6 +15,7 @@ import { Observable, map, switchMap } from 'rxjs';
 import { AppNotification } from '../models/notification.model';
 import { AuthService } from '../auth/auth.service';
 import { monthKey } from '../utils/month.util';
+import { collection$ } from './firestore-query.util';
 
 @Injectable({ providedIn: 'root' })
 export class NotificationService {
@@ -26,7 +27,11 @@ export class NotificationService {
       switchMap(uid => {
         const ref = collection(this.firestore, 'notifications');
         const q = query(ref, where('ownerId', '==', uid), orderBy('sentAt', 'desc'));
-        return (collectionData(q, { idField: 'id' }) as Observable<AppNotification[]>).pipe(
+        return collection$<AppNotification>(q, {
+          label: 'NotificationService.getAll',
+          collection: 'notifications',
+          query: `ownerId == ${uid}, orderBy sentAt desc`,
+        }).pipe(
           map(list => {
             let result = list;
             if (propertyId) result = result.filter(n => n.propertyId === propertyId);
@@ -45,7 +50,11 @@ export class NotificationService {
       switchMap(uid => {
         const ref = collection(this.firestore, 'notifications');
         const q = query(ref, where('ownerId', '==', uid), orderBy('sentAt', 'desc'), limit(count));
-        return collectionData(q, { idField: 'id' }) as Observable<AppNotification[]>;
+        return collection$<AppNotification>(q, {
+          label: 'NotificationService.getRecent',
+          collection: 'notifications',
+          query: `ownerId == ${uid}, orderBy sentAt desc, limit ${count}`,
+        });
       })
     );
   }
@@ -55,9 +64,11 @@ export class NotificationService {
       switchMap(uid => {
         const ref = collection(this.firestore, 'notifications');
         const q = query(ref, where('ownerId', '==', uid), where('viewedByOwner', '==', false));
-        return (collectionData(q, { idField: 'id' }) as Observable<AppNotification[]>).pipe(
-          map(list => list.length)
-        );
+        return collection$<AppNotification>(q, {
+          label: 'NotificationService.getUnreadCount',
+          collection: 'notifications',
+          query: `ownerId == ${uid}, viewedByOwner == false`,
+        }).pipe(map(list => list.length));
       })
     );
   }

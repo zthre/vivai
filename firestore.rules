@@ -39,8 +39,29 @@ service cloud.firestore {
     // Tenant can read property where they are tenantUid.
     // Tenant can update tenantUid + updatedAt on first login (email match).
     match /properties/{propertyId} {
+      // Invitacion por correo aun sin vincular.
+      //
+      // Al iniciar sesion, AuthService busca properties por `tenantEmail` y por
+      // `pendingCollaboratorEmails` para vincularse. En ese momento el invitado
+      // todavia NO tiene `tenantUid` puesto ni figura en `collaboratorUids`, asi
+      // que ninguna de las clausulas de abajo lo cubria: la consulta se denegaba
+      // y el error salia crudo en consola en cada login, ademas de impedir el
+      // vinculo. Habia `allow update` para que el inquilino se pusiera su
+      // `tenantUid`, pero no habia forma de LEER la propiedad para encontrarla.
+      //
+      // No abre nada: solo alcanza a quien el dueno escribio explicitamente como
+      // inquilino o colaborador de esa propiedad. El correo viene del token de
+      // Firebase Auth, no de un campo que el cliente pueda inventarse.
+      function isInvitedByEmail() {
+        return request.auth != null
+               && request.auth.token.email != null
+               && (request.auth.token.email == resource.data.get('tenantEmail', '')
+                   || request.auth.token.email in resource.data.get('pendingCollaboratorEmails', []));
+      }
+
       allow read: if resource.data.isPublic == true
                   || isMember()
+                  || isInvitedByEmail()
                   || (request.auth != null && request.auth.uid == resource.data.ownerId)
                   || (request.auth != null && request.auth.uid in resource.data.get('collaboratorUids', []))
                   || (request.auth != null && request.auth.uid == resource.data.tenantUid);
@@ -131,8 +152,18 @@ service cloud.firestore {
 
     // Tickets: owner or colaborador can read/update; tenant can read/create their own.
     match /tickets/{ticketId} {
+      // El get() va guardado, como en payments y expenses: un ticket que apunta
+      // a una propiedad borrada —o con propertyId vacio— es un path invalido, y
+      // eso hace fallar la evaluacion, lo que DENIEGA la consulta entera. Basta
+      // un ticket huerfano para dejar el tablero en blanco a un colaborador.
+      function ticketPropertyOk() {
+        return resource.data.get('propertyId', '') is string
+               && resource.data.get('propertyId', '') != ''
+               && exists(/databases/$(database)/documents/properties/$(resource.data.propertyId));
+      }
       function isCollaboratorOnTicket() {
         return request.auth != null
+               && ticketPropertyOk()
                && request.auth.uid in get(/databases/$(database)/documents/properties/$(resource.data.propertyId))
                                       .data.get('collaboratorUids', []);
       }

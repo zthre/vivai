@@ -11,6 +11,7 @@ import {
 import { Observable, map } from 'rxjs';
 import { Property } from '../models/property.model';
 import { isListingActive } from './listing.util';
+import { collection$ } from './firestore-query.util';
 
 export function listingPrice(property: Property): number {
   return property.isForRent ? (property.rentPrice ?? 0) : (property.salePrice ?? 0);
@@ -33,9 +34,11 @@ export class MarketplaceService {
   getListings(): Observable<Property[]> {
     const ref = collection(this.firestore, 'properties');
     const q = query(ref, where('isPublic', '==', true));
-    return (collectionData(q, { idField: 'id' }) as Observable<Property[]>).pipe(
-      map(props => props.filter(p => isListingActive(p)))
-    );
+    return collection$<Property>(q, {
+      label: 'MarketplaceService.getListings',
+      collection: 'properties',
+      query: 'isPublic == true',
+    }).pipe(map(props => props.filter(p => isListingActive(p))));
   }
 
   getPropertyById(id: string): Observable<Property> {
