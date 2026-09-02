@@ -21,9 +21,8 @@ import { ServiceReceipt } from '../models/service-receipt.model';
 import { ServiceAssignment } from '../models/service-assignment.model';
 import { Property, propertyMemberUids } from '../models/property.model';
 import { AuthService } from '../auth/auth.service';
-import { ExpenseService } from './expense.service';
 import { PropertyService } from './property.service';
-import { accountingDateForMonth, isMonthKey } from '../utils/month.util';
+import { isMonthKey } from '../utils/month.util';
 
 export interface ManualReceiptInput {
   propertyId: string;
@@ -43,7 +42,6 @@ export interface ManualReceiptInput {
 export class ServiceReceiptService {
   private firestore = inject(Firestore);
   private auth = inject(AuthService);
-  private expenseService = inject(ExpenseService);
   private properties = inject(PropertyService);
 
   private safe(q: Query<DocumentData>, label: string, queryDesc: string): Observable<ServiceReceipt[]> {
@@ -251,55 +249,36 @@ export class ServiceReceiptService {
   // ── Pago ──────────────────────────────────────────────────────────────────
 
   /**
-   * Marca (o desmarca) un recibo como pagado. Al pagar se crea automáticamente un
-   * gasto de categoría 'servicio'; al desmarcar se elimina ese gasto.
+   * Marca (o desmarca) un recibo como pagado.
+   *
+   * El gasto asociado lo crea, actualiza y borra el trigger `syncReceiptExpense`.
+   * Aquí solo se registra el pago.
+   *
+   * Antes esa correspondencia se mantenía también desde el cliente, repartida en
+   * cinco métodos y cada uno con su `.catch(() => void 0)`. Cualquier fallo
+   * silencioso dejaba un gasto huérfano sumando en Finanzas, o un recibo pagado
+   * sin gasto — y no había forma de enterarse hasta cuadrar las cuentas.
    */
   async setPaid(receipt: ServiceReceipt, paid: boolean): Promise<void> {
     const ref = doc(this.firestore, `serviceReceipts/${receipt.id}`);
 
-    if (!paid) {
-      if (receipt.expenseId) {
-        await this.expenseService.delete(receipt.expenseId).catch(() => void 0);
-      }
-      await updateDoc(ref, {
-        isPaid: false,
-        paidAt: null,
-        paidBy: null,
-        expenseId: null,
-        updatedAt: serverTimestamp(),
-      });
-      return;
-    }
-
-    // Ya tiene gasto asociado: no se duplica
-    let expenseId = receipt.expenseId ?? null;
-    if (!expenseId) {
-      const propertyName = receipt.propertyName ?? (await this.propertyNameOf(receipt.propertyId));
-      const code = receipt.assignmentCode ? ` · ${receipt.assignmentCode}` : '';
-      // Id determinista, el mismo que calcula el trigger `syncReceiptExpense`:
-      // mientras cliente y servidor convivan escriben el MISMO documento en vez
-      // de crear dos gastos por el mismo recibo.
-      expenseId = await this.expenseService.create(
-        {
-          propertyId: receipt.propertyId,
-          propertyName,
-          category: 'servicio',
-          description: `${receipt.serviceName}${code}`,
-          amount: receipt.propertyAmount,
-          date: accountingDateForMonth(receipt.month),
-          notes: receipt.notes || null,
-        },
-        `expense_${receipt.id}`
-      );
-    }
-
-    await updateDoc(ref, {
-      isPaid: true,
-      paidAt: Timestamp.now(),
-      paidBy: this.auth.uid() ?? null,
-      expenseId,
-      updatedAt: serverTimestamp(),
-    });
+    await loggedWrite(
+      'ServiceReceiptService.setPaid',
+      () => updateDoc(ref, paid
+        ? {
+            isPaid: true,
+            paidAt: Timestamp.now(),
+            paidBy: this.auth.uid() ?? null,
+            updatedAt: serverTimestamp(),
+          }
+        : {
+            isPaid: false,
+            paidAt: null,
+            paidBy: null,
+            updatedAt: serverTimestamp(),
+          }),
+      { collection: 'serviceReceipts', query: `setPaid(${paid}) serviceReceipts/${receipt.id}` }
+    );
   }
 
   /** Marca varios recibos como pagados en una sola operación. */
@@ -320,50 +299,39 @@ export class ServiceReceiptService {
     );
   }
 
-  /** Actualiza el monto de un recibo, propagándolo al gasto asociado si ya estaba pagado. */
+  /** Actualiza el monto de un recibo. El gasto lo arrastra el trigger. */
   async updateAmount(receipt: ServiceReceipt, amount: number): Promise<void> {
     await this.update(receipt.id!, {
       propertyAmount: amount,
       ...(receipt.origin === 'manual' ? { totalAmount: amount } : {}),
     });
-    if (receipt.isPaid && receipt.expenseId) {
-      await this.expenseService.update(receipt.expenseId, { amount }).catch(() => void 0);
-    }
   }
 
   /**
-   * Mueve un recibo a otro mes (para corregir uno anotado en el mes equivocado).
-   * Si ya está pagado, arrastra la fecha de su gasto asociado, porque si no
-   * el recibo quedaría en un mes y el gasto seguiría contando en el otro.
+   * Mueve un recibo a otro mes, para corregir uno anotado donde no iba.
+   *
+   * La fecha del gasto la arrastra el trigger; si no, el recibo quedaría en un
+   * mes y el gasto seguiría contando en el otro.
    */
   async changeMonth(receipt: ServiceReceipt, newMonth: string): Promise<void> {
     if (!isMonthKey(newMonth)) {
       throw new Error(`Mes inválido: ${newMonth}. Se espera 'YYYY-MM'.`);
     }
     if (newMonth === receipt.month) return;
-
     await this.update(receipt.id!, { month: newMonth });
-
-    if (receipt.expenseId) {
-      await this.expenseService
-        .update(receipt.expenseId, { date: accountingDateForMonth(newMonth) })
-        .catch(() => void 0);
-    }
   }
 
+  /** Borra un recibo. Su gasto se va con él, por el trigger. */
   async delete(receipt: ServiceReceipt): Promise<void> {
-    if (receipt.expenseId) {
-      await this.expenseService.delete(receipt.expenseId).catch(() => void 0);
-    }
     await deleteDoc(doc(this.firestore, `serviceReceipts/${receipt.id}`));
   }
 
-  /** Borra los recibos de un código en un mes, con sus gastos asociados. */
+  /** Borra los recibos de un código en un mes. Sus gastos se van con ellos. */
   async deleteByMonth(assignmentId: string, month: string): Promise<void> {
     await this.deleteWhere(month, r => r.assignmentId === assignmentId);
   }
 
-  /** Borra los recibos de un servicio en un mes, con sus gastos asociados. */
+  /** Borra los recibos de un servicio en un mes. Sus gastos se van con ellos. */
   async deleteByServiceAndMonth(serviceId: string, month: string): Promise<void> {
     await this.deleteWhere(month, r => r.serviceId === serviceId);
   }
@@ -371,11 +339,9 @@ export class ServiceReceiptService {
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   /**
-   * Borra los recibos que cumplan los filtros, arrastrando el gasto de cada uno.
-   *
-   * Un gasto que sobrevive a su recibo sigue sumando en Finanzas sin nada que lo
-   * explique, así que se borra primero; si esa parte falla, el recibo se borra
-   * igual y el gasto queda visible y editable a mano, que es el mal menor.
+   * Borra los recibos de un mes que cumplan `match`. El gasto de cada uno se va
+   * con él por el trigger — un gasto que sobrevive a su recibo seguiría sumando
+   * en Finanzas sin nada que lo explique.
    */
   private async deleteWhere(
     month: string,
@@ -397,11 +363,7 @@ export class ServiceReceiptService {
     await Promise.all(
       snap.docs
         .filter(d => match({ id: d.id, ...d.data() } as ServiceReceipt))
-        .map(async d => {
-          const expenseId = (d.data() as ServiceReceipt).expenseId;
-          if (expenseId) await this.expenseService.delete(expenseId).catch(() => void 0);
-          await deleteDoc(doc(this.firestore, `serviceReceipts/${d.id}`));
-        })
+        .map(d => deleteDoc(doc(this.firestore, `serviceReceipts/${d.id}`)))
     );
   }
 
@@ -409,7 +371,4 @@ export class ServiceReceiptService {
     return this.properties.ownerIdOf(propertyId, this.auth.uid()!);
   }
 
-  private propertyNameOf(propertyId: string): Promise<string> {
-    return this.properties.nameOf(propertyId);
-  }
 }

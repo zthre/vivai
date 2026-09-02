@@ -159,13 +159,11 @@ documento que lo exceda tumba el listado entero) y al abanico de una consulta po
 
 ### Consistencia en el servidor (triggers)
 
-- **`syncReceiptExpense`** — el gasto de un recibo pagado lo mantiene el servidor:
-  crear, actualizar el monto y borrar. El id es `expense_{receiptId}`, el mismo que usa
-  `ServiceReceiptService.setPaid`, para que cliente y trigger escriban EL MISMO documento
-  mientras conviven. Un recibo antiguo que ya apunta a un gasto con id automático conserva
-  ese gasto (se respeta `receipt.expenseId`): crear el determinista al lado sería el
-  duplicado que se quiere evitar. **La lógica del cliente sigue ahí a propósito**; se
-  retira cuando el trigger esté verificado en producción.
+- **`syncReceiptExpense`** — el gasto de un recibo pagado lo mantiene **solo el servidor**:
+  crear, actualizar el monto, mover de mes y borrar. El id es `expense_{receiptId}`. Un
+  recibo antiguo que ya apunta a un gasto con id automático conserva ese gasto (se respeta
+  `receipt.expenseId`). **El cliente no toca `expenses` al pagar un recibo**: si añades un
+  camino que lo haga, vuelves a tener dos escritores del mismo documento.
 - **`syncMemberUids`** — ver la sección de `memberUids`.
 - **Región de los triggers de Firestore**: un trigger v2 debe vivir en una región
   compatible con la ubicación de la base de datos, o su creación falla con «Failed to
