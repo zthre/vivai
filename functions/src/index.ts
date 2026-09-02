@@ -5,3 +5,4 @@ export { generateMonthlySnapshot, generateMonthlySnapshotCallable as generateMon
 export { exportReport } from './exportReport';
 export { expireListings, expireListingsManual } from './expireListings';
 export { syncMemberUids, syncMemberUidsManual } from './syncMemberUids';
+export { syncReceiptExpense } from './syncReceiptExpense';

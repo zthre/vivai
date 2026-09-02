@@ -269,15 +269,21 @@ export class ServiceReceiptService {
     if (!expenseId) {
       const propertyName = receipt.propertyName ?? (await this.propertyNameOf(receipt.propertyId));
       const code = receipt.assignmentCode ? ` · ${receipt.assignmentCode}` : '';
-      expenseId = await this.expenseService.create({
-        propertyId: receipt.propertyId,
-        propertyName,
-        category: 'servicio',
-        description: `${receipt.serviceName}${code}`,
-        amount: receipt.propertyAmount,
-        date: accountingDateForMonth(receipt.month),
-        notes: receipt.notes || null,
-      });
+      // Id determinista, el mismo que calcula el trigger `syncReceiptExpense`:
+      // mientras cliente y servidor convivan escriben el MISMO documento en vez
+      // de crear dos gastos por el mismo recibo.
+      expenseId = await this.expenseService.create(
+        {
+          propertyId: receipt.propertyId,
+          propertyName,
+          category: 'servicio',
+          description: `${receipt.serviceName}${code}`,
+          amount: receipt.propertyAmount,
+          date: accountingDateForMonth(receipt.month),
+          notes: receipt.notes || null,
+        },
+        `expense_${receipt.id}`
+      );
     }
 
     await updateDoc(ref, {

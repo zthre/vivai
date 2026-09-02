@@ -48,3 +48,8 @@ Thumbs.db
 # Migraciones de datos (scripts/)
 /scripts/node_modules
 /scripts/*service-account*.json
+
+# Artefactos del emulador de Firebase
+firestore-debug.log
+firebase-debug.log
+ui-debug.log

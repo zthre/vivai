@@ -1,10 +1,17 @@
 /**
- * v1.0.0 — Generate Monthly Snapshot
+ * Generate Monthly Snapshot
  * - Cron: runs on the 1st of each month at 1:00 AM UTC-5.
  * - Callable: owner can trigger manually from analytics dashboard.
  *
  * For each owner's property, queries payments and expenses from the prior month,
  * checks occupancy status, and writes a monthlySnapshot document.
+ *
+ * El id del snapshot es determinista: `{ownerId}_{propertyId}_{month}`. Antes se
+ * buscaba por consulta y se hacia `add()` si no habia nada, asi que dos corridas
+ * concurrentes —el cron y un «Regenerar» manual— creaban documentos duplicados.
+ * Y Analytics SUMA los snapshots de un mes para agregar sus propiedades, asi que
+ * un duplicado no se ignora: se cuenta dos veces. Con id determinista no puede
+ * haber duplicados, y los que ya existan se limpian en la siguiente corrida.
  */
 
 import * as admin from 'firebase-admin';
@@ -15,7 +22,17 @@ import { Timestamp } from 'firebase-admin/firestore';
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
 
-async function buildSnapshots(year: number, month: number, ownerId?: string): Promise<void> {
+/** Id estable de un snapshot. Dos corridas escriben el mismo documento. */
+function snapshotId(ownerId: string, propertyId: string, monthKey: string): string {
+  return `${ownerId}_${propertyId}_${monthKey}`;
+}
+
+async function buildSnapshots(
+  year: number,
+  month: number,
+  ownerId?: string,
+  generatedBy: 'cron' | 'manual' = 'cron'
+): Promise<void> {
   const startDate = new Date(year, month - 1, 1);
   const endDate = new Date(year, month, 0, 23, 59, 59);
   const monthKey = `${year}-${String(month).padStart(2, '0')}`;
@@ -59,23 +76,29 @@ async function buildSnapshots(year: number, month: number, ownerId?: string): Pr
       totalExpenses,
       netBalance: totalCollected - totalExpenses,
       isOccupied,
+      // El modelo y Analytics esperan `occupancyRate` (0-100); aqui solo se
+      // escribia `isOccupied`, asi que el KPI de ocupacion salia NaN
+      // (`Math.max(0, undefined)`). Una propiedad esta ocupada o no lo esta:
+      // 100 o 0, y Analytics promedia entre propiedades.
+      occupancyRate: isOccupied ? 100 : 0,
       generatedAt: Timestamp.now(),
-      generatedBy: 'cron',
+      generatedBy,
     };
 
-    // Upsert — overwrite if exists (idempotent)
-    const existingSnap = await db
+    const id = snapshotId(ownerUid, pid, monthKey);
+    await db.collection('monthlySnapshots').doc(id).set(snapshotData, { merge: true });
+
+    // Limpieza de los duplicados que dejo el esquema anterior de ids automaticos.
+    // Sin esto, escribir el documento determinista SUMARIA uno mas en vez de
+    // reemplazarlos, porque Analytics agrega por mes sumando.
+    const stale = await db
       .collection('monthlySnapshots')
       .where('propertyId', '==', pid)
       .where('month', '==', monthKey)
-      .limit(1)
       .get();
-
-    if (!existingSnap.empty) {
-      await existingSnap.docs[0].ref.update({ ...snapshotData, generatedBy: 'manual' });
-    } else {
-      await db.collection('monthlySnapshots').add(snapshotData);
-    }
+    await Promise.all(
+      stale.docs.filter(d => d.id !== id).map(d => d.ref.delete())
+    );
   }
 }
 
@@ -99,6 +122,6 @@ export const generateMonthlySnapshotCallable = onCall(async request => {
   const endMonth = targetYear === new Date().getFullYear() ? currentMonth : 12;
 
   for (let m = 1; m <= endMonth; m++) {
-    await buildSnapshots(targetYear, m, request.auth.uid);
+    await buildSnapshots(targetYear, m, request.auth.uid, 'manual');
   }
 });
