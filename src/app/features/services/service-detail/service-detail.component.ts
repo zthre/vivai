@@ -16,6 +16,7 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { ServiceAssignment } from '../../../core/models/service-assignment.model';
 import { ServiceReceipt } from '../../../core/models/service-receipt.model';
 import { RegisterServiceDialogComponent } from '../register-service/register-service-dialog.component';
+import { AmortizeDialogComponent } from '../amortize/amortize-dialog.component';
 import { PermissionService } from '../../../core/auth/permissions';
 import { addMonths, monthKey, monthLabel, startOfMonth } from '../../../core/utils/month.util';
 
@@ -225,6 +226,11 @@ type DistMethod = 'por_persona' | 'partes_iguales' | 'manual';
                   }
 
                   @if (canWrite()) {
+                    <button (click)="amortize(r)" [disabled]="busy() || r.propertyAmount <= 0"
+                      title="Repartir parte de este monto entre otras propiedades"
+                      class="w-7 flex-shrink-0 p-1 text-warm-300 hover:text-primary-600 hover:bg-primary-50 rounded transition-colors disabled:opacity-50">
+                      <mat-icon class="text-[16px]">call_split</mat-icon>
+                    </button>
                     <button (click)="removeReceipt(r)" [disabled]="busy()" title="Eliminar recibo"
                       class="w-7 flex-shrink-0 p-1 text-warm-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors disabled:opacity-50">
                       <mat-icon class="text-[16px]">delete_outline</mat-icon>
@@ -723,6 +729,16 @@ export class ServiceDetailComponent implements OnInit {
     } finally {
       this.busy.set(false);
     }
+  }
+
+  /** Reparte parte del monto de un recibo entre otras propiedades. */
+  amortize(receipt: ServiceReceipt) {
+    this.dialog.open(AmortizeDialogComponent, {
+      width: '480px',
+      maxWidth: '95vw',
+      maxHeight: '90vh',
+      data: { receipt },
+    });
   }
 
   async updateAmount(receipt: ServiceReceipt, event: Event) {
