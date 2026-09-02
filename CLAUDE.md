@@ -242,7 +242,13 @@ Located in `functions/` (TypeScript, Firebase Functions v2):
 - `exportReport` — callable, generates CSV/XLSX and returns signed Storage URL
 - `expireListings` — cron diario 3:00 (America/Bogota), apaga `isPublic`/`isListed` de las publicaciones vencidas + `expireListingsManual` callable
 
-Deploy: `cd functions && npm install && cd .. && firebase deploy --only functions`
+Deploy: `firebase deploy --only functions --project vivai-now`
+
+`firebase.json` tiene un hook `predeploy` que corre `npm ci` y `npm run build` en `functions/`
+antes de subir. Es necesario: el CLI valida que exista `functions/lib/index.js` —el compilado—
+y `lib/` no está versionado, así que sin el hook un clon limpio falla con «There was an error
+reading functions/package.json», y un `lib/` viejo se desplegaría tal cual, subiendo código
+obsoleto sin avisar.
 
 Required env vars for functions: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `APP_URL` (Stripe); Firebase "Trigger Email" extension must be installed for email delivery.
 
