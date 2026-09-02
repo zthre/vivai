@@ -23,28 +23,25 @@ jobs:
       - name: Build project
         run: npm run build
 
-      # Solo las reglas.
+      # Reglas e índices. Sin los índices, una consulta con filtro + orden falla
+      # con `failed-precondition` y la pantalla se queda vacía.
       #
-      # Los índices NO se despliegan aquí todavía. Cuando el proyecto tiene algún
-      # índice que no está en firestore.indexes.json, el CLI aborta el despliegue
-      # entero con «Pass the --force flag to use this command in non-interactive
-      # mode» — imprime que los borraría con --force, pero acto seguido pregunta
-      # igual, y preguntar en modo no interactivo lanza. No llega a borrar nada,
-      # pero tumba el paso y con él el despliegue del hosting.
+      # Requisito para que esto no tumbe el workflow: firestore.indexes.json tiene
+      # que ser un SUPERCONJUNTO de lo que hay en el proyecto. Si al proyecto le
+      # sobra alguno, el CLI pregunta si borrarlo — y preguntar en modo no
+      # interactivo lanza «Pass the --force flag», abortando el despliegue entero
+      # (incluido el hosting) aunque no llegue a borrar nada.
       #
-      # Y --force NO es la salida: borraría de verdad los índices del proyecto que
-      # falten en el archivo, y las consultas que dependan de ellos empezarían a
-      # fallar con `failed-precondition`.
-      #
-      # Para reactivarlo: reconciliar el archivo con el proyecto
-      # (`npx firebase-tools@13 firestore:indexes --project vivai-now` y añadir lo
-      # que falte). Cuando no quede ningún índice por borrar, el CLI ya no pregunta
-      # y se puede volver a `--only firestore:rules,firestore:indexes`.
-      - name: Deploy Firestore rules
+      # NUNCA añadir --force para saltárselo: borraría de verdad esos índices y
+      # las consultas que dependan de ellos empezarían a fallar. Lo correcto es
+      # reconciliar:
+      #   npx firebase-tools@13 firestore:indexes --project vivai-now
+      # y añadir al archivo lo que falte.
+      - name: Deploy Firestore rules and indexes
         run: |
           echo '${{ secrets.VIVAI_FIREBASE }}' > "$RUNNER_TEMP/firebase-key.json"
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-key.json"
-          npx firebase-tools@13 deploy --only firestore:rules --project vivai-now --non-interactive
+          npx firebase-tools@13 deploy --only firestore:rules,firestore:indexes --project vivai-now --non-interactive
 
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
