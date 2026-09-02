@@ -306,6 +306,28 @@ service cloud.firestore {
       allow update, delete: if isMember() || (request.auth != null && canWriteReceipt());
     }
 
+    // ServiceBills: el total de una factura y como se reparte.
+    match /serviceBills/{billId} {
+      allow read: if isMember();
+      allow create: if willBeMember();
+      allow update, delete: if isMember();
+    }
+
+    // Collaborators: los permisos de un colaborador con un dueno.
+    //
+    // El dueno los gestiona; el colaborador solo necesita LEER los suyos, porque
+    // la app decide con ellos que puede hacer. Un tercero no ve ninguno.
+    match /collaborators/{relationId} {
+      allow read: if request.auth != null && (
+        request.auth.uid == resource.data.ownerId
+        || request.auth.uid == resource.data.collaboratorUid
+      );
+      allow create: if request.auth != null
+                    && request.auth.uid == request.resource.data.ownerId;
+      allow update, delete: if request.auth != null
+                            && request.auth.uid == resource.data.ownerId;
+    }
+
     // Leases: el historial de arrendamientos de una propiedad.
     //
     // El inquilino puede leer el suyo —es su contrato— pero no los anteriores ni

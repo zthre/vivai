@@ -69,6 +69,8 @@ All docs owned by a user have `ownerId = uid`. Key collections:
 | `paymentLinks` | `propertyId`, `month: 'YYYY-MM'`, `status: 'active'\|'paid'\|'expired'`, `externalId` (Stripe session) |
 | `serviceAssignments` | `ownerId`, `serviceId`, `serviceName`, `code?`, `description?`, `propertyIds[]`, `distributionMethod` |
 | `serviceReceipts` | `ownerId`, `serviceId`, `assignmentId?` (null en manuales), `assignmentCode?`, `propertyId`, `propertyName?`, `month: 'YYYY-MM'`, `origin: 'manual'\|'distribucion'`, `totalAmount`, `propertyAmount`, `isPaid`, `paidAt?`, `expenseId?` |
+| `collaborators` | id `{ownerId}_{uid}`, `permissions` — los permisos de colaborador, ya no dentro de cada propiedad |
+| `serviceBills` | id `{assignmentId}_{month}`, `totalAmount`, `distributionMethod` — el total de la factura, ya no copiado en cada recibo |
 | `leases` | `propertyId`, `ownerId`, `memberUids[]`, `tenantUid?`, `rentPrice`, `priceHistory[]`, `startDate`, `endDate` (null = vigente) |
 | `monthlySnapshots` | `ownerId`, `propertyId`, `month: 'YYYY-MM'`, aggregated financials |
 | `mail` | Written by Cloud Functions; consumed by Firebase "Trigger Email" extension |
@@ -222,13 +224,32 @@ para siempre quién vivía y a cuánto.
 - Si abrir el arrendamiento falla, la asignación del inquilino **no** se deshace: se pierde
   la entrada de historial, no el dato operativo.
 
-### Cabeceras y diálogos — dos trampas
+### `collaborators` y `serviceBills` — dos duplicaciones retiradas
+
+- **`collaborators/{ownerId}_{uid}`** guarda los permisos. Antes se replicaban en
+  `property.collaboratorPermissions[uid]`: un colaborador en 14 inmuebles eran 14 copias, y
+  cambiar un permiso, 14 escrituras sin atomicidad. `PermissionService` lee de la colección
+  y **cae al mapa viejo** si no hay documento, que es lo que permite desplegar sin esperar
+  al backfill. El mapa se conserva como respaldo; no lo borres.
+- **`serviceBills/{assignmentId}_{month}`** guarda el total de la factura. Antes se copiaba
+  en cada recibo del reparto, así que corregir un dígito obligaba a **regenerar** — borrar
+  y recrear los recibos, incluidos los pagados con su gasto. Ahora
+  `ServiceReceiptService.updateBillTotal` recalcula los montos **en sitio**: los recibos
+  conservan id, estado de pago y gasto. El reparto vive en `distribute()`
+  (`service-bill.model.ts`) para que generar y corregir usen el mismo cálculo.
+
+### Cabeceras y diálogos — tres trampas
 
 - **`Cross-Origin-Opener-Policy: same-origin-allow-popups`** (`firebase.json`). NO lo cambies
   a `same-origin`: `signInWithPopup` necesita conservar la referencia a la ventana de Google
   para sondear `popup.closed`, y con la política estricta el login se queda colgado sin
   ningún error que apunte a la cabecera. El aviso «COOP policy would block the window.closed
   call» que sale en consola es preventivo, no un fallo.
+- **Caché del hosting**: `index.html` va con `Cache-Control: no-cache` y los ficheros con
+  hash con `immutable`. Sin eso, desplegar con una pestaña abierta rompe la navegación:
+  el `index.html` cacheado pide trozos de la versión anterior que el despliegue ya
+  reemplazó, y sale «Failed to fetch dynamically imported module». Para quien ya la tenía
+  abierta, `recoverFromStaleChunk` en `app.config.ts` recarga una vez.
 - **Abre los diálogos con `DialogService`, no con `MatDialog`.** Material 17 marca el fondo
   con `aria-hidden` antes de mover el foco, así que el botón que abrió el diálogo se queda
   con el foco dentro de la zona oculta y Chrome se niega a aplicarlo. `DialogService` suelta

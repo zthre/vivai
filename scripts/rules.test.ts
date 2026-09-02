@@ -222,6 +222,18 @@ async function seedLeases(): Promise<void> {
   });
 }
 
+/** Permisos de colaborador y factura de servicio, en sus colecciones propias. */
+async function seedPhase5(): Promise<void> {
+  await put(`collaborators/${OWNER}_${COLLAB}`, {
+    ownerId: OWNER, collaboratorUid: COLLAB,
+  });
+  await put('serviceBills/asg-1_2026-09', {
+    assignmentId: 'asg-1', serviceId: 'svc-1', ownerId: OWNER,
+    memberUids: CIRCLE, month: '2026-09', totalAmount: 180000,
+    distributionMethod: 'partes_iguales',
+  });
+}
+
 async function seedUsers(): Promise<void> {
   await put(`users/${COLLAB}`, {
     uid: COLLAB, email: 'colab@example.com', displayName: 'Ana Colaboradora',
@@ -367,6 +379,19 @@ async function suite(strict: boolean): Promise<void> {
   await denied('inquilino NO lee el del anterior', read(tenant, 'leases/lease-anterior'));
   await denied('extraño NO lee arrendamientos', read(stranger, 'leases/lease-actual'));
 
+  // ── Permisos y facturas (fase 5) ────────────────────────────────────────
+  await allowed('dueño lee los permisos de su colaborador',
+    read(owner, `collaborators/${OWNER}_${COLLAB}`));
+  await allowed('colaborador lee SUS permisos',
+    read(collab, `collaborators/${OWNER}_${COLLAB}`));
+  await denied('extraño NO lee permisos ajenos',
+    read(stranger, `collaborators/${OWNER}_${COLLAB}`));
+
+  await allowed('dueño lee la factura', read(owner, 'serviceBills/asg-1_2026-09'));
+  await allowed('colaborador lee la factura', read(collab, 'serviceBills/asg-1_2026-09'));
+  await denied('extraño NO lee la factura', read(stranger, 'serviceBills/asg-1_2026-09'));
+  await denied('inquilino NO lee la factura', read(tenant, 'serviceBills/asg-1_2026-09'));
+
   // El agujero que cerró todo esto.
   await denied('extraño NO lee serviceReceipts', read(stranger, 'serviceReceipts/rec-1'));
   await denied('extraño NO lee services', read(stranger, 'services/svc-1'));
@@ -385,6 +410,7 @@ async function main(): Promise<void> {
   await seedInvites();
   await seedUsers();
   await seedLeases();
+  await seedPhase5();
   await suite(true);
 
   console.log(`\n  ${passes} ok, ${failures} fallos\n`);

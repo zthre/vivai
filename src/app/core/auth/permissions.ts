@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { ColaboradorPermission, Property } from '../models/property.model';
 import { AuthService } from './auth.service';
+import { CollaboratorService } from '../services/collaborator.service';
 
 /**
  * Permisos de colaborador, en un solo sitio.
@@ -72,23 +73,36 @@ export function propertiesWithPermission(
 
 /**
  * Las mismas comprobaciones, ya resueltas contra el usuario en sesión.
- * Pensado para consumirse dentro de un `computed()`: lee `auth.uid()`, que es
- * una señal, así que la vista se recalcula sola al cambiar de sesión.
+ * Pensado para consumirse dentro de un `computed()`: lee señales, así que la
+ * vista se recalcula sola al cambiar de sesión o de permisos.
+ *
+ * Los permisos salen de la colección `collaborators`, un documento por pareja
+ * dueño-colaborador. Si no hay documento —un colaborador anterior a la
+ * migración— se cae al mapa que vive dentro de la propiedad, que es de donde
+ * venían. Ese respaldo es lo que permite desplegar sin esperar al backfill.
  */
 @Injectable({ providedIn: 'root' })
 export class PermissionService {
   private auth = inject(AuthService);
+  private collaborators = inject(CollaboratorService);
 
   can(property: Property | null | undefined, key: PermissionKey): boolean {
-    return hasPermission(property, this.auth.uid(), key);
+    const uid = this.auth.uid();
+    if (!uid || !property) return false;
+    if (property.ownerId === uid) return true;
+
+    const global = this.collaborators.permissionsByOwner().get(property.ownerId);
+    if (global) return global[key] !== false;
+
+    return hasPermission(property, uid, key);
   }
 
   canOnAny(properties: readonly Property[], key: PermissionKey): boolean {
-    return hasPermissionOnAny(properties, this.auth.uid(), key);
+    return properties.some(p => this.can(p, key));
   }
 
   filterByPermission(properties: readonly Property[], key: PermissionKey): Property[] {
-    return propertiesWithPermission(properties, this.auth.uid(), key);
+    return properties.filter(p => this.can(p, key));
   }
 
   isOwnerOf(property: Property | null | undefined): boolean {
