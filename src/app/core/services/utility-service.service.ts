@@ -132,8 +132,13 @@ export class UtilityServiceService {
 
   /** Cuántos recibos existen para un servicio, en cualquier mes. */
   async countReceipts(serviceId: string): Promise<number> {
+    const uid = this.auth.uid();
+    if (!uid) return 0;
+    // Acotado al círculo: sin eso, un recibo ajeno deniega la consulta entera y
+    // el conteo se convierte en una excepción justo antes de borrar un servicio.
     const q = query(
       collection(this.firestore, 'serviceReceipts'),
+      where('memberUids', 'array-contains', uid),
       where('serviceId', '==', serviceId)
     );
     return (await getDocs(q)).size;
@@ -153,7 +158,11 @@ export class UtilityServiceService {
     const receiptsKept = await this.countReceipts(serviceId);
 
     const assignmentsSnap = await getDocs(
-      query(collection(this.firestore, 'serviceAssignments'), where('serviceId', '==', serviceId))
+      query(
+        collection(this.firestore, 'serviceAssignments'),
+        where('memberUids', 'array-contains', this.auth.uid()!),
+        where('serviceId', '==', serviceId)
+      )
     );
     await loggedWrite(
       'UtilityServiceService.deleteWithAssignments:assignments',

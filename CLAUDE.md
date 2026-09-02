@@ -136,6 +136,15 @@ documento que lo exceda tumba el listado entero) y al abanico de una consulta po
   `getByProperty` sobre una lista — eso está reservado a la vista de UNA propiedad.
 - **Todo camino de escritura nuevo debe sellar `memberUids` y `period`**: un documento
   sin ellos desaparece de estas consultas en silencio, y las cifras salen de menos.
+- **Toda consulta de listado sobre estas colecciones debe filtrar por `memberUids`.**
+  No es optimización, es corrección: en Firestore basta UN documento que no pase las
+  reglas para denegar el listado entero. Una consulta como
+  `where('serviceId','==',x)` sin acotar se cae en cuanto exista un documento de otro
+  círculo — y el síntoma engaña, porque la caché local sirve los datos y desaparecen
+  milisegundos después, cuando el servidor deniega.
+  Si el corte que necesitas exigiría un índice compuesto nuevo, **derívalo de una
+  consulta ya acotada y filtra en memoria** (así están `getByServiceAndMonth`,
+  `getByAssignmentAndMonth` y `getByPropertyAndMonth`): reutiliza índice y caché.
 - **La lectura está cerrada**: `services`, `serviceReceipts` y `serviceAssignments` ya no
   tienen `allow read: if request.auth != null`. Un documento **sin `memberUids` es
   ilegible, incluso para su dueño** — por eso todo camino de escritura debe sellarlo, y
