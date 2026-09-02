@@ -23,7 +23,7 @@
  */
 
 import { initializeApp, applicationDefault } from 'firebase-admin/app';
-import { getFirestore, Firestore, Timestamp } from 'firebase-admin/firestore';
+import { getFirestore, Firestore, Timestamp, FieldValue } from 'firebase-admin/firestore';
 
 const PROJECT_ID = process.env['FIREBASE_PROJECT'] ?? 'vivai-now';
 const PAGE_SIZE = 400;
@@ -65,6 +65,8 @@ const collaboratorOwners = new Map<string, Set<string>>();
 const propertyOwners = new Map<string, string>();
 /** serviceId → uids que lo comparten, deducidos de donde se usa. */
 const serviceCircles = new Map<string, Set<string>>();
+/** propertyId → nombre. */
+const propertyNames = new Map<string, string>();
 
 /** Fase 2: clave de mes en pagos y gastos, derivada de `date`. */
 const period: Migration = {
@@ -296,8 +298,47 @@ const serviceCircle: Migration = {
   },
 };
 
+/**
+ * `propertyName` en pagos, y retirada de `isListed`.
+ *
+ * Los pagos eran la unica coleccion sin el nombre de la propiedad
+ * denormalizado, asi que cualquier lista tenia que cruzar contra el catalogo
+ * solo para poner una etiqueta.
+ *
+ * `isListed` se escribia en dos sitios y no se leia en ninguno: el marketplace
+ * consulta `isPublic`. Se borra de los documentos para que nadie lo confunda con
+ * un campo vivo al mirarlos en la consola.
+ */
+const cleanup: Migration = {
+  name: 'cleanup',
+  description: 'Anade propertyName a payments y borra el campo muerto isListed de properties',
+  collections: ['payments', 'properties'],
+
+  async prepare(db) {
+    const snap = await db.collection('properties').get();
+    for (const doc of snap.docs) {
+      const name = doc.data()['name'] as string | undefined;
+      if (name) propertyNames.set(doc.id, name);
+    }
+    console.log(`  (${propertyNames.size} nombres de propiedad en memoria)\n`);
+  },
+
+  patch(data, collection) {
+    if (collection === 'properties') {
+      return 'isListed' in data ? { isListed: FieldValue.delete() } : null;
+    }
+
+    const propertyId = data['propertyId'] as string | undefined;
+    const name = propertyId ? propertyNames.get(propertyId) : undefined;
+    // Una propiedad ya borrada no tiene nombre que copiar; el pago se queda como
+    // esta y la pantalla sigue cayendo a su respaldo.
+    if (!name || data['propertyName'] === name) return null;
+    return { propertyName: name };
+  },
+};
+
 const MIGRATIONS: Migration[] = [
-  period, memberUids, ownerUids, serviceAssignmentOwner, serviceCircle,
+  period, memberUids, ownerUids, serviceAssignmentOwner, serviceCircle, cleanup,
 ];
 
 // ── Motor ───────────────────────────────────────────────────────────────────

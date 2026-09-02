@@ -66,7 +66,6 @@ export interface Property {
   status: 'disponible' | 'ocupado';
   isForRent: boolean;
   isForSale: boolean;
-  isListed: boolean;
   rentPrice?: number | null;
   salePrice?: number | null;
   publicDescription?: string | null;

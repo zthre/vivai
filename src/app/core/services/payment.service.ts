@@ -115,6 +115,7 @@ export class PaymentService {
     // Always attribute the payment to the property owner (not the colaborador who might be creating it)
     const ownerId = await this.properties.ownerIdOf(data.propertyId, uid);
     const memberUids = await this.properties.memberUidsOf(data.propertyId, ownerId);
+    const propertyName = await this.properties.nameOf(data.propertyId);
     const ref = collection(this.firestore, 'payments');
     await loggedWrite(
       'PaymentService.create',
@@ -122,6 +123,7 @@ export class PaymentService {
         ...data,
         date: Timestamp.fromDate(data.date),
         period: monthKey(data.date),
+        propertyName,
         ownerId,
         memberUids,
         createdBy: uid,

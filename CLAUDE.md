@@ -61,8 +61,8 @@ All docs owned by a user have `ownerId = uid`. Key collections:
 | Collection | Key fields |
 |---|---|
 | `users` | `roles[]`, `propertyIds[]`, `collaboratingPropertyIds[]` |
-| `properties` | `ownerId`, `collaboratorUids[]`, `pendingCollaboratorEmails[]`, `collaboratorPermissions: {uid: ColaboradorPermission}`, `status: 'ocupado'\|'disponible'`, `isForRent`, `isForSale`, `isListed`, `isPublic`, `publishedAt?`, `listingExpiresAt?`, `listingExpiredAt?`, `tenantUid?`, `paymentFree?`, `paymentDueDay?`, `notificationsEnabled?`, `purchasePrice?`, `purchaseDate?` |
-| `payments` | `ownerId`, `propertyId`, `date: Timestamp`, `source?: 'manual'\|'gateway'` |
+| `properties` | `ownerId`, `collaboratorUids[]`, `pendingCollaboratorEmails[]`, `collaboratorPermissions: {uid: ColaboradorPermission}`, `status: 'ocupado'\|'disponible'`, `isForRent`, `isForSale`, `isPublic`, `publishedAt?`, `listingExpiresAt?`, `listingExpiredAt?`, `tenantUid?`, `paymentFree?`, `paymentDueDay?`, `notificationsEnabled?`, `purchasePrice?`, `purchaseDate?` |
+| `payments` | `ownerId`, `memberUids[]`, `propertyId`, `propertyName?`, `date: Timestamp`, `period: 'YYYY-MM'`, `source?: 'manual'\|'gateway'` |
 | `expenses` | `ownerId`, `propertyId`, `date: Timestamp`, `category: 'reparacion'\|'impuesto'\|'servicio'\|'otro'` |
 | `tickets` | `ownerId`, `tenantUid`, `propertyId`, `status` |
 | `notifications` | `ownerId`, `type: 'payment_reminder'\|'payment_overdue'\|'ticket_update'`, `viewedByOwner` |
@@ -279,7 +279,7 @@ Located in `functions/` (TypeScript, Firebase Functions v2):
 - `expirePaymentLinks` — cron daily, marks stale links as `expired`
 - `generateMonthlySnapshot` — cron 1st of month + `generateMonthlySnapshotManual` callable
 - `exportReport` — callable, generates CSV/XLSX and returns signed Storage URL
-- `expireListings` — cron diario 3:00 (America/Bogota), apaga `isPublic`/`isListed` de las publicaciones vencidas + `expireListingsManual` callable
+- `expireListings` — cron diario 3:00 (America/Bogota), apaga `isPublic` de las publicaciones vencidas + `expireListingsManual` callable
 
 Deploy: `firebase deploy --only functions --project vivai-now`
 
@@ -295,7 +295,7 @@ Required env vars for functions: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `
 
 - **`effect()` with signal writes** requires `{ allowSignalWrites: true }` option.
 - **Template literals** in inline TypeScript templates: use `&#36;{{ }}` instead of `${{ }}` to avoid interpolation conflicts.
-- **Marketplace Firestore query** uses `where('isListed', '==', true)` — old properties need re-save to appear.
+- **Marketplace Firestore query** uses `where('isPublic', '==', true)` y filtra la vigencia en memoria. `isListed` **ya no existe**: se escribía en dos sitios y no se leía en ninguno.
 - **`PropertyService.getAll()`** does `combineLatest` of owned + collaborated properties, deduplicating by id. Está cacheado con `shareReplay({ bufferSize: 1, refCount: false })`: las ~18 pantallas que lo consumen comparten un único par de listeners. No lo envuelvas en otro `shareReplay` ni lo reconstruyas por pantalla.
 - **`PropertyService.snapshot(id)` / `ownerIdOf(id, fallback)` / `nameOf(id)`** — lectura puntual de una propiedad, memoizada 5 s. Pagos, gastos, recibos y servicios la usan para resolver el dueño antes de escribir. No hagas `getDoc(properties/{id})` a mano desde un servicio.
 - **Escrituras masivas**: los métodos globales de colaborador usan `writeBatch` (helper privado `batched()`, lotes de 500). Un `for` con `updateDoc` sueltos no es atómico.

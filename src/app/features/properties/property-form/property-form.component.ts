@@ -417,7 +417,6 @@ export class PropertyFormComponent implements OnInit {
         rentPrice: isForRent ? (v.rentPrice || null) : null,
         isForSale,
         salePrice: isForSale ? (v.salePrice || null) : null,
-        isListed: isForRent || isForSale,
         publicDescription: (isForRent || isForSale) ? (v.publicDescription || null) : null,
         tags: this.tags(),
       };

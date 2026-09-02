@@ -3,6 +3,12 @@ import { Timestamp } from '@angular/fire/firestore';
 export interface Payment {
   id?: string;
   propertyId: string;
+  /**
+   * Nombre de la propiedad, denormalizado como en gastos, tickets y recibos.
+   * Sin él, cualquier lista de pagos tenía que cruzar contra el catálogo de
+   * propiedades solo para poner una etiqueta.
+   */
+  propertyName?: string;
   ownerId: string;
   /** Círculo de la propiedad: `[ownerId, ...collaboratorUids]`. Ver `propertyMemberUids`. */
   memberUids?: string[];
