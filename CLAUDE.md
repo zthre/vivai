@@ -72,7 +72,13 @@ All docs owned by a user have `ownerId = uid`. Key collections:
 | `monthlySnapshots` | `ownerId`, `propertyId`, `month: 'YYYY-MM'`, aggregated financials |
 | `mail` | Written by Cloud Functions; consumed by Firebase "Trigger Email" extension |
 
-Firestore rules are in `firestore.rules` y los índices compuestos en `firestore.indexes.json`; ambos **se despliegan solos**: `.github/workflows/firebase-hosting-merge.yml` corre `firebase deploy --only firestore:rules,firestore:indexes` en cada push a `main`, antes del hosting. En modo no interactivo el CLI solo crea los índices que falten — nunca borra los que existan en el proyecto y no estén en el archivo. Si añades una consulta con filtro + orden, añade su índice ahí. No hay que pegarlas a mano en la consola, y lo pegado a mano se sobrescribe en el siguiente merge a `main`. Fuera de ese flujo: `npx firebase-tools@13 deploy --only firestore:rules --project vivai-now`.
+Firestore rules are in `firestore.rules` y **se despliegan solas**: `.github/workflows/firebase-hosting-merge.yml` corre `firebase deploy --only firestore:rules` en cada push a `main`, antes del hosting.
+
+Los índices compuestos están versionados en `firestore.indexes.json` pero **se despliegan a mano**, por ahora:
+```bash
+npx firebase-tools@13 deploy --only firestore:indexes --project vivai-now
+```
+No están en CI porque el CLI aborta el despliegue entero si el proyecto tiene algún índice que no esté en el archivo: imprime que lo borraría con `--force`, pero pregunta igual, y preguntar en modo no interactivo lanza `Pass the --force flag to use this command in non-interactive mode`. No borra nada, pero tumba el paso y con él el hosting. **`--force` no es la salida**: sí borraría esos índices y las consultas que dependan de ellos empezarían a fallar con `failed-precondition`. Para volver a meterlo en CI hay que reconciliar primero el archivo con el proyecto (`npx firebase-tools@13 firestore:indexes --project vivai-now`). Si añades una consulta con filtro + orden, añade su índice ahí. No hay que pegarlas a mano en la consola, y lo pegado a mano se sobrescribe en el siguiente merge a `main`. Fuera de ese flujo: `npx firebase-tools@13 deploy --only firestore:rules --project vivai-now`.
 
 Marketplace items are publicly readable when `isPublic == true` on property.
 
