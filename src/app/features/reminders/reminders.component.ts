@@ -6,6 +6,9 @@ import { switchMap } from 'rxjs';
 import { PropertyService } from '../../core/services/property.service';
 import { PaymentService } from '../../core/services/payment.service';
 import { Property } from '../../core/models/property.model';
+import { Payment } from '../../core/models/payment.model';
+import { ServiceReceipt } from '../../core/models/service-receipt.model';
+import { ServiceReceiptService } from '../../core/services/service-receipt.service';
 import { currentMonthKey, fromMonthKey } from '../../core/utils/month.util';
 
 @Component({
@@ -19,7 +22,7 @@ import { currentMonthKey, fromMonthKey } from '../../core/utils/month.util';
       <div class="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 class="text-2xl font-bold text-warm-900">Recordatorios de pago</h1>
-          <p class="text-warm-500 text-sm mt-1">Envía recordatorios manuales por WhatsApp, uno a uno o a todos los pendientes</p>
+          <p class="text-warm-500 text-sm mt-1">Arriendo y servicios pendientes, por WhatsApp — uno a uno o a todos</p>
         </div>
         @if (pendingProperties().length > 0) {
           <button
@@ -138,6 +141,7 @@ import { currentMonthKey, fromMonthKey } from '../../core/utils/month.util';
 export class RemindersComponent {
   private propertyService = inject(PropertyService);
   private paymentService = inject(PaymentService);
+  private receiptService = inject(ServiceReceiptService);
 
   private now = new Date();
 
@@ -154,49 +158,118 @@ export class RemindersComponent {
     this.properties().filter(p => p.status === 'ocupado')
   );
 
+  /**
+   * Por círculo, no por `ownerId`: la consulta anterior no devolvía nada a un
+   * colaborador, así que le salían TODAS las propiedades como pendientes y los
+   * recordatorios se enviaban a gente que ya había pagado.
+   */
+  private period$ = toObservable(this.selectedMonthStr);
+
   paymentsThisMonth = toSignal(
-    toObservable(this.selectedMonthDate).pipe(
-      switchMap(d => {
-        const start = new Date(d.getFullYear(), d.getMonth(), 1);
-        const end = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
-        return this.paymentService.getByMonth(start, end);
-      })
-    ),
-    { initialValue: [] }
+    this.period$.pipe(switchMap(period => this.paymentService.getByCircleAndPeriod(period))),
+    { initialValue: [] as Payment[] }
+  );
+
+  private receiptsThisMonth = toSignal(
+    this.period$.pipe(switchMap(month => this.receiptService.getByCircleAndMonth(month))),
+    { initialValue: [] as ServiceReceipt[] }
   );
 
   paidPropertyIds = computed(() => new Set(this.paymentsThisMonth().map(p => p.propertyId)));
+
+  /** Recibos de servicio sin pagar, por propiedad. */
+  private pendingServicesByProperty = computed(() => {
+    const map = new Map<string, ServiceReceipt[]>();
+    for (const r of this.receiptsThisMonth()) {
+      if (r.isPaid) continue;
+      map.set(r.propertyId, [...(map.get(r.propertyId) ?? []), r]);
+    }
+    return map;
+  });
 
   filteredProperties = computed(() => {
     const pid = this.selectedPropertyId();
     return pid ? this.allOccupied().filter(p => p.id === pid) : this.allOccupied();
   });
 
+  /** Servicios pendientes de una propiedad este mes. */
+  pendingServices(propertyId: string): ServiceReceipt[] {
+    return this.pendingServicesByProperty().get(propertyId) ?? [];
+  }
+
+  /** Arriendo pendiente más servicios pendientes. */
+  pendingTotal(prop: Property): number {
+    const rent = this.rentPending(prop)
+      ? (prop.tenantRentPrice ?? prop.rentPrice ?? 0)
+      : 0;
+    return rent + this.servicesTotal(prop.id!);
+  }
+
+  servicesTotal(propertyId: string): number {
+    return this.pendingServices(propertyId).reduce((s, r) => s + (r.propertyAmount ?? 0), 0);
+  }
+
+  /**
+   * ¿Falta el arriendo?
+   *
+   * `paymentFree` significa que a ese inquilino no se le cobra arriendo, así que
+   * nunca está pendiente. Antes no se miraba, y esas propiedades salían como
+   * pendientes todos los meses, para siempre.
+   */
+  rentPending(prop: Property): boolean {
+    return !prop.paymentFree && !this.paidPropertyIds().has(prop.id!);
+  }
+
+  /** Al día: ni arriendo ni servicios pendientes. */
+  isPaid(propertyId: string): boolean {
+    const prop = this.filteredProperties().find(p => p.id === propertyId);
+    if (!prop) return false;
+    return !this.rentPending(prop) && this.pendingServices(propertyId).length === 0;
+  }
+
   pendingProperties = computed(() =>
-    this.filteredProperties().filter(p => !!p.tenantPhone && !this.paidPropertyIds().has(p.id!))
+    this.filteredProperties().filter(p => !!p.tenantPhone && !this.isPaid(p.id!))
   );
 
   paidCount = computed(() =>
-    this.filteredProperties().filter(p => this.paidPropertyIds().has(p.id!)).length
+    this.filteredProperties().filter(p => this.isPaid(p.id!)).length
   );
 
-  isPaid(propertyId: string): boolean {
-    return this.paidPropertyIds().has(propertyId);
-  }
-
+  /**
+   * El mensaje detalla arriendo y servicios por separado, con su total.
+   *
+   * Antes solo hablaba del arriendo, así que al inquilino le llegaban dos avisos
+   * inconexos —o ninguno por los servicios— y no sabía cuánto tenía que pagar en
+   * total.
+   */
   whatsappLink(prop: Property): string {
     const phone = (prop.tenantPhone ?? '').replace(/\D/g, '');
     const name = prop.tenantName ?? 'Inquilino';
-    let msg = `Hola ${name}, te recordamos que tu pago de arriendo de *${prop.name}*`;
-    if (prop.paymentDueDay) {
-      msg += ` vence el *día ${prop.paymentDueDay}* de este mes`;
-    } else {
-      msg += ` está pendiente este mes`;
+    const money = (n: number) => `$${n.toLocaleString('es-CO')}`;
+
+    const lines: string[] = [];
+    let total = 0;
+
+    if (this.rentPending(prop)) {
+      const amount = prop.tenantRentPrice ?? prop.rentPrice ?? 0;
+      const due = prop.paymentDueDay ? ` (vence el día ${prop.paymentDueDay})` : '';
+      lines.push(`• Arriendo: *${money(amount)}*${due}`);
+      total += amount;
     }
-    if (prop.tenantRentPrice) {
-      msg += `. Monto: *$${prop.tenantRentPrice.toLocaleString('es-CO')}*`;
+
+    for (const r of this.pendingServices(prop.id!)) {
+      const amount = r.propertyAmount ?? 0;
+      lines.push(`• ${r.serviceName}: *${money(amount)}*`);
+      total += amount;
     }
-    msg += '.';
+
+    // Sin nada pendiente no se envía nada; el botón no aparece en ese caso.
+    if (lines.length === 0) return `https://wa.me/${phone}`;
+
+    let msg = `Hola ${name}, te recordamos lo pendiente de *${prop.name}* este mes:\n\n`;
+    msg += lines.join('\n');
+    if (lines.length > 1) msg += `\n\nTotal: *${money(total)}*`;
+
     return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
   }
 
