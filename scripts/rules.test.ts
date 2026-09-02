@@ -206,6 +206,18 @@ async function seedLegacy(): Promise<void> {
  * y por `pendingCollaboratorEmails`— para vincularse. Si las reglas no dejan
  * LEER esa propiedad, la consulta se deniega y el vinculo nunca ocurre.
  */
+async function seedUsers(): Promise<void> {
+  await put(`users/${COLLAB}`, {
+    uid: COLLAB, email: 'colab@example.com', displayName: 'Ana Colaboradora',
+    roles: ['colaborador'], collaboratingPropertyIds: [PROPERTY],
+    ownerUids: [OWNER],
+  });
+  await put(`users/${STRANGER}`, {
+    uid: STRANGER, email: 'ajeno@example.com', displayName: 'Nadie',
+    roles: ['owner'], collaboratingPropertyIds: [],
+  });
+}
+
 async function seedInvites(): Promise<void> {
   await put(`properties/${INVITE_PROPERTY}`, {
     ownerId: OWNER,
@@ -315,6 +327,16 @@ async function suite(strict: boolean): Promise<void> {
   await denied('extraño sin invitación NO lee esa propiedad',
     read(stranger, `properties/${INVITE_PROPERTY}`));
 
+  // ── Perfil de un colaborador ────────────────────────────────────────────
+  // La pantalla de Colaboradores lee users/{uid} de cada colaborador para
+  // mostrar su nombre y correo. Sin esto se queda cargando para siempre.
+  await allowed('dueño lee el perfil de su colaborador',
+    read(owner, `users/${COLLAB}`));
+  await allowed('colaborador lee su propio perfil',
+    read(collab, `users/${COLLAB}`));
+  await denied('dueño NO lee el perfil de un usuario ajeno',
+    read(owner, `users/${STRANGER}`));
+
   // El motivo de esta suite: hoy pasan, endurecidas deben denegar.
   const assertFn = strict ? denied : allowed;
   const verb = strict ? 'NO lee' : 'lee (agujero actual)';
@@ -335,6 +357,7 @@ async function main(): Promise<void> {
     await seed();
     await seedLegacy();
     await seedInvites();
+    await seedUsers();
     await suite(strict);
   }
 

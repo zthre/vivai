@@ -59,6 +59,8 @@ function sameSet(a: string[], b: string[]): boolean {
 /** Índices que `memberUids.prepare()` deja listos para `patch()`. */
 const propertyCircles = new Map<string, string[]>();
 const ownerCircles = new Map<string, Set<string>>();
+/** uid del colaborador → duenos para los que colabora. */
+const collaboratorOwners = new Map<string, Set<string>>();
 
 /** Fase 2: clave de mes en pagos y gastos, derivada de `date`. */
 const period: Migration = {
@@ -136,7 +138,44 @@ const memberUids: Migration = {
   },
 };
 
-const MIGRATIONS: Migration[] = [period, memberUids];
+/**
+ * `ownerUids` en el documento de usuario: los duenos para los que colabora.
+ *
+ * Es lo que permite al dueno leer el perfil de su colaborador (nombre y correo)
+ * en la pantalla de Colaboradores. Sin esto, esa lectura se deniega.
+ */
+const ownerUids: Migration = {
+  name: 'ownerUids',
+  description: 'Anade ownerUids a users: los duenos para los que cada persona colabora',
+  collections: ['users'],
+
+  async prepare(db) {
+    const snap = await db.collection('properties').get();
+    for (const doc of snap.docs) {
+      const data = doc.data();
+      const ownerId = data['ownerId'] as string | undefined;
+      if (!ownerId) continue;
+      for (const uid of ((data['collaboratorUids'] as string[] | undefined) ?? [])) {
+        const owners = collaboratorOwners.get(uid) ?? new Set<string>();
+        owners.add(ownerId);
+        collaboratorOwners.set(uid, owners);
+      }
+    }
+    console.log(`  (${collaboratorOwners.size} colaboradores en memoria)\n`);
+  },
+
+  patch(data) {
+    const uid = data['uid'] as string | undefined;
+    if (!uid) return null;
+    const expected = [...(collaboratorOwners.get(uid) ?? [])];
+    const current = (data['ownerUids'] as string[] | undefined) ?? [];
+    // Un usuario que no colabora para nadie no necesita el campo.
+    if (expected.length === 0 && current.length === 0) return null;
+    return sameSet(current, expected) ? null : { ownerUids: expected };
+  },
+};
+
+const MIGRATIONS: Migration[] = [period, memberUids, ownerUids];
 
 // ── Motor ───────────────────────────────────────────────────────────────────
 

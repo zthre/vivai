@@ -191,7 +191,13 @@ cd scripts && npm install
 GOOGLE_APPLICATION_CREDENTIALS=./service-account.json npx tsx backfill.ts memberUids
 GOOGLE_APPLICATION_CREDENTIALS=./service-account.json npx tsx backfill.ts memberUids --apply
 ```
-Migraciones: `period` (clave de mes en pagos y gastos), `memberUids`.
+Migraciones: `period` (clave de mes en pagos y gastos), `memberUids`, `ownerUids`.
+
+**`ownerUids`** vive en `users/{uid}`: los dueños para los que esa persona colabora. Es lo
+que permite al dueño leer el perfil de su colaborador —nombre y correo— en la pantalla de
+Colaboradores, sin abrir la colección `users`. Lo mantiene `PropertyService` al dar de alta
+o de baja a un colaborador; al quitarlo de una propiedad suelta solo se retira el dueño si
+ya no le queda ninguna otra propiedad de ese dueño.
 
 ### Utilidades compartidas
 

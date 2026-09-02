@@ -388,11 +388,15 @@ export class PropertyService {
     });
     await updateDoc(doc(this.firestore, `users/${targetUid}`), {
       collaboratingPropertyIds: arrayUnion(propertyId),
+      // El dueño de ESTA propiedad, no quien ejecuta la acción: un colaborador
+      // con permiso puede estar dando de alta a otro.
+      ownerUids: arrayUnion(await this.ownerIdOf(propertyId, this.auth.uid()!)),
     });
     this.forget(propertyId);
   }
 
   async removeColaboradorFromProperty(propertyId: string, uid: string): Promise<void> {
+    const ownerId = await this.ownerIdOf(propertyId, this.auth.uid()!);
     await updateDoc(doc(this.firestore, `properties/${propertyId}`), {
       collaboratorUids: arrayRemove(uid),
       // Igual que al añadir: se escribe el círculo entero. `arrayRemove` sobre un
@@ -404,6 +408,7 @@ export class PropertyService {
       collaboratingPropertyIds: arrayRemove(propertyId),
     });
     this.forget(propertyId);
+    await this.dropOwnerIfLastProperty(uid, ownerId);
   }
 
   async removePendingColaborador(propertyId: string, email: string): Promise<void> {
@@ -476,12 +481,13 @@ export class PropertyService {
     );
 
     // `arrayUnion` admite varios valores: una escritura en vez de una por propiedad.
-    await this.grantColaboradorRole(targetUid, ids);
+    await this.grantColaboradorRole(targetUid, ids, ownerUid);
     ids.forEach(id => this.forget(id));
     return 'assigned';
   }
 
   async removeGlobalColaborador(collaboratorUid: string): Promise<void> {
+    const ownerUid = this.auth.uid()!;
     const ids = await this.ownedPropertyIds();
     await this.batched(ids, (batch, id) =>
       batch.update(doc(this.firestore, `properties/${id}`), {
@@ -493,6 +499,9 @@ export class PropertyService {
     if (ids.length > 0) {
       await updateDoc(doc(this.firestore, `users/${collaboratorUid}`), {
         collaboratingPropertyIds: arrayRemove(...ids),
+        // Se le retira de todas las propiedades de este dueño a la vez, así que
+        // el dueño deja de poder ver su perfil.
+        ownerUids: arrayRemove(ownerUid),
       });
     }
     ids.forEach(id => this.forget(id));
@@ -509,6 +518,24 @@ export class PropertyService {
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
+
+  /**
+   * Si `uid` ya no colabora en ninguna propiedad de `ownerId`, le quita ese dueño
+   * de `ownerUids` — y con ello el acceso del dueño a su perfil.
+   */
+  private async dropOwnerIfLastProperty(uid: string, ownerId: string): Promise<void> {
+    const snap = await getDocs(
+      query(
+        collection(this.firestore, 'properties'),
+        where('ownerId', '==', ownerId),
+        where('collaboratorUids', 'array-contains', uid)
+      )
+    );
+    if (!snap.empty) return;
+    await updateDoc(doc(this.firestore, `users/${uid}`), {
+      ownerUids: arrayRemove(ownerId),
+    }).catch(() => void 0);
+  }
 
   /** Círculo de una propiedad con `uid` añadido. */
   private async circleWith(propertyId: string, uid: string): Promise<string[]> {
@@ -548,7 +575,11 @@ export class PropertyService {
    * Contempla los documentos antiguos con `role` en singular, que el resto de la
    * app ya migra al iniciar sesión.
    */
-  private async grantColaboradorRole(targetUid: string, propertyIds: string[] = []): Promise<void> {
+  private async grantColaboradorRole(
+    targetUid: string,
+    propertyIds: string[] = [],
+    ownerUid?: string
+  ): Promise<void> {
     const userSnap = await getDoc(doc(this.firestore, `users/${targetUid}`));
     const userData = userSnap.data() ?? {};
     const existingRoles: string[] = Array.isArray(userData['roles'])
@@ -562,6 +593,7 @@ export class PropertyService {
     if (propertyIds.length > 0) {
       payload['collaboratingPropertyIds'] = arrayUnion(...propertyIds);
     }
+    if (ownerUid) payload['ownerUids'] = arrayUnion(ownerUid);
     await updateDoc(doc(this.firestore, `users/${targetUid}`), payload);
   }
 

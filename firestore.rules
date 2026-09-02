@@ -30,9 +30,21 @@ service cloud.firestore {
     // (needed when owner assigns existing user as colaborador).
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
+
+      // Un dueño puede leer el perfil de quien colabora para el: la pantalla de
+      // Colaboradores muestra nombre y correo de cada uno. Sin esto la lectura se
+      // denegaba, y como el `Promise.all` del componente no capturaba el error,
+      // la pagina se quedaba cargando para siempre.
+      //
+      // `ownerUids` son los duenos para los que esa persona colabora,
+      // denormalizado igual que `memberUids`: se resuelve contra el propio
+      // documento, sin un get() por lectura.
+      allow read: if request.auth != null
+                  && request.auth.uid in resource.data.get('ownerUids', []);
+
       allow update: if request.auth != null
                     && request.resource.data.diff(resource.data).affectedKeys()
-                       .hasOnly(['collaboratingPropertyIds', 'roles', 'updatedAt']);
+                       .hasOnly(['collaboratingPropertyIds', 'ownerUids', 'roles', 'updatedAt']);
     }
 
     // Properties: public read if isPublic, owner or colaborator read/write.
