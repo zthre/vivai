@@ -15,7 +15,7 @@ import {
   QueryConstraint,
   DocumentData,
 } from '@angular/fire/firestore';
-import { Observable, combineLatest, of, map } from 'rxjs';
+import { Observable, combineLatest, of, map, switchMap } from 'rxjs';
 import { loggedWrite } from './firestore-error.util';
 import { collection$ } from './firestore-query.util';
 import { ServiceReceipt } from '../models/service-receipt.model';
@@ -84,19 +84,22 @@ export class ServiceReceiptService {
 
   /**
    * Recibos del mes en todo el círculo del usuario: UNA consulta en lugar de
-   * combinar una por propiedad, que es lo que hace `getByPropertiesAndMonth`.
-   *
-   * TODAVÍA SIN USAR: depende de que el backfill de `memberUids` haya terminado.
-   * Ver el plan, fase 3.
+   * combinar una por propiedad.
    */
   getByCircleAndMonth(month: string): Observable<ServiceReceipt[]> {
-    const uid = this.auth.uid();
-    if (!uid) return of([] as ServiceReceipt[]);
-    const ref = collection(this.firestore, 'serviceReceipts');
-    return this.safe(
-      query(ref, where('memberUids', 'array-contains', uid), where('month', '==', month)),
-      'getByCircleAndMonth',
-      `memberUids array-contains ${uid}, month == ${month}`
+    // Sobre `uid$`, no sobre `uid()`: leer la señal aquí captura el valor del
+    // instante de la suscripción, y si la vista se monta antes de que resuelva
+    // la sesión se queda con lista vacía para siempre. `uid$` filtra los nulos
+    // y vuelve a emitir al cambiar de sesión.
+    return this.auth.uid$.pipe(
+      switchMap(uid => {
+        const ref = collection(this.firestore, 'serviceReceipts');
+        return this.safe(
+          query(ref, where('memberUids', 'array-contains', uid), where('month', '==', month)),
+          'getByCircleAndMonth',
+          `memberUids array-contains ${uid}, month == ${month}`
+        );
+      })
     );
   }
 

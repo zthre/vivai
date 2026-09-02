@@ -48,8 +48,12 @@ export class ExpenseService {
   }
 
   /**
-   * Gastos del mes en todo el círculo. Ver `PaymentService.getByCircleAndPeriod`:
-   * todavía sin usar, depende del backfill.
+   * Gastos del mes en todo el círculo. Ver `PaymentService.getByCircleAndPeriod`.
+   *
+   * Reemplaza a `getByMonth`, que filtraba por `ownerId == uid`: como un gasto se
+   * atribuye siempre al DUEÑO de la propiedad, aunque lo cree un colaborador, esa
+   * consulta no le devolvía nada a un colaborador — veía los pagos y los recibos
+   * del mes, pero los gastos y el balance le salían en cero.
    */
   getByCircleAndPeriod(period: string): Observable<Expense[]> {
     return this.auth.uid$.pipe(

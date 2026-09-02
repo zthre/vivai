@@ -5,13 +5,13 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { MatIconModule } from '@angular/material/icon';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { toSignal, toObservable } from '@angular/core/rxjs-interop';
-import { switchMap, map } from 'rxjs/operators';
-import { combineLatest, of } from 'rxjs';
+import { switchMap } from 'rxjs/operators';
 import { PropertyService } from '../../../core/services/property.service';
 import { PaymentService } from '../../../core/services/payment.service';
 import { ExpenseService } from '../../../core/services/expense.service';
 import { ServiceReceiptService } from '../../../core/services/service-receipt.service';
 import { Expense } from '../../../core/models/expense.model';
+import { Payment } from '../../../core/models/payment.model';
 import { ServiceReceipt } from '../../../core/models/service-receipt.model';
 import { MonthSelectorComponent } from './month-selector/month-selector.component';
 import { KpiCardComponent, KpiVariant } from './kpi-card/kpi-card.component';
@@ -20,12 +20,7 @@ import { ExpenseListComponent } from './expense-list/expense-list.component';
 import { ExpenseFormComponent } from './expense-form/expense-form.component';
 import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialog/confirm-dialog.component';
 import { PermissionService } from '../../../core/auth/permissions';
-import {
-  endOfMonth,
-  fromMonthKey,
-  monthKey,
-  startOfMonth,
-} from '../../../core/utils/month.util';
+import { fromMonthKey, monthKey, startOfMonth } from '../../../core/utils/month.util';
 
 @Component({
   selector: 'app-finances-dashboard',
@@ -135,45 +130,32 @@ export class FinancesDashboardComponent implements OnInit {
 
   private month$ = toObservable(this.selectedMonth);
 
-  /** Query payments per-property so both owners AND colaboradores see them */
+  /**
+   * Pagos, gastos y recibos del mes en todo el círculo: una consulta cada uno.
+   *
+   * Los pagos se abrían propiedad por propiedad, y cada consulta traía el
+   * historial COMPLETO para filtrar el mes en memoria.
+   *
+   * Los gastos, en cambio, se consultaban por `ownerId == uid`. Como un gasto se
+   * atribuye siempre al DUEÑO de la propiedad —incluso cuando lo crea un
+   * colaborador—, a un colaborador esa consulta no le devolvía nada: veía los
+   * pagos y los recibos del mes, pero la lista de gastos y el KPI de balance le
+   * salían en cero. Con el círculo, ve lo mismo que el dueño.
+   */
+  private period$ = toObservable(computed(() => monthKey(this.selectedMonth())));
+
   paymentsInMonth = toSignal(
-    combineLatest([toObservable(this.properties), this.month$]).pipe(
-      switchMap(([props, m]) => {
-        if (props.length === 0) return of([] as any[]);
-        const monthStart = startOfMonth(m).getTime();
-        const monthEnd = endOfMonth(m).getTime();
-        return combineLatest(
-          props.map(p => this.paymentService.getByProperty(p.id!))
-        ).pipe(
-          map(arrays =>
-            arrays.flat().filter(payment => {
-              const payDate = payment.date?.toDate?.()?.getTime?.();
-              return payDate && payDate >= monthStart && payDate <= monthEnd;
-            })
-          )
-        );
-      })
-    ),
-    { initialValue: [] }
+    this.period$.pipe(switchMap(period => this.paymentService.getByCircleAndPeriod(period))),
+    { initialValue: [] as Payment[] }
   );
 
   expensesInMonth = toSignal(
-    this.month$.pipe(
-      switchMap(m => this.expenseService.getByMonth(startOfMonth(m), endOfMonth(m)))
-    ),
-    { initialValue: [] }
+    this.period$.pipe(switchMap(period => this.expenseService.getByCircleAndPeriod(period))),
+    { initialValue: [] as Expense[] }
   );
 
-  /** Recibos de servicios del mes, consultados por propiedad (sirve a dueños y colaboradores) */
   private receiptsInMonth = toSignal(
-    combineLatest([toObservable(this.properties), this.month$]).pipe(
-      switchMap(([props, m]) =>
-        this.receiptService.getByPropertiesAndMonth(
-          props.filter(p => p.id).map(p => p.id!),
-          monthKey(m)
-        )
-      )
-    ),
+    this.period$.pipe(switchMap(period => this.receiptService.getByCircleAndMonth(period))),
     { initialValue: [] as ServiceReceipt[] }
   );
 

@@ -4,8 +4,7 @@ import { RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { toSignal, toObservable } from '@angular/core/rxjs-interop';
-import { switchMap, map } from 'rxjs/operators';
-import { combineLatest, of } from 'rxjs';
+import { switchMap } from 'rxjs/operators';
 import { PropertyService } from '../../core/services/property.service';
 import { PaymentService } from '../../core/services/payment.service';
 import { ServiceReceiptService } from '../../core/services/service-receipt.service';
@@ -18,14 +17,7 @@ import { PaymentFormComponent } from '../payments/payment-form/payment-form.comp
 import { MonthSettlementDialogComponent } from '../services/month-settlement/month-settlement-dialog.component';
 import { ListingStatusComponent } from '../../shared/components/listing-status/listing-status.component';
 import { PermissionService } from '../../core/auth/permissions';
-import {
-  addMonths,
-  endOfMonth,
-  isCurrentMonth,
-  monthKey,
-  monthLabel,
-  startOfMonth,
-} from '../../core/utils/month.util';
+import { addMonths, isCurrentMonth, monthKey, monthLabel, startOfMonth } from '../../core/utils/month.util';
 
 @Component({
   selector: 'app-dashboard',
@@ -421,18 +413,15 @@ export class DashboardComponent {
 
   properties = toSignal(this.propertyService.getAll(), { initialValue: [] });
 
-  /** Service receipts for the selected month, queried per property */
+  /**
+   * Recibos del mes en todo el círculo: UNA consulta.
+   *
+   * Antes se abría una por propiedad y se combinaban, así que la vista esperaba
+   * a que respondieran las N y mantenía N listeners abiertos.
+   */
   private currentMonthReceipts = toSignal(
-    combineLatest([toObservable(this.properties), toObservable(this.selectedMonthStr)]).pipe(
-      switchMap(([props, monthStr]) => {
-        const withId = props.filter(p => p.id);
-        if (withId.length === 0) return of([] as ServiceReceipt[]);
-        return combineLatest(
-          withId.map(p => this.receiptService.getByPropertyAndMonth(p.id!, monthStr))
-        ).pipe(
-          map(arrays => arrays.flat())
-        );
-      })
+    toObservable(this.selectedMonthStr).pipe(
+      switchMap(monthStr => this.receiptService.getByCircleAndMonth(monthStr))
     ),
     { initialValue: [] as ServiceReceipt[] }
   );
@@ -449,25 +438,17 @@ export class DashboardComponent {
     return m;
   });
 
-  /** Payments for the selected month, queried per occupied property */
+  /**
+   * Pagos del mes en todo el círculo: UNA consulta, y solo los del mes.
+   *
+   * Antes se consultaba propiedad por propiedad, y cada una traía su historial
+   * COMPLETO de pagos sin límite ni rango, para filtrar el mes en memoria.
+   */
   private currentMonthPayments = toSignal(
-    combineLatest([toObservable(this.properties), toObservable(this.selectedMonth)]).pipe(
-      switchMap(([props, selMonth]) => {
-        const occupied = props.filter(p => p.status === 'ocupado' && p.id);
-        if (occupied.length === 0) return of([] as Payment[]);
-        const monthStart = startOfMonth(selMonth).getTime();
-        const monthEnd = endOfMonth(selMonth).getTime();
-        return combineLatest(
-          occupied.map(p => this.paymentService.getByProperty(p.id!))
-        ).pipe(
-          map(arrays => arrays.flat().filter(payment => {
-            const payDate = payment.date?.toDate?.()?.getTime?.();
-            return payDate && payDate >= monthStart && payDate <= monthEnd;
-          }))
-        );
-      })
+    toObservable(this.selectedMonthStr).pipe(
+      switchMap(period => this.paymentService.getByCircleAndPeriod(period))
     ),
-    { initialValue: [] }
+    { initialValue: [] as Payment[] }
   );
 
   private paymentByProperty = computed(() => {

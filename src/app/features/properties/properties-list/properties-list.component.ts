@@ -5,8 +5,6 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { toSignal, toObservable } from '@angular/core/rxjs-interop';
-import { switchMap, map } from 'rxjs/operators';
-import { combineLatest, of } from 'rxjs';
 import { PropertyService } from '../../../core/services/property.service';
 import { PaymentService } from '../../../core/services/payment.service';
 import { AuthService } from '../../../core/auth/auth.service';
@@ -20,7 +18,7 @@ import { ServiceReceiptService } from '../../../core/services/service-receipt.se
 import { ServiceReceipt } from '../../../core/models/service-receipt.model';
 import { listingState } from '../../../core/services/listing.util';
 import { PermissionService } from '../../../core/auth/permissions';
-import { currentMonthKey, endOfMonth, startOfMonth } from '../../../core/utils/month.util';
+import { currentMonthKey } from '../../../core/utils/month.util';
 
 @Component({
   selector: 'app-properties-list',
@@ -216,38 +214,19 @@ export class PropertiesListComponent {
 
   properties = toSignal(this.propertyService.getAll(), { initialValue: [] });
 
-  /** Payments for the current month, queried per occupied property (works for owners AND collaborators) */
+  /**
+   * Pagos y recibos del mes en curso, en todo el círculo: una consulta cada uno.
+   *
+   * Antes se abría una consulta por propiedad, y la de pagos traía además el
+   * historial COMPLETO de cada una para filtrar el mes en memoria.
+   */
   private currentMonthPayments = toSignal(
-    toObservable(this.properties).pipe(
-      switchMap(props => {
-        const occupied = props.filter(p => p.status === 'ocupado' && p.id);
-        if (occupied.length === 0) return of([] as Payment[]);
-        const now = new Date();
-        const monthStart = startOfMonth(now).getTime();
-        const monthEnd = endOfMonth(now).getTime();
-        return combineLatest(
-          occupied.map(p => this.paymentService.getByProperty(p.id!))
-        ).pipe(
-          map(arrays => arrays.flat().filter(payment => {
-            const payDate = payment.date?.toDate().getTime();
-            return payDate >= monthStart && payDate <= monthEnd;
-          }))
-        );
-      })
-    ),
-    { initialValue: [] }
+    this.paymentService.getByCircleAndPeriod(currentMonthKey()),
+    { initialValue: [] as Payment[] }
   );
 
-  /** Recibos de servicios del mes en curso, consultados por propiedad */
   private currentMonthReceipts = toSignal(
-    toObservable(this.properties).pipe(
-      switchMap(props =>
-        this.receiptService.getByPropertiesAndMonth(
-          props.filter(p => p.id).map(p => p.id!),
-          currentMonthKey()
-        )
-      )
-    ),
+    this.receiptService.getByCircleAndMonth(currentMonthKey()),
     { initialValue: [] as ServiceReceipt[] }
   );
 
