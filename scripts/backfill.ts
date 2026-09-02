@@ -22,6 +22,8 @@
  * que volver a correrlo tras una interrupción retoma donde se quedó.
  */
 
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { initializeApp, applicationDefault } from 'firebase-admin/app';
 import { getFirestore, Firestore, Timestamp } from 'firebase-admin/firestore';
 
@@ -188,6 +190,29 @@ async function run(db: Firestore, migration: Migration, apply: boolean): Promise
   }
 }
 
+/**
+ * Cloud Shell reubica el directorio de configuración de gcloud a un temporal
+ * (`CLOUDSDK_CONFIG=/tmp/tmp.XXXX`), así que
+ * `gcloud auth application-default login` NO escribe en la ruta estándar
+ * `~/.config/gcloud/`. El SDK de Admin solo mira ahí, no encuentra nada, y se
+ * cae a la identidad de la máquina — que no tiene permisos sobre Firestore.
+ *
+ * El síntoma es desconcertante: acabas de autenticarte y aun así te deniega.
+ * Aquí se apunta la variable al fichero que gcloud escribió de verdad.
+ */
+function resolveCloudShellCredentials(): void {
+  if (process.env['GOOGLE_APPLICATION_CREDENTIALS']) return;
+
+  const configDir = process.env['CLOUDSDK_CONFIG'];
+  if (!configDir) return;
+
+  const adc = join(configDir, 'application_default_credentials.json');
+  if (existsSync(adc)) {
+    process.env['GOOGLE_APPLICATION_CREDENTIALS'] = adc;
+    console.log(`  (credenciales de gcloud: ${adc})\n`);
+  }
+}
+
 async function main(): Promise<void> {
   const [name, ...flags] = process.argv.slice(2);
   const apply = flags.includes('--apply');
@@ -199,6 +224,8 @@ async function main(): Promise<void> {
     for (const m of MIGRATIONS) console.error(`  ${m.name} — ${m.description}`);
     process.exit(1);
   }
+
+  resolveCloudShellCredentials();
 
   // `applicationDefault()` resuelve, en este orden: GOOGLE_APPLICATION_CREDENTIALS
   // si está puesta, y si no el login de gcloud (ADC). No se exige ninguna de las
@@ -219,6 +246,10 @@ async function main(): Promise<void> {
       console.error(`\nNo se pudo acceder a ${PROJECT_ID}: ${message}\n`);
       console.error('Autentícate con la cuenta dueña del proyecto:');
       console.error(`  gcloud auth application-default login --project ${PROJECT_ID}\n`);
+      console.error('Si ya lo hiciste y sigue fallando, gcloud pudo guardar las');
+      console.error('credenciales fuera de la ruta estándar (pasa en Cloud Shell):');
+      console.error('  export GOOGLE_APPLICATION_CREDENTIALS="$(gcloud info \\');
+      console.error('    --format=\'value(config.paths.global_config_dir)\')/application_default_credentials.json"\n');
       console.error('O apunta a un service account:');
       console.error('  export GOOGLE_APPLICATION_CREDENTIALS=/ruta/al/service-account.json\n');
       process.exit(1);
