@@ -12,7 +12,6 @@ import {
   serverTimestamp,
   Timestamp,
   Query,
-  QueryConstraint,
   DocumentData,
 } from '@angular/fire/firestore';
 import { Observable, combineLatest, of, map, switchMap } from 'rxjs';
@@ -55,30 +54,35 @@ export class ServiceReceiptService {
     });
   }
 
+  /**
+   * Los tres cortes de un mes —por servicio, por código, por propiedad— se
+   * derivan de `getByCircleAndMonth` y se filtran en memoria.
+   *
+   * Consultar `serviceId == X, month == Y` directamente parecía lo natural, pero
+   * NO acota a lo que el usuario puede leer: bastaba un recibo de otro círculo
+   * para denegar la consulta entera. El síntoma engañaba —los recibos aparecían
+   * y desaparecían a los milisegundos— porque la caché local los servía antes de
+   * que el servidor denegara.
+   *
+   * Acotar cada consulta por separado habría exigido un índice compuesto por
+   * cada corte. Derivarlas de una sola reutiliza su índice y su caché, y el
+   * filtro es sobre los recibos de UN mes: nunca es un volumen que importe.
+   */
   getByServiceAndMonth(serviceId: string, month: string): Observable<ServiceReceipt[]> {
-    const ref = collection(this.firestore, 'serviceReceipts');
-    return this.safe(
-      query(ref, where('serviceId', '==', serviceId), where('month', '==', month)),
-      'getByServiceAndMonth',
-      `serviceId == ${serviceId}, month == ${month}`
+    return this.getByCircleAndMonth(month).pipe(
+      map(list => list.filter(r => r.serviceId === serviceId))
     );
   }
 
   getByAssignmentAndMonth(assignmentId: string, month: string): Observable<ServiceReceipt[]> {
-    const ref = collection(this.firestore, 'serviceReceipts');
-    return this.safe(
-      query(ref, where('assignmentId', '==', assignmentId), where('month', '==', month)),
-      'getByAssignmentAndMonth',
-      `assignmentId == ${assignmentId}, month == ${month}`
+    return this.getByCircleAndMonth(month).pipe(
+      map(list => list.filter(r => r.assignmentId === assignmentId))
     );
   }
 
   getByPropertyAndMonth(propertyId: string, month: string): Observable<ServiceReceipt[]> {
-    const ref = collection(this.firestore, 'serviceReceipts');
-    return this.safe(
-      query(ref, where('propertyId', '==', propertyId), where('month', '==', month)),
-      'getByPropertyAndMonth',
-      `propertyId == ${propertyId}, month == ${month}`
+    return this.getByCircleAndMonth(month).pipe(
+      map(list => list.filter(r => r.propertyId === propertyId))
     );
   }
 
@@ -356,19 +360,12 @@ export class ServiceReceiptService {
 
   /** Borra los recibos de un código en un mes, con sus gastos asociados. */
   async deleteByMonth(assignmentId: string, month: string): Promise<void> {
-    await this.deleteWhere(
-      where('assignmentId', '==', assignmentId),
-      where('month', '==', month)
-    );
+    await this.deleteWhere(month, r => r.assignmentId === assignmentId);
   }
 
   /** Borra los recibos de un servicio en un mes, con sus gastos asociados. */
   async deleteByServiceAndMonth(serviceId: string, month: string): Promise<void> {
-    await this.deleteWhere(
-      where('ownerId', '==', this.auth.uid()!),
-      where('serviceId', '==', serviceId),
-      where('month', '==', month)
-    );
+    await this.deleteWhere(month, r => r.serviceId === serviceId);
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
@@ -380,15 +377,32 @@ export class ServiceReceiptService {
    * explique, así que se borra primero; si esa parte falla, el recibo se borra
    * igual y el gasto queda visible y editable a mano, que es el mal menor.
    */
-  private async deleteWhere(...filters: QueryConstraint[]): Promise<void> {
+  private async deleteWhere(
+    month: string,
+    match: (r: ServiceReceipt) => boolean
+  ): Promise<void> {
+    const uid = this.auth.uid();
+    if (!uid) return;
+
+    // Acotado al círculo por el mismo motivo que las lecturas: una consulta que
+    // puede devolver un documento ajeno se deniega entera.
     const snap = await getDocs(
-      query(collection(this.firestore, 'serviceReceipts'), ...filters)
+      query(
+        collection(this.firestore, 'serviceReceipts'),
+        where('memberUids', 'array-contains', uid),
+        where('month', '==', month)
+      )
     );
-    await Promise.all(snap.docs.map(async d => {
-      const expenseId = (d.data() as ServiceReceipt).expenseId;
-      if (expenseId) await this.expenseService.delete(expenseId).catch(() => void 0);
-      await deleteDoc(doc(this.firestore, `serviceReceipts/${d.id}`));
-    }));
+
+    await Promise.all(
+      snap.docs
+        .filter(d => match({ id: d.id, ...d.data() } as ServiceReceipt))
+        .map(async d => {
+          const expenseId = (d.data() as ServiceReceipt).expenseId;
+          if (expenseId) await this.expenseService.delete(expenseId).catch(() => void 0);
+          await deleteDoc(doc(this.firestore, `serviceReceipts/${d.id}`));
+        })
+    );
   }
 
   private ownerIdOf(propertyId: string): Promise<string> {
