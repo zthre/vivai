@@ -3,7 +3,8 @@ import { CommonModule } from '@angular/common';
 import { Router, ActivatedRoute } from '@angular/router';
 import { AuthService } from '../../../core/auth/auth.service';
 import { MatIconModule } from '@angular/material/icon';
-import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatDialogModule } from '@angular/material/dialog';
+import { DialogService } from '../../../core/services/dialog.service';
 import { toSignal, toObservable } from '@angular/core/rxjs-interop';
 import { switchMap } from 'rxjs/operators';
 import { PropertyService } from '../../../core/services/property.service';
@@ -119,7 +120,7 @@ export class FinancesDashboardComponent implements OnInit {
   private receiptService = inject(ServiceReceiptService);
   private authService = inject(AuthService);
   private permissions = inject(PermissionService);
-  private dialog = inject(MatDialog);
+  private dialog = inject(DialogService);
   private router = inject(Router);
   private route = inject(ActivatedRoute);
 

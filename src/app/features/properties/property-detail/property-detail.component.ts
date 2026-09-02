@@ -3,7 +3,8 @@ import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { RouterLink, ActivatedRoute } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
-import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatDialogModule } from '@angular/material/dialog';
+import { DialogService } from '../../../core/services/dialog.service';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { switchMap } from 'rxjs';
@@ -408,7 +409,7 @@ export class PropertyDetailComponent implements OnInit {
   private receiptService = inject(ServiceReceiptService);
   private authService = inject(AuthService);
   private permissions = inject(PermissionService);
-  private dialog = inject(MatDialog);
+  private dialog = inject(DialogService);
   private snackBar = inject(MatSnackBar);
   private route = inject(ActivatedRoute);
   private fb = inject(FormBuilder);
