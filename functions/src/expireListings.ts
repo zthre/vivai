@@ -48,7 +48,6 @@ async function expireStaleListings(ownerId?: string): Promise<number> {
     for (const doc of stale.slice(i, i + 400)) {
       batch.update(doc.ref, {
         isPublic: false,
-        isListed: false,
         listingExpiredAt: now,
         updatedAt: now,
       });

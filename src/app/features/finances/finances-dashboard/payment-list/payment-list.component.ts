@@ -44,7 +44,7 @@ const MONTH_NAMES = [
                     {{ p.date.toDate() | date:'d MMM y' }}
                   </td>
                   <td class="px-5 py-3 text-warm-800 font-medium">
-                    {{ propertyName(p.propertyId) }}
+                    {{ propertyName(p) }}
                   </td>
                   <td class="px-5 py-3 text-warm-600">
                     {{ tenantName(p.propertyId) }}
@@ -81,8 +81,14 @@ export class PaymentListComponent {
     return `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
   }
 
-  propertyName(propertyId: string): string {
-    return this.properties().find(p => p.id === propertyId)?.name ?? propertyId;
+  /**
+   * El nombre viene denormalizado en el propio pago. El cruce contra el catálogo
+   * se conserva como respaldo para los pagos anteriores al backfill.
+   */
+  propertyName(payment: Payment): string {
+    return payment.propertyName
+      ?? this.properties().find(p => p.id === payment.propertyId)?.name
+      ?? payment.propertyId;
   }
 
   tenantName(propertyId: string): string {
