@@ -8,12 +8,15 @@
  * cuántos documentos cambiarían y enseña una muestra, para poder comparar el
  * número esperado antes de tocar producción.
  *
+ * Credenciales: sirve el login de gcloud
+ *   (`gcloud auth application-default login --project vivai-now`) o un service
+ *   account en GOOGLE_APPLICATION_CREDENTIALS. Lo primero evita descargar una
+ *   llave al disco, que es una credencial permanente que hay que custodiar.
+ *
  * Uso:
  *   cd scripts && npm install
- *   GOOGLE_APPLICATION_CREDENTIALS=./service-account.json \
- *     npx tsx backfill.ts period            # en seco
- *   GOOGLE_APPLICATION_CREDENTIALS=./service-account.json \
- *     npx tsx backfill.ts period --apply    # escribe
+ *   npx tsx backfill.ts period            # en seco
+ *   npx tsx backfill.ts period --apply    # escribe
  *
  * Es idempotente: un documento que ya tiene el valor correcto no se toca, así
  * que volver a correrlo tras una interrupción retoma donde se quedó.
@@ -22,6 +25,7 @@
 import { initializeApp, applicationDefault } from 'firebase-admin/app';
 import { getFirestore, Firestore, Timestamp } from 'firebase-admin/firestore';
 
+const PROJECT_ID = process.env['FIREBASE_PROJECT'] ?? 'vivai-now';
 const PAGE_SIZE = 400;
 const BATCH_LIMIT = 500;
 
@@ -196,19 +200,31 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  if (!process.env['GOOGLE_APPLICATION_CREDENTIALS']) {
-    console.error('Falta GOOGLE_APPLICATION_CREDENTIALS (ruta al service account JSON).');
-    process.exit(1);
-  }
-
-  initializeApp({ credential: applicationDefault(), projectId: 'vivai-now' });
+  // `applicationDefault()` resuelve, en este orden: GOOGLE_APPLICATION_CREDENTIALS
+  // si está puesta, y si no el login de gcloud (ADC). No se exige ninguna de las
+  // dos aquí: si faltan, el primer acceso falla con un mensaje claro y se
+  // reconduce abajo.
+  initializeApp({ credential: applicationDefault(), projectId: PROJECT_ID });
   const db = getFirestore();
 
   console.log(`\n${migration.name} — ${migration.description}`);
   console.log(apply ? 'MODO ESCRITURA\n' : 'EN SECO (sin --apply no se escribe nada)\n');
 
-  if (migration.prepare) await migration.prepare(db);
-  await run(db, migration, apply);
+  try {
+    if (migration.prepare) await migration.prepare(db);
+    await run(db, migration, apply);
+  } catch (err) {
+    const message = (err as Error).message ?? String(err);
+    if (/credential|authenticat|permission|PERMISSION_DENIED|Could not load/i.test(message)) {
+      console.error(`\nNo se pudo acceder a ${PROJECT_ID}: ${message}\n`);
+      console.error('Autentícate con la cuenta dueña del proyecto:');
+      console.error(`  gcloud auth application-default login --project ${PROJECT_ID}\n`);
+      console.error('O apunta a un service account:');
+      console.error('  export GOOGLE_APPLICATION_CREDENTIALS=/ruta/al/service-account.json\n');
+      process.exit(1);
+    }
+    throw err;
+  }
 
   if (!apply) console.log('\nNada escrito. Repite con --apply cuando los números cuadren.');
 }
