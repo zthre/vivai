@@ -155,6 +155,15 @@ documento que lo exceda tumba el listado entero) y al abanico de una consulta po
   duplicado que se quiere evitar. **La lógica del cliente sigue ahí a propósito**; se
   retira cuando el trigger esté verificado en producción.
 - **`syncMemberUids`** — ver la sección de `memberUids`.
+- **Región de los triggers de Firestore**: un trigger v2 debe vivir en una región
+  compatible con la ubicación de la base de datos, o su creación falla con «Failed to
+  create function … in region». Se ajusta sin tocar código:
+  ```bash
+  gcloud firestore databases describe --project vivai-now --format="value(locationId)"
+  FUNCTIONS_REGION=<esa región> firebase deploy --only functions --project vivai-now
+  ```
+  Una multi-región como `nam5` admite `us-central1` (el valor por defecto); una región
+  concreta exige la suya.
 - **`monthlySnapshots`** usa id determinista `{ownerId}_{propertyId}_{month}` con
   `set(merge)`, y cada corrida borra los duplicados que dejó el esquema de ids
   automáticos. Importa porque Analytics **suma** los snapshots de un mes para agregar

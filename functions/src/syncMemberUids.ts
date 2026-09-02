@@ -7,7 +7,22 @@ import type { Firestore, Query } from 'firebase-admin/firestore';
 
 if (!admin.apps.length) admin.initializeApp();
 
-const REGION = 'us-central1';
+/**
+ * Región de los triggers de Firestore.
+ *
+ * No es libre: un trigger v2 tiene que vivir en una región compatible con la
+ * ubicación de la base de datos, o su creación falla con «Failed to create
+ * function ... in region». Se lee del entorno para poder ajustarla sin tocar
+ * código:
+ *
+ *   FUNCTIONS_REGION=southamerica-east1 firebase deploy --only functions
+ *
+ * El valor correcto sale de:
+ *   gcloud firestore databases describe --format="value(locationId)"
+ * Una multi-región como `nam5` admite `us-central1`; una región concreta exige
+ * la suya.
+ */
+const REGION = process.env['FUNCTIONS_REGION'] ?? 'us-central1';
 const BATCH_LIMIT = 500;
 
 /**
