@@ -7,6 +7,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { Firestore, doc, getDoc } from '@angular/fire/firestore';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { PropertyService } from '../../core/services/property.service';
+import { logFirestoreError } from '../../core/services/firestore-error.util';
 import { AuthService } from '../../core/auth/auth.service';
 import { Property, ColaboradorPermission } from '../../core/models/property.model';
 import { PermisoColaboradorDialogComponent } from '../properties/property-detail/colaboradores/permiso-colaborador-dialog.component';
@@ -258,17 +259,37 @@ export class ColaboradoresPageComponent {
       }
     }
 
+    // Cada perfil se resuelve por separado y el fallo de uno no tumba al resto:
+    // antes un solo `getDoc` denegado rechazaba el `Promise.all`, y como
+    // `loading` se apagaba después, la pantalla se quedaba cargando para siempre.
+    // El colaborador sigue listándose con sus permisos aunque su perfil no se
+    // pueda leer — que es lo que se viene a gestionar aquí.
     const profiles = await Promise.all(
       uids.map(async uid => {
-        const snap = await getDoc(doc(this.firestore, `users/${uid}`));
-        const data = snap.data();
-        return {
+        const base = {
           uid,
-          displayName: data?.['displayName'] ?? null,
-          email: data?.['email'] ?? null,
-          photoURL: data?.['photoURL'] ?? null,
+          displayName: null,
+          email: null,
+          photoURL: null,
           permissions: { ...DEFAULT_PERMISSION, ...(permMap[uid] ?? {}) },
         } as ColaboradorInfo;
+        try {
+          const snap = await getDoc(doc(this.firestore, `users/${uid}`));
+          const data = snap.data();
+          if (!data) return base;
+          return {
+            ...base,
+            displayName: data['displayName'] ?? null,
+            email: data['email'] ?? null,
+            photoURL: data['photoURL'] ?? null,
+          };
+        } catch (err) {
+          logFirestoreError('ColaboradoresPage.loadProfiles', err, {
+            collection: 'users',
+            query: `getDoc users/${uid}`,
+          });
+          return base;
+        }
       })
     );
 
