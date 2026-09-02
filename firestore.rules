@@ -306,6 +306,18 @@ service cloud.firestore {
       allow update, delete: if isMember() || (request.auth != null && canWriteReceipt());
     }
 
+    // Leases: el historial de arrendamientos de una propiedad.
+    //
+    // El inquilino puede leer el suyo —es su contrato— pero no los anteriores ni
+    // los de otras propiedades, de ahi la clausula por `tenantUid` ademas de la
+    // de circulo.
+    match /leases/{leaseId} {
+      allow read: if isMember()
+                  || (request.auth != null && request.auth.uid == resource.data.get('tenantUid', ''));
+      allow create: if willBeMember();
+      allow update, delete: if isMember();
+    }
+
     // Mail: write-only from Cloud Functions (Admin SDK). No client access needed.
     match /mail/{mailId} {
       allow read, write: if false;

@@ -71,6 +71,13 @@ export interface Property {
   publicDescription?: string | null;
 
   // Inquilino
+  //
+  // Estos campos siguen siendo la fuente que leen las pantallas, pero la HISTORIA
+  // vive en `leases`: al cambiar de inquilino aquí se sobrescriben, y antes eso
+  // borraba para siempre quién vivía y a cuánto. `activeLeaseId` apunta al
+  // arrendamiento vigente, que es el mismo dato con fecha de inicio y fin.
+  /** Arrendamiento vigente. `null` si la propiedad está disponible. */
+  activeLeaseId?: string | null;
   tenantName?: string | null;
   tenantPhone?: string | null;
   tenantEmail?: string | null;

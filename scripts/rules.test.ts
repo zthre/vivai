@@ -203,6 +203,25 @@ async function seedLegacy(): Promise<void> {
  * y por `pendingCollaboratorEmails`— para vincularse. Si las reglas no dejan
  * LEER esa propiedad, la consulta se deniega y el vinculo nunca ocurre.
  */
+/**
+ * Un arrendamiento vigente y otro terminado sobre la misma propiedad.
+ *
+ * El inquilino actual puede ver el SUYO —es su contrato— pero no el del que vivio
+ * antes que el.
+ */
+async function seedLeases(): Promise<void> {
+  await put('leases/lease-actual', {
+    propertyId: PROPERTY, ownerId: OWNER, memberUids: CIRCLE,
+    tenantUid: TENANT, tenantName: 'Inquilino actual',
+    rentPrice: 1400000, endDate: null,
+  });
+  await put('leases/lease-anterior', {
+    propertyId: PROPERTY, ownerId: OWNER, memberUids: CIRCLE,
+    tenantUid: 'uid-inquilino-viejo', tenantName: 'Inquilino anterior',
+    rentPrice: 1200000,
+  });
+}
+
 async function seedUsers(): Promise<void> {
   await put(`users/${COLLAB}`, {
     uid: COLLAB, email: 'colab@example.com', displayName: 'Ana Colaboradora',
@@ -340,6 +359,14 @@ async function suite(strict: boolean): Promise<void> {
   await denied('dueño NO lee el perfil de un usuario ajeno',
     read(owner, `users/${STRANGER}`));
 
+  // ── Arrendamientos ──────────────────────────────────────────────────────
+  await allowed('dueño lee el arrendamiento vigente', read(owner, 'leases/lease-actual'));
+  await allowed('dueño lee un arrendamiento anterior', read(owner, 'leases/lease-anterior'));
+  await allowed('colaborador lee el arrendamiento', read(collab, 'leases/lease-actual'));
+  await allowed('inquilino lee SU arrendamiento', read(tenant, 'leases/lease-actual'));
+  await denied('inquilino NO lee el del anterior', read(tenant, 'leases/lease-anterior'));
+  await denied('extraño NO lee arrendamientos', read(stranger, 'leases/lease-actual'));
+
   // El agujero que cerró todo esto.
   await denied('extraño NO lee serviceReceipts', read(stranger, 'serviceReceipts/rec-1'));
   await denied('extraño NO lee services', read(stranger, 'services/svc-1'));
@@ -357,6 +384,7 @@ async function main(): Promise<void> {
   await seedLegacy();
   await seedInvites();
   await seedUsers();
+  await seedLeases();
   await suite(true);
 
   console.log(`\n  ${passes} ok, ${failures} fallos\n`);

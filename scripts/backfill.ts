@@ -41,6 +41,11 @@ interface Migration {
   prepare?(db: Firestore): Promise<void>;
   /** Devuelve los campos a escribir, o `null` si el documento ya está bien. */
   patch(data: FirebaseFirestore.DocumentData, collection: string): Record<string, unknown> | null;
+  /**
+   * Se ejecuta al terminar el recorrido. Para migraciones que además de completar
+   * campos tienen que CREAR documentos en otra colección.
+   */
+  finish?(db: Firestore, apply: boolean): Promise<void>;
 }
 
 /** 'YYYY-MM' de una fecha, en la zona horaria del proceso. */
@@ -67,6 +72,8 @@ const propertyOwners = new Map<string, string>();
 const serviceCircles = new Map<string, Set<string>>();
 /** propertyId → nombre. */
 const propertyNames = new Map<string, string>();
+/** Arrendamientos por crear, recogidos durante el recorrido de `properties`. */
+const pendingLeases: any[] = [];
 
 /** Fase 2: clave de mes en pagos y gastos, derivada de `date`. */
 const period: Migration = {
@@ -337,8 +344,84 @@ const cleanup: Migration = {
   },
 };
 
+/**
+ * Crea el arrendamiento vigente de cada propiedad ocupada.
+ *
+ * Los datos del inquilino vivian dentro de `Property`, asi que al cambiar de
+ * arrendatario se sobrescribian y se perdia quien vivia y a cuanto. Esto
+ * convierte lo que hay HOY en el primer arrendamiento de cada propiedad, para
+ * que a partir de ahora cada cambio quede registrado en vez de borrar el
+ * anterior.
+ *
+ * NO reconstruye historia que ya se perdio: lo anterior a este punto no esta en
+ * ninguna parte. Y no toca los pagos existentes.
+ *
+ * Es la unica migracion que CREA documentos en vez de completar campos, asi que
+ * su idempotencia se apoya en un id determinista: `lease_{propertyId}`.
+ */
+const leases: Migration = {
+  name: 'leases',
+  description: 'Crea el arrendamiento vigente de cada propiedad ocupada',
+  collections: ['properties'],
+
+  patch(data) {
+    const id = data['__id'] as string;
+    // Solo las ocupadas: una propiedad disponible no tiene arrendamiento vigente.
+    if (data['status'] !== 'ocupado') return null;
+    if (data['activeLeaseId']) return null;
+
+    pendingLeases.push({
+      propertyId: id,
+      ownerId: data['ownerId'] as string,
+      memberUids: (data['memberUids'] as string[] | undefined) ?? [data['ownerId'] as string],
+      tenantName: (data['tenantName'] as string | null) ?? null,
+      tenantPhone: (data['tenantPhone'] as string | null) ?? null,
+      tenantEmail: (data['tenantEmail'] as string | null) ?? null,
+      tenantUid: (data['tenantUid'] as string | null) ?? null,
+      rentPrice: (data['tenantRentPrice'] as number | null)
+        ?? (data['rentPrice'] as number | null) ?? null,
+      residentCount: (data['residentCount'] as number | undefined) ?? 1,
+      paymentDueDay: (data['paymentDueDay'] as number | null) ?? null,
+      paymentFree: (data['paymentFree'] as boolean | undefined) ?? false,
+      createdAt: data['createdAt'],
+    });
+
+    return { activeLeaseId: `lease_${id}` };
+  },
+
+  async finish(db, apply) {
+    console.log(`  ${pendingLeases.length} arrendamientos ${apply ? 'creados' : 'se crearian'}`);
+    for (const l of pendingLeases.slice(0, 5)) {
+      console.log(`    lease_${l.propertyId} → ${l.tenantName ?? '(sin nombre)'}, ${l.rentPrice ?? 'sin precio'}`);
+    }
+    if (!apply) return;
+
+    for (const l of pendingLeases) {
+      const { propertyId, createdAt, ...rest } = l;
+      // El arrendamiento arranca cuando se creo la propiedad: es lo mas cercano a
+      // la verdad que se puede saber sin datos que ya no existen.
+      const startDate = createdAt instanceof Timestamp ? createdAt : Timestamp.now();
+      const priceHistory = rest.rentPrice === null ? [] : [{
+        from: startDate,
+        rentPrice: rest.rentPrice,
+        changedAt: Timestamp.now(),
+        changedBy: rest.ownerId,
+      }];
+      await db.collection('leases').doc(`lease_${propertyId}`).set({
+        propertyId,
+        ...rest,
+        priceHistory,
+        startDate,
+        endDate: null,
+        createdAt: startDate,
+        updatedAt: Timestamp.now(),
+      }, { merge: true });
+    }
+  },
+};
+
 const MIGRATIONS: Migration[] = [
-  period, memberUids, ownerUids, serviceAssignmentOwner, serviceCircle, cleanup,
+  period, memberUids, ownerUids, serviceAssignmentOwner, serviceCircle, cleanup, leases,
 ];
 
 // ── Motor ───────────────────────────────────────────────────────────────────
@@ -418,6 +501,7 @@ async function main(): Promise<void> {
   try {
     if (migration.prepare) await migration.prepare(db);
     await run(db, migration, apply);
+    if (migration.finish) await migration.finish(db, apply);
   } catch (err) {
     const message = (err as Error).message ?? String(err);
     if (/credential|authenticat|permission|PERMISSION_DENIED|Could not load/i.test(message)) {
