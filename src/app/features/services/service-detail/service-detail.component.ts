@@ -509,20 +509,47 @@ type DistMethod = 'por_persona' | 'partes_iguales' | 'manual';
                 }
 
                 @if (existingReceipts().length) {
-                  <div class="p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2">
-                    <mat-icon class="text-amber-500 text-[18px] flex-shrink-0 mt-0.5">warning</mat-icon>
-                    <p class="text-xs text-amber-700">Ya existen {{ existingReceipts().length }} recibo(s) para este mes. Al generar nuevos se reemplazarán.</p>
-                  </div>
+                  @if (paidReceiptsCount() > 0) {
+                    <div class="p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2">
+                      <mat-icon class="text-amber-500 text-[18px] flex-shrink-0 mt-0.5">warning</mat-icon>
+                      <p class="text-xs text-amber-700">
+                        {{ paidReceiptsCount() }} de estos {{ existingReceipts().length }} recibo(s) ya están pagados.
+                        <strong>Corrige el total</strong> para ajustar los montos sin perder esos pagos;
+                        generar de nuevo los borra y los recrea sin pagar.
+                      </p>
+                    </div>
+                  } @else {
+                    <div class="p-3 bg-warm-50 border border-warm-200 rounded-lg flex items-start gap-2">
+                      <mat-icon class="text-warm-400 text-[18px] flex-shrink-0 mt-0.5">info</mat-icon>
+                      <p class="text-xs text-warm-600">Ya existen {{ existingReceipts().length }} recibo(s) para este mes. Al generar nuevos se reemplazarán.</p>
+                    </div>
+                  }
                 }
 
                 @if (canWrite()) {
+                  <!-- Corregir el total: recalcula los montos sin tocar los pagos -->
+                  @if (existingReceipts().length && totalAmount() > 0 && totalAmount() !== billTotal()) {
+                    <button (click)="correctTotal()" [disabled]="correctingTotal()"
+                      class="w-full px-4 py-2.5 bg-primary-500 text-white rounded-lg text-sm font-medium hover:bg-primary-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                      @if (correctingTotal()) {
+                        <div class="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin"></div>
+                      }
+                      <mat-icon class="text-[18px]">edit</mat-icon>
+                      Corregir total a {{ totalAmount() | currency:'COP':'symbol-narrow':'1.0-0' }}
+                    </button>
+                  }
+
                   <button (click)="generateReceipts()" [disabled]="generatingReceipts() || totalAmount() <= 0"
-                    class="w-full px-4 py-2.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                    class="w-full px-4 py-2.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                    [class]="existingReceipts().length
+                      ? 'border border-warm-200 text-warm-600 hover:bg-warm-50'
+                      : 'bg-green-600 text-white hover:bg-green-700'">
                     @if (generatingReceipts()) {
                       <div class="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin"></div>
                     }
                     <mat-icon class="text-[18px]">receipt</mat-icon>
-                    Generar {{ livePropertyIds(selectedAssignment()!).length }} recibo(s)
+                    {{ existingReceipts().length ? 'Regenerar' : 'Generar' }}
+                    {{ livePropertyIds(selectedAssignment()!).length }} recibo(s)
                   </button>
                 }
 
@@ -991,6 +1018,48 @@ export class ServiceDetailComponent implements OnInit {
   }
 
   // ── Receipt generation ────────────────────────────────────────────────────
+
+  correctingTotal = signal(false);
+
+  /** La factura del código y mes seleccionados, si ya se generó alguna vez. */
+  private bill = toSignal(
+    combineLatest([this.selectedAssignment$, this.selectedMonth$]).pipe(
+      switchMap(([assignment, month]) =>
+        assignment?.id ? this.receiptService.getBill(assignment.id, month) : of(null)
+      )
+    ),
+    { initialValue: null }
+  );
+
+  billTotal = computed(() => this.bill()?.totalAmount ?? null);
+  paidReceiptsCount = computed(() => this.existingReceipts().filter(r => r.isPaid).length);
+
+  /**
+   * Corrige el total sin regenerar.
+   *
+   * Regenerar borra los recibos y los recrea, así que se lleva por delante los
+   * que ya estaban pagados —con su gasto asociado— solo por arreglar un dígito
+   * mal tecleado. Esto recalcula los montos en sitio: los recibos conservan su
+   * id, su estado de pago y su gasto.
+   */
+  async correctTotal() {
+    const bill = this.bill();
+    if (!bill || this.totalAmount() <= 0) return;
+
+    this.correctingTotal.set(true);
+    try {
+      await this.receiptService.updateBillTotal(bill, this.totalAmount());
+      this.snackBar.open(
+        `Total corregido. ${this.existingReceipts().length} recibo(s) ajustados, sin perder los pagos.`,
+        'OK',
+        { duration: 4000 }
+      );
+    } catch {
+      this.snackBar.open('No se pudo corregir el total.', 'OK', { duration: 4000 });
+    } finally {
+      this.correctingTotal.set(false);
+    }
+  }
 
   async generateReceipts() {
     const assignment = this.selectedAssignment();
