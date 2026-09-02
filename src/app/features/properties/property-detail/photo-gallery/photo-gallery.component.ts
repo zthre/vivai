@@ -2,7 +2,8 @@ import { Component, inject, input, signal, computed, WritableSignal } from '@ang
 import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatDialogModule } from '@angular/material/dialog';
+import { DialogService } from '../../../../core/services/dialog.service';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { PhotoItem } from '../../../../core/models/property.model';
 import { PropertyService } from '../../../../core/services/property.service';
@@ -139,7 +140,7 @@ export class PhotoGalleryComponent {
 
   private propertyService = inject(PropertyService);
   private storageService = inject(StorageService);
-  private dialog = inject(MatDialog);
+  private dialog = inject(DialogService);
   private snackBar = inject(MatSnackBar);
 
   readonly maxPhotos = MAX_PHOTOS;

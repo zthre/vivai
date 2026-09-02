@@ -2,7 +2,8 @@ import { Component, Input, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
-import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatDialogModule } from '@angular/material/dialog';
+import { DialogService } from '../../../../core/services/dialog.service';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { Firestore, doc, getDoc } from '@angular/fire/firestore';
 import { PropertyService } from '../../../../core/services/property.service';
@@ -159,7 +160,7 @@ export class ColaboradoresComponent implements OnInit {
   private authService = inject(AuthService);
   private firestore = inject(Firestore);
   private snackBar = inject(MatSnackBar);
-  private dialog = inject(MatDialog);
+  private dialog = inject(DialogService);
 
   colaboradores = signal<ColaboradorInfo[]>([]);
   pendingEmails = signal<string[]>([]);

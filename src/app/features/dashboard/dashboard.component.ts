@@ -2,7 +2,8 @@ import { Component, inject, computed, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
-import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatDialogModule } from '@angular/material/dialog';
+import { DialogService } from '../../core/services/dialog.service';
 import { toSignal, toObservable } from '@angular/core/rxjs-interop';
 import { switchMap } from 'rxjs/operators';
 import { PropertyService } from '../../core/services/property.service';
@@ -394,7 +395,7 @@ export class DashboardComponent {
   private receiptService = inject(ServiceReceiptService);
   private authService = inject(AuthService);
   private permissions = inject(PermissionService);
-  private dialog = inject(MatDialog);
+  private dialog = inject(DialogService);
 
   selectedMonth = signal<Date>(startOfMonth(new Date()));
 

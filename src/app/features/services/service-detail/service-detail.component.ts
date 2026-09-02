@@ -3,7 +3,8 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink, ActivatedRoute, Router } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
-import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatDialogModule } from '@angular/material/dialog';
+import { DialogService } from '../../../core/services/dialog.service';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { toSignal, toObservable } from '@angular/core/rxjs-interop';
 import { switchMap, of, combineLatest } from 'rxjs';
@@ -570,7 +571,7 @@ export class ServiceDetailComponent implements OnInit {
   private permissions = inject(PermissionService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
-  private dialog = inject(MatDialog);
+  private dialog = inject(DialogService);
   private snackBar = inject(MatSnackBar);
 
   serviceId = '';

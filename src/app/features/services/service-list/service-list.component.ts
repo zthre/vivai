@@ -2,7 +2,8 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
-import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatDialogModule } from '@angular/material/dialog';
+import { DialogService } from '../../../core/services/dialog.service';
 import { toSignal, toObservable } from '@angular/core/rxjs-interop';
 import { switchMap } from 'rxjs';
 import { UtilityServiceService } from '../../../core/services/utility-service.service';
@@ -184,7 +185,7 @@ export class ServiceListComponent {
   private svcService = inject(UtilityServiceService);
   private receiptService = inject(ServiceReceiptService);
   private propertyService = inject(PropertyService);
-  private dialog = inject(MatDialog);
+  private dialog = inject(DialogService);
 
   services = toSignal(this.svcService.getAll());
   private properties = toSignal(this.propertyService.getAll(), { initialValue: [] });

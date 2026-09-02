@@ -205,6 +205,18 @@ Colaboradores, sin abrir la colección `users`. Lo mantiene `PropertyService` al
 o de baja a un colaborador; al quitarlo de una propiedad suelta solo se retira el dueño si
 ya no le queda ninguna otra propiedad de ese dueño.
 
+### Cabeceras y diálogos — dos trampas
+
+- **`Cross-Origin-Opener-Policy: same-origin-allow-popups`** (`firebase.json`). NO lo cambies
+  a `same-origin`: `signInWithPopup` necesita conservar la referencia a la ventana de Google
+  para sondear `popup.closed`, y con la política estricta el login se queda colgado sin
+  ningún error que apunte a la cabecera. El aviso «COOP policy would block the window.closed
+  call» que sale en consola es preventivo, no un fallo.
+- **Abre los diálogos con `DialogService`, no con `MatDialog`.** Material 17 marca el fondo
+  con `aria-hidden` antes de mover el foco, así que el botón que abrió el diálogo se queda
+  con el foco dentro de la zona oculta y Chrome se niega a aplicarlo. `DialogService` suelta
+  el foco antes de abrir; es un reemplazo directo de `MatDialog.open`.
+
 ### Utilidades compartidas
 
 - **`core/utils/month.util.ts`** — todo lo de meses en un solo sitio: `monthKey(d)` →

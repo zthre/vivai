@@ -2,7 +2,8 @@ import { Component, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
-import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatDialogModule } from '@angular/material/dialog';
+import { DialogService } from '../../../core/services/dialog.service';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { toSignal, toObservable } from '@angular/core/rxjs-interop';
 import { PropertyService } from '../../../core/services/property.service';
@@ -209,7 +210,7 @@ export class PropertiesListComponent {
   private receiptService = inject(ServiceReceiptService);
   private authService = inject(AuthService);
   private permissions = inject(PermissionService);
-  private dialog = inject(MatDialog);
+  private dialog = inject(DialogService);
   private snackBar = inject(MatSnackBar);
 
   properties = toSignal(this.propertyService.getAll(), { initialValue: [] });
