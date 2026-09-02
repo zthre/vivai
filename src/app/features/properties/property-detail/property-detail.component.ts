@@ -22,6 +22,9 @@ import { ServiceReceipt } from '../../../core/models/service-receipt.model';
 import { listingState } from '../../../core/services/listing.util';
 import { AuthService } from '../../../core/auth/auth.service';
 import { PermissionService } from '../../../core/auth/permissions';
+import { LeaseService } from '../../../core/services/lease.service';
+import { Lease, isLeaseActive } from '../../../core/models/lease.model';
+import { Timestamp } from '@angular/fire/firestore';
 import { addMonths, monthKey, monthLabel, startOfMonth } from '../../../core/utils/month.util';
 import { toObservable } from '@angular/core/rxjs-interop';
 import { combineLatest } from 'rxjs';
@@ -348,6 +351,38 @@ import { combineLatest } from 'rxjs';
             </div>
           }
 
+          <!-- Historial de arrendamientos -->
+          @if (pastLeases().length > 0) {
+            <div class="bg-white rounded-xl border border-warm-200 shadow-sm">
+              <div class="px-5 py-4 border-b border-warm-100">
+                <h2 class="font-semibold text-warm-900">Arrendamientos anteriores</h2>
+                <p class="text-xs text-warm-400 mt-0.5">Quién vivió aquí y a qué precio</p>
+              </div>
+              <div class="divide-y divide-warm-100">
+                @for (lease of pastLeases(); track lease.id) {
+                  <div class="px-5 py-3.5 flex items-start justify-between gap-4">
+                    <div class="min-w-0">
+                      <p class="font-medium text-warm-900 truncate">
+                        {{ lease.tenantName || 'Sin nombre' }}
+                      </p>
+                      <p class="text-xs text-warm-500 mt-0.5">
+                        {{ leaseRange(lease) }}
+                      </p>
+                      @if (lease.priceHistory.length > 1) {
+                        <p class="text-xs text-warm-400 mt-1">
+                          {{ lease.priceHistory.length }} cambios de precio
+                        </p>
+                      }
+                    </div>
+                    <span class="text-sm font-semibold text-warm-700 whitespace-nowrap">
+                      {{ lease.rentPrice | currency:'COP':'symbol-narrow':'1.0-0' }}
+                    </span>
+                  </div>
+                }
+              </div>
+            </div>
+          }
+
           <div class="bg-white rounded-xl border border-warm-200 shadow-sm">
             <div class="px-5 py-4 border-b border-warm-100">
               <h2 class="font-semibold text-warm-900">Historial de pagos</h2>
@@ -409,6 +444,7 @@ export class PropertyDetailComponent implements OnInit {
   private receiptService = inject(ServiceReceiptService);
   private authService = inject(AuthService);
   private permissions = inject(PermissionService);
+  private leaseService = inject(LeaseService);
   private dialog = inject(DialogService);
   private snackBar = inject(MatSnackBar);
   private route = inject(ActivatedRoute);
@@ -436,6 +472,28 @@ export class PropertyDetailComponent implements OnInit {
     const prop = this.property();
     return !!prop && listingState(prop) !== 'none';
   });
+
+  /**
+   * Arrendamientos terminados. El vigente ya se muestra arriba con los datos del
+   * inquilino, así que aquí solo va lo que antes se perdía al cambiar de
+   * arrendatario.
+   */
+  private leases = toSignal(
+    this.route.paramMap.pipe(
+      switchMap(params => this.leaseService.getByProperty(params.get('id')!))
+    ),
+    { initialValue: [] as Lease[] }
+  );
+
+  pastLeases = computed(() => this.leases().filter(l => !isLeaseActive(l)));
+
+  /** «ene 2024 — jun 2025», o «desde ene 2024» si sigue abierto. */
+  leaseRange(lease: Lease): string {
+    const fmt = (t: Timestamp) =>
+      t.toDate().toLocaleDateString('es-CO', { month: 'short', year: 'numeric' });
+    const start = fmt(lease.startDate);
+    return lease.endDate ? `${start} — ${fmt(lease.endDate)}` : `desde ${start}`;
+  }
 
   propertyPayments = toSignal(
     this.route.paramMap.pipe(

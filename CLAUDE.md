@@ -69,6 +69,7 @@ All docs owned by a user have `ownerId = uid`. Key collections:
 | `paymentLinks` | `propertyId`, `month: 'YYYY-MM'`, `status: 'active'\|'paid'\|'expired'`, `externalId` (Stripe session) |
 | `serviceAssignments` | `ownerId`, `serviceId`, `serviceName`, `code?`, `description?`, `propertyIds[]`, `distributionMethod` |
 | `serviceReceipts` | `ownerId`, `serviceId`, `assignmentId?` (null en manuales), `assignmentCode?`, `propertyId`, `propertyName?`, `month: 'YYYY-MM'`, `origin: 'manual'\|'distribucion'`, `totalAmount`, `propertyAmount`, `isPaid`, `paidAt?`, `expenseId?` |
+| `leases` | `propertyId`, `ownerId`, `memberUids[]`, `tenantUid?`, `rentPrice`, `priceHistory[]`, `startDate`, `endDate` (null = vigente) |
 | `monthlySnapshots` | `ownerId`, `propertyId`, `month: 'YYYY-MM'`, aggregated financials |
 | `mail` | Written by Cloud Functions; consumed by Firebase "Trigger Email" extension |
 
@@ -202,6 +203,24 @@ que permite al dueño leer el perfil de su colaborador —nombre y correo— en 
 Colaboradores, sin abrir la colección `users`. Lo mantiene `PropertyService` al dar de alta
 o de baja a un colaborador; al quitarlo de una propiedad suelta solo se retira el dueño si
 ya no le queda ninguna otra propiedad de ese dueño.
+
+### `leases` — historial de arrendamientos
+
+Los datos del inquilino siguen en `Property` (las pantallas los leen de ahí), pero la
+**historia** vive en `leases`. Antes, cambiar de arrendatario los sobrescribía y se perdía
+para siempre quién vivía y a cuánto.
+
+- **Dos ejes de historia**: varios arrendamientos por propiedad (uno por inquilino) y,
+  dentro de cada uno, `priceHistory` para las subidas al mismo. `rentPrice` es el vigente,
+  espejo de la última entrada.
+- **El cierre es automático**: `PropertyService.assignTenant` abre uno nuevo y
+  `LeaseService.open` cierra el anterior con la fecha del día previo, sin solape ni hueco.
+  `removeTenant` cierra el vigente.
+- **`LeaseInput` exige `ownerId` y `memberUids` de quien llama.** No es capricho:
+  `PropertyService` abre arrendamientos, así que si `LeaseService` dependiera de él habría
+  un ciclo de inyección — que TypeScript no detecta y Angular revienta en runtime.
+- Si abrir el arrendamiento falla, la asignación del inquilino **no** se deshace: se pierde
+  la entrada de historial, no el dato operativo.
 
 ### Cabeceras y diálogos — dos trampas
 

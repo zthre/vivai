@@ -31,6 +31,8 @@ import {
   propertyMemberUids,
 } from '../models/property.model';
 import { AuthService } from '../auth/auth.service';
+import { LeaseService } from './lease.service';
+import { logFirestoreError } from './firestore-error.util';
 import { DEFAULT_COLABORADOR_PERMISSIONS } from '../auth/permissions';
 import { listingExpiryFrom } from './listing.util';
 
@@ -44,6 +46,7 @@ const SNAPSHOT_TTL_MS = 5_000;
 export class PropertyService {
   private firestore = inject(Firestore);
   private auth = inject(AuthService);
+  private leases = inject(LeaseService);
 
   private snapshotCache = new Map<string, { value: Property | null; at: number }>();
 
@@ -276,12 +279,21 @@ export class PropertyService {
     const propData = propSnap.data() as Property | undefined;
     const tenantUid = propData?.tenantUid;
 
+    // El arrendamiento se cierra con la fecha de hoy y queda en el historial.
+    await this.leases.closeActive(propertyId).catch(err =>
+      logFirestoreError('PropertyService.removeTenant', err, {
+        collection: 'leases',
+        query: `closeActive propertyId ${propertyId}`,
+      })
+    );
+
     await updateDoc(propRef, {
       tenantName: null,
       tenantPhone: null,
       tenantEmail: null,
       tenantUid: null,
       tenantRentPrice: null,
+      activeLeaseId: null,
       status: 'disponible',
       updatedAt: serverTimestamp(),
     });
@@ -356,12 +368,58 @@ export class PropertyService {
         });
 
         await updateDoc(propRef, payload);
+        await this.openLease(propertyId, tenant, targetUid);
         return 'linked';
       }
     }
 
     await updateDoc(propRef, payload);
+    await this.openLease(propertyId, tenant, null);
     return 'saved';
+  }
+
+  /**
+   * Abre el arrendamiento correspondiente a la asignación y lo enlaza.
+   *
+   * `LeaseService` cierra solo el anterior, así que asignar un inquilino nuevo
+   * termina el que hubiera — que es como ya funcionaba, solo que ahora el
+   * anterior queda registrado en vez de desaparecer.
+   *
+   * Si esto falla, la asignación NO se deshace: el inquilino queda bien puesto en
+   * la propiedad y solo se pierde la entrada de historial, que es el mal menor.
+   */
+  private async openLease(
+    propertyId: string,
+    tenant: { name: string; phone?: string; email?: string; rentPrice?: number; residentCount?: number },
+    tenantUid: string | null
+  ): Promise<void> {
+    try {
+      const prop = await this.snapshot(propertyId);
+      const ownerId = prop?.ownerId ?? this.auth.uid()!;
+      const leaseId = await this.leases.open({
+        propertyId,
+        ownerId,
+        memberUids: prop ? propertyMemberUids(prop) : [ownerId],
+        tenantName: tenant.name || null,
+        tenantPhone: tenant.phone || null,
+        tenantEmail: tenant.email || null,
+        tenantUid,
+        rentPrice: tenant.rentPrice ?? null,
+        residentCount: tenant.residentCount ?? 1,
+        paymentDueDay: prop?.paymentDueDay ?? null,
+        paymentFree: prop?.paymentFree ?? false,
+      });
+      await updateDoc(doc(this.firestore, `properties/${propertyId}`), {
+        activeLeaseId: leaseId,
+        updatedAt: serverTimestamp(),
+      });
+      this.forget(propertyId);
+    } catch (err) {
+      logFirestoreError('PropertyService.openLease', err, {
+        collection: 'leases',
+        query: `open sobre propertyId ${propertyId}`,
+      });
+    }
   }
 
   // ── Colaboradores ─────────────────────────────────────────────────────────
