@@ -31,6 +31,7 @@ export const DEFAULT_COLABORADOR_PERMISSIONS: Required<ColaboradorPermission> = 
   gastos: true,
   tickets: true,
   servicios: true,
+  analytics: true,
 };
 
 /**

@@ -9,6 +9,7 @@ import { Property } from '../../core/models/property.model';
 import { Payment } from '../../core/models/payment.model';
 import { ServiceReceipt } from '../../core/models/service-receipt.model';
 import { ServiceReceiptService } from '../../core/services/service-receipt.service';
+import { PermissionService } from '../../core/auth/permissions';
 import { currentMonthKey, fromMonthKey } from '../../core/utils/month.util';
 
 @Component({
@@ -24,7 +25,13 @@ import { currentMonthKey, fromMonthKey } from '../../core/utils/month.util';
           <h1 class="text-2xl font-bold text-warm-900">Recordatorios de pago</h1>
           <p class="text-warm-500 text-sm mt-1">Arriendo y servicios pendientes, por WhatsApp — uno a uno o a todos</p>
         </div>
-        @if (pendingProperties().length > 0) {
+        @if (!canRemind()) {
+        <div class="bg-white rounded-xl border border-warm-200 p-8 text-center">
+          <mat-icon class="text-warm-300 text-[40px]">lock</mat-icon>
+          <p class="text-warm-500 text-sm mt-3">No tienes permiso para enviar recordatorios de pago</p>
+        </div>
+      }
+      @if (canRemind() && pendingProperties().length > 0) {
           <button
             (click)="sendAll()"
             class="flex items-center gap-2 px-4 py-2.5 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors text-sm font-medium shadow-sm"
@@ -55,7 +62,7 @@ import { currentMonthKey, fromMonthKey } from '../../core/utils/month.util';
       </div>
 
       <!-- Summary chips -->
-      @if (filteredProperties().length > 0) {
+      @if (canRemind() && filteredProperties().length > 0) {
         <div class="flex gap-3 flex-wrap">
           <div class="bg-white rounded-lg border border-warm-200 px-4 py-2.5 flex items-center gap-2">
             <mat-icon class="text-warm-400 text-[18px]">home</mat-icon>
@@ -81,7 +88,7 @@ import { currentMonthKey, fromMonthKey } from '../../core/utils/month.util';
       }
 
       <!-- Property list -->
-      @for (prop of filteredProperties(); track prop.id) {
+      @for (prop of canRemind() ? filteredProperties() : []; track prop.id) {
         <div class="bg-white rounded-xl border border-warm-200 shadow-sm overflow-hidden">
           <div class="flex items-center gap-4 px-5 py-4 flex-wrap">
             <div class="flex-1 min-w-0">
@@ -142,6 +149,7 @@ export class RemindersComponent {
   private propertyService = inject(PropertyService);
   private paymentService = inject(PaymentService);
   private receiptService = inject(ServiceReceiptService);
+  private permissions = inject(PermissionService);
 
   private now = new Date();
 
@@ -153,6 +161,13 @@ export class RemindersComponent {
   });
 
   properties = toSignal(this.propertyService.getAll(), { initialValue: [] });
+
+  /**
+   * Enviar un recordatorio es una acción de cara al inquilino, así que va bajo el
+   * mismo permiso que registrar su pago. Antes no comprobaba nada: un colaborador
+   * sin ningún permiso de pagos podía escribirle por WhatsApp a los inquilinos.
+   */
+  canRemind = computed(() => this.permissions.canOnAny(this.properties(), 'inmueblesPagos'));
 
   private allOccupied = computed(() =>
     this.properties().filter(p => p.status === 'ocupado')

@@ -8,6 +8,7 @@ import { switchMap, of, combineLatest, filter, map, startWith } from 'rxjs';
 import { AuthService, UserRole } from '../../core/auth/auth.service';
 import { TicketService } from '../../core/services/ticket.service';
 import { PropertyService } from '../../core/services/property.service';
+import { PermissionService, PermissionKey } from '../../core/auth/permissions';
 import { APP_VERSION } from '../../core/app-version';
 
 interface NavItem {
@@ -234,6 +235,7 @@ export class ShellComponent implements OnInit {
   private authService = inject(AuthService);
   private ticketService = inject(TicketService);
   private propertyService = inject(PropertyService);
+  private permissions = inject(PermissionService);
   private router = inject(Router);
 
   isMobile = signal(false);
@@ -300,6 +302,9 @@ export class ShellComponent implements OnInit {
     )
   );
 
+  /** Las propiedades del círculo, para decidir qué secciones mostrar. */
+  private properties = toSignal(this.propertyService.getAll(), { initialValue: [] });
+
   private uid$ = toObservable(this.authService.uid).pipe(filter((uid): uid is string => !!uid));
   private role$ = toObservable(this.authService.activeRole).pipe(filter((r): r is NonNullable<typeof r> => !!r));
 
@@ -337,14 +342,34 @@ export class ShellComponent implements OnInit {
     { label: 'Tickets', icon: 'build_circle', route: '/tickets', badge: () => this.pendingTicketsCount() },
   ];
 
-  private colaboradorNavItems: NavItem[] = [
-    { label: 'Dashboard', icon: 'dashboard', route: '/dashboard' },
-    { label: 'Propiedades', icon: 'apartment', route: '/properties' },
-    { label: 'Finanzas', icon: 'bar_chart', route: '/finances' },
-    { label: 'Servicios', icon: 'receipt_long', route: '/services' },
-    { label: 'Marketplace', icon: 'storefront', route: '/', external: true, trailingIcon: 'open_in_new' },
-    { label: 'Tickets', icon: 'build_circle', route: '/tickets', badge: () => this.pendingTicketsCount() },
-  ];
+  /**
+   * El menú de un colaborador depende de sus permisos.
+   *
+   * Antes era una lista fija: veía Finanzas, Servicios y Tickets aunque los
+   * tuviera desactivados, entraba, y se encontraba una pantalla en la que no
+   * podía hacer nada. Ocultar lo que no puede usar evita ese callejón.
+   *
+   * Dashboard y Propiedades no llevan permiso: son la vista de lo que gestiona,
+   * y sin ellas la sesión no tendría sentido.
+   */
+  private colaboradorNavItems = computed<NavItem[]>(() => {
+    const props = this.properties();
+    const item = (key: PermissionKey, nav: NavItem): NavItem[] =>
+      this.permissions.canOnAny(props, key) ? [nav] : [];
+
+    return [
+      { label: 'Dashboard', icon: 'dashboard', route: '/dashboard' },
+      { label: 'Propiedades', icon: 'apartment', route: '/properties' },
+      ...item('gastos', { label: 'Finanzas', icon: 'bar_chart', route: '/finances' }),
+      ...item('servicios', { label: 'Servicios', icon: 'receipt_long', route: '/services' }),
+      ...item('analytics', { label: 'Analytics', icon: 'insights', route: '/analytics' }),
+      { label: 'Marketplace', icon: 'storefront', route: '/', external: true, trailingIcon: 'open_in_new' },
+      ...item('tickets', {
+        label: 'Tickets', icon: 'build_circle', route: '/tickets',
+        badge: () => this.pendingTicketsCount(),
+      }),
+    ];
+  });
 
   private tenantNavItems: NavItem[] = [
     { label: 'Mi Arriendo', icon: 'home', route: '/tenant' },
@@ -354,7 +379,7 @@ export class ShellComponent implements OnInit {
 
   navItems = computed(() => {
     if (this.activeRole() === 'tenant') return this.tenantNavItems;
-    if (this.activeRole() === 'colaborador') return this.colaboradorNavItems;
+    if (this.activeRole() === 'colaborador') return this.colaboradorNavItems();
     return this.ownerNavItems;
   });
 

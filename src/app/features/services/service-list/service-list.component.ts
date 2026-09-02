@@ -11,6 +11,7 @@ import { ServiceReceiptService } from '../../../core/services/service-receipt.se
 import { PropertyService } from '../../../core/services/property.service';
 import { ServiceReceipt } from '../../../core/models/service-receipt.model';
 import { RegisterServiceDialogComponent } from '../register-service/register-service-dialog.component';
+import { PermissionService } from '../../../core/auth/permissions';
 import { addMonths, monthKey, monthLabel, startOfMonth } from '../../../core/utils/month.util';
 
 @Component({
@@ -33,16 +34,18 @@ import { addMonths, monthKey, monthLabel, startOfMonth } from '../../../core/uti
           </div>
 
           <div class="flex items-center gap-2">
-            <button (click)="openRegister()"
-              class="flex items-center gap-1.5 px-3 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-xs font-medium shadow-sm">
-              <mat-icon class="text-[16px]">add</mat-icon>
-              Registrar servicio
-            </button>
-            <a routerLink="/services/new"
-              class="flex items-center gap-1.5 px-3 py-2 border border-warm-200 text-warm-600 rounded-lg hover:bg-warm-50 transition-colors text-xs font-medium">
-              <mat-icon class="text-[16px]">tune</mat-icon>
-              Nuevo tipo de servicio
-            </a>
+            @if (canWrite()) {
+              <button (click)="openRegister()"
+                class="flex items-center gap-1.5 px-3 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-xs font-medium shadow-sm">
+                <mat-icon class="text-[16px]">add</mat-icon>
+                Registrar servicio
+              </button>
+              <a routerLink="/services/new"
+                class="flex items-center gap-1.5 px-3 py-2 border border-warm-200 text-warm-600 rounded-lg hover:bg-warm-50 transition-colors text-xs font-medium">
+                <mat-icon class="text-[16px]">tune</mat-icon>
+                Nuevo tipo de servicio
+              </a>
+            }
           </div>
         </div>
 
@@ -79,14 +82,20 @@ import { addMonths, monthKey, monthLabel, startOfMonth } from '../../../core/uti
         <div class="bg-white rounded-xl border border-warm-200 shadow-sm p-12 text-center">
           <mat-icon class="text-warm-300 text-[56px]">receipt_long</mat-icon>
           <h3 class="text-warm-700 font-semibold mt-3">Sin servicios</h3>
-          <p class="text-warm-400 text-sm mt-1 mb-5">
-            Registra el primer servicio de una propiedad: qué es y cuánto se paga
-          </p>
-          <button (click)="openRegister()"
-            class="inline-flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium">
-            <mat-icon class="text-[18px]">add</mat-icon>
-            Registrar servicio
-          </button>
+          @if (canWrite()) {
+            <p class="text-warm-400 text-sm mt-1 mb-5">
+              Registra el primer servicio de una propiedad: qué es y cuánto se paga
+            </p>
+            <button (click)="openRegister()"
+              class="inline-flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium">
+              <mat-icon class="text-[18px]">add</mat-icon>
+              Registrar servicio
+            </button>
+          } @else {
+            <p class="text-warm-400 text-sm mt-1">
+              No tienes permiso para gestionar servicios
+            </p>
+          }
         </div>
       } @else {
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -185,10 +194,18 @@ export class ServiceListComponent {
   private svcService = inject(UtilityServiceService);
   private receiptService = inject(ServiceReceiptService);
   private propertyService = inject(PropertyService);
+  private permissions = inject(PermissionService);
   private dialog = inject(DialogService);
 
   services = toSignal(this.svcService.getAll());
   private properties = toSignal(this.propertyService.getAll(), { initialValue: [] });
+
+  /**
+   * El detalle de un servicio y el registro manual ya comprobaban el permiso,
+   * pero esta lista no: sus botones de crear se le mostraban a cualquier
+   * colaborador, tuviera o no `servicios`.
+   */
+  canWrite = computed(() => this.permissions.canOnAny(this.properties(), 'servicios'));
 
   selectedMonth = signal<Date>(startOfMonth(new Date()));
 

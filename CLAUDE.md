@@ -87,7 +87,7 @@ Marketplace items are publicly readable when `isPublic == true` on property.
 
 `ColaboradorPermission` (on `property.collaboratorPermissions[uid]`):
 ```typescript
-{ inmueblesUnidades?, inmueblesPagos?, inmueblesMedia?, gastos?, tickets?, servicios? }
+{ inmueblesUnidades?, inmueblesPagos?, inmueblesMedia?, gastos?, tickets?, servicios?, analytics? }
 ```
 `undefined` field = `true` (backwards compat).
 
@@ -102,6 +102,16 @@ canWritePagos = computed(() => this.permissions.can(this.property(), 'inmueblesP
 Las variantes que dan acceso total cuando el rol activo no es `colaborador` conservan
 esa línea en el componente (`if (activeRole() !== 'colaborador') return true;`): es una
 regla de rol, no de permiso.
+
+**Dónde se aplica cada uno** — si añades una pantalla que escribe, gatéala aquí también:
+`inmueblesUnidades` (crear/editar/borrar propiedad, publicar en marketplace) · `inmueblesPagos`
+(registrar pagos, enviar recordatorios) · `inmueblesMedia` (fotos) · `gastos` (Finanzas) ·
+`tickets` (cambiar estado) · `servicios` (lista, detalle, recibos, registro) · `analytics`
+(Analytics y exportar reportes).
+
+**El menú lateral del colaborador se calcula con estos permisos** (`shell.component.ts`): no
+se le muestra una sección en la que no podría hacer nada. Si añades una sección con permiso,
+añádela también ahí.
 
 Colaboradores are added globally (all owner's properties at once) via `PropertyService.addGlobalColaborador()`. Per-property methods also exist for legacy use.
 
