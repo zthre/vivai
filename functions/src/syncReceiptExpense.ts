@@ -61,6 +61,37 @@ function describe(data: FirebaseFirestore.DocumentData): string {
   return `${data['serviceName'] ?? 'Servicio'}${code}`;
 }
 
+/**
+ * Asegura que el circulo del servicio cubra a quienes comparten la propiedad
+ * donde se acaba de registrar un recibo suyo.
+ *
+ * Un servicio no cuelga de una propiedad, asi que al crearlo solo se conoce el
+ * circulo de quien lo crea. Si despues se registra un recibo suyo sobre la
+ * propiedad de otro dueno, ese dueno tiene que poder ver el servicio — si no, le
+ * aparece como «eliminado» con sus recibos sueltos por debajo.
+ *
+ * Solo escribe cuando hay algo que anadir.
+ */
+async function widenServiceCircle(
+  db: FirebaseFirestore.Firestore,
+  receipt: FirebaseFirestore.DocumentData
+): Promise<void> {
+  const serviceId = receipt['serviceId'] as string | undefined;
+  const members = (receipt['memberUids'] as string[] | undefined) ?? [];
+  if (!serviceId || members.length === 0) return;
+
+  const ref = db.collection('services').doc(serviceId);
+  const snap = await ref.get();
+  if (!snap.exists) return;
+
+  const current = (snap.data()?.['memberUids'] as string[] | undefined) ?? [];
+  const missing = members.filter(uid => !current.includes(uid));
+  if (missing.length === 0) return;
+
+  await ref.update({ memberUids: [...current, ...missing] });
+  logger.info(`memberUids: servicio ${serviceId} ampliado con ${missing.length} uid(s)`);
+}
+
 export const syncReceiptExpense = onDocumentWritten(
   { document: 'serviceReceipts/{receiptId}', region: REGION },
   async event => {
@@ -118,5 +149,7 @@ export const syncReceiptExpense = onDocumentWritten(
       await after.ref.update({ expenseId });
       logger.info(`syncReceiptExpense: recibo ${receiptId} vinculado a ${expenseId}`);
     }
+
+    await widenServiceCircle(db, data);
   }
 );

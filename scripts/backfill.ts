@@ -63,6 +63,8 @@ const ownerCircles = new Map<string, Set<string>>();
 const collaboratorOwners = new Map<string, Set<string>>();
 /** propertyId → uid de su dueno. */
 const propertyOwners = new Map<string, string>();
+/** serviceId → uids que lo comparten, deducidos de donde se usa. */
+const serviceCircles = new Map<string, Set<string>>();
 
 /** Fase 2: clave de mes en pagos y gastos, derivada de `date`. */
 const period: Migration = {
@@ -230,7 +232,73 @@ const serviceAssignmentOwner: Migration = {
   },
 };
 
-const MIGRATIONS: Migration[] = [period, memberUids, ownerUids, serviceAssignmentOwner];
+/**
+ * Ensancha el circulo de cada servicio hasta cubrir a todos los que lo comparten.
+ *
+ * Un servicio no cuelga de una propiedad, asi que al crearlo solo se sabe el
+ * circulo de quien lo crea. Pero si luego se registra un recibo suyo sobre la
+ * propiedad de OTRO dueno, ese dueno tambien tiene que poder verlo — y con el
+ * circulo original no podia: el servicio le salia como «eliminado», con sus
+ * recibos sueltos por debajo.
+ *
+ * El circulo correcto se deduce de donde se usa el servicio: las propiedades de
+ * sus recibos y de sus codigos de distribucion.
+ */
+const serviceCircle: Migration = {
+  name: 'serviceCircle',
+  description: 'Ensancha memberUids de services al circulo de las propiedades donde se usan',
+  collections: ['services'],
+
+  async prepare(db) {
+    const props = await db.collection('properties').get();
+    for (const doc of props.docs) {
+      const data = doc.data();
+      const ownerId = data['ownerId'] as string | undefined;
+      if (!ownerId) continue;
+      const collaborators = (data['collaboratorUids'] as string[] | undefined) ?? [];
+      propertyCircles.set(doc.id, [...new Set([ownerId, ...collaborators])].filter(Boolean));
+    }
+
+    const add = (serviceId: string | undefined, propertyId: string | undefined) => {
+      if (!serviceId || !propertyId) return;
+      const circle = propertyCircles.get(propertyId);
+      if (!circle) return;
+      const acc = serviceCircles.get(serviceId) ?? new Set<string>();
+      for (const uid of circle) acc.add(uid);
+      serviceCircles.set(serviceId, acc);
+    };
+
+    const receipts = await db.collection('serviceReceipts').get();
+    for (const d of receipts.docs) {
+      add(d.data()['serviceId'] as string, d.data()['propertyId'] as string);
+    }
+
+    const assignments = await db.collection('serviceAssignments').get();
+    for (const d of assignments.docs) {
+      const data = d.data();
+      for (const pid of ((data['propertyIds'] as string[] | undefined) ?? [])) {
+        add(data['serviceId'] as string, pid);
+      }
+    }
+
+    console.log(`  (${serviceCircles.size} servicios con uso registrado)\n`);
+  },
+
+  patch(data, _collection) {
+    const ownerId = data['ownerId'] as string | undefined;
+    if (!ownerId) return null;
+    const id = data['__id'] as string;
+
+    // El dueno siempre dentro, aunque el servicio aun no se use en ninguna parte.
+    const expected = [...new Set([ownerId, ...(serviceCircles.get(id) ?? [])])];
+    const current = (data['memberUids'] as string[] | undefined) ?? [];
+    return sameSet(current, expected) ? null : { memberUids: expected };
+  },
+};
+
+const MIGRATIONS: Migration[] = [
+  period, memberUids, ownerUids, serviceAssignmentOwner, serviceCircle,
+];
 
 // ── Motor ───────────────────────────────────────────────────────────────────
 
@@ -253,7 +321,9 @@ async function run(db: Firestore, migration: Migration, apply: boolean): Promise
 
       for (const docSnap of snap.docs) {
         scanned++;
-        const patch = migration.patch(docSnap.data(), collectionName);
+        // `__id` deja el id del documento al alcance de `patch`, que solo recibe
+        // los campos. Lo necesita `serviceCircle` para cruzar por serviceId.
+        const patch = migration.patch({ ...docSnap.data(), __id: docSnap.id }, collectionName);
         if (!patch) continue;
 
         changed++;
