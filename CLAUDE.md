@@ -139,6 +139,28 @@ documento que lo exceda tumba el listado entero) y al abanico de una consulta po
     "npx tsx scripts/rules.test.ts"
   ```
 
+### Consistencia en el servidor (triggers)
+
+- **`syncReceiptExpense`** — el gasto de un recibo pagado lo mantiene el servidor:
+  crear, actualizar el monto y borrar. El id es `expense_{receiptId}`, el mismo que usa
+  `ServiceReceiptService.setPaid`, para que cliente y trigger escriban EL MISMO documento
+  mientras conviven. Un recibo antiguo que ya apunta a un gasto con id automático conserva
+  ese gasto (se respeta `receipt.expenseId`): crear el determinista al lado sería el
+  duplicado que se quiere evitar. **La lógica del cliente sigue ahí a propósito**; se
+  retira cuando el trigger esté verificado en producción.
+- **`syncMemberUids`** — ver la sección de `memberUids`.
+- **`monthlySnapshots`** usa id determinista `{ownerId}_{propertyId}_{month}` con
+  `set(merge)`, y cada corrida borra los duplicados que dejó el esquema de ids
+  automáticos. Importa porque Analytics **suma** los snapshots de un mes para agregar
+  sus propiedades: un duplicado no se ignora, se cuenta dos veces.
+
+Pruebas de triggers (necesitan las functions compiladas):
+```bash
+cd functions && npm run build && cd ..
+npx firebase-tools@13 emulators:exec --only firestore,functions --project demo-vivai \
+  "npx tsx scripts/triggers.test.ts"
+```
+
 ### Migraciones de datos
 
 `scripts/backfill.ts` (Admin SDK, fuera del bundle). Sin `--apply` no escribe nada.

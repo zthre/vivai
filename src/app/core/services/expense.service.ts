@@ -4,6 +4,7 @@ import {
   collection,
   doc,
   addDoc,
+  setDoc,
   updateDoc,
   deleteDoc,
   query,
@@ -67,24 +68,45 @@ export class ExpenseService {
     );
   }
 
-  /** Crea un gasto y devuelve su id. Se atribuye siempre al dueño de la propiedad. */
-  async create(data: ExpenseCreate): Promise<string> {
+  /**
+   * Crea un gasto y devuelve su id. Se atribuye siempre al dueño de la propiedad.
+   *
+   * `id` fuerza un identificador concreto en vez de uno automático. Lo usan los
+   * gastos que nacen de un recibo de servicio: el mismo id que calcula el trigger
+   * `syncReceiptExpense`, para que cliente y servidor escriban EL MISMO documento
+   * mientras conviven y no se dupliquen los gastos.
+   */
+  async create(data: ExpenseCreate, id?: string): Promise<string> {
     const uid = this.auth.uid()!;
     const ownerId = await this.properties.ownerIdOf(data.propertyId, uid);
     const memberUids = await this.properties.memberUidsOf(data.propertyId, ownerId);
-    const ref = collection(this.firestore, 'expenses');
+    const payload = {
+      ...data,
+      date: Timestamp.fromDate(data.date),
+      period: monthKey(data.date),
+      ownerId,
+      memberUids,
+      createdBy: uid,
+      createdAt: serverTimestamp(),
+    };
+    const context = {
+      collection: 'expenses',
+      query: `create sobre propertyId ${data.propertyId} (ownerId ${ownerId})`,
+    };
+
+    if (id) {
+      await loggedWrite(
+        'ExpenseService.create',
+        () => setDoc(doc(this.firestore, `expenses/${id}`), payload),
+        context
+      );
+      return id;
+    }
+
     const docRef = await loggedWrite(
       'ExpenseService.create',
-      () => addDoc(ref, {
-        ...data,
-        date: Timestamp.fromDate(data.date),
-        period: monthKey(data.date),
-        ownerId,
-        memberUids,
-        createdBy: uid,
-        createdAt: serverTimestamp(),
-      }),
-      { collection: 'expenses', query: `create sobre propertyId ${data.propertyId} (ownerId ${ownerId})` }
+      () => addDoc(collection(this.firestore, 'expenses'), payload),
+      context
     );
     return docRef.id;
   }
