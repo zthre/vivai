@@ -58,6 +58,13 @@ const SECTIONS: PermissionSection[] = [
       { key: 'servicios', label: 'Ver, crear y editar servicios y recibos' },
     ],
   },
+  {
+    icon: 'insights',
+    title: 'Analytics',
+    subPermissions: [
+      { key: 'analytics', label: 'Ver cifras agregadas y exportar reportes' },
+    ],
+  },
 ];
 
 @Component({

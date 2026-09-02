@@ -7,6 +7,7 @@ import { toSignal, toObservable } from '@angular/core/rxjs-interop';
 import { switchMap } from 'rxjs';
 import { SnapshotService } from '../../../core/services/snapshot.service';
 import { PropertyService } from '../../../core/services/property.service';
+import { PermissionService } from '../../../core/auth/permissions';
 import { MonthlySnapshot } from '../../../core/models/monthly-snapshot.model';
 
 const MONTH_NAMES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -17,6 +18,13 @@ const MONTH_NAMES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Se
   imports: [CommonModule, RouterLink, MatIconModule, MatSnackBarModule],
   template: `
     <div class="space-y-6">
+
+      @if (!canView()) {
+        <div class="bg-white rounded-xl border border-warm-200 p-12 text-center">
+          <mat-icon class="text-warm-300 text-[48px]">lock</mat-icon>
+          <p class="text-warm-500 text-sm mt-3">No tienes permiso para ver Analytics</p>
+        </div>
+      } @else {
 
       <!-- Filters -->
       <div class="flex flex-wrap items-center justify-end gap-3">
@@ -219,12 +227,15 @@ const MONTH_NAMES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Se
         </div>
 
       }
+      }
+
     </div>
   `,
 })
 export class AnalyticsDashboardComponent {
   private snapshotService = inject(SnapshotService);
   private propertyService = inject(PropertyService);
+  private permissions = inject(PermissionService);
   private snackBar = inject(MatSnackBar);
   private router = inject(Router);
 
@@ -238,6 +249,9 @@ export class AnalyticsDashboardComponent {
 
 
   properties = toSignal(this.propertyService.getAll(), { initialValue: [] });
+
+  /** Analytics muestra cifras agregadas del dueño; no todo colaborador debe verlas. */
+  canView = computed(() => this.permissions.canOnAny(this.properties(), 'analytics'));
 
   private year$ = toObservable(this.selectedYear);
   allSnapshots = toSignal(

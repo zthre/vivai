@@ -5,7 +5,7 @@ export interface ColaboradorPermission {
   inmueblesUnidades?: boolean;
   /** Registrar pagos */
   inmueblesPagos?: boolean;
-  /** Fotos y contratos */
+  /** Fotos de la propiedad. (La subida de contratos no existe todavía.) */
   inmueblesMedia?: boolean;
   /** Registrar y editar gastos */
   gastos?: boolean;
@@ -13,6 +13,8 @@ export interface ColaboradorPermission {
   tickets?: boolean;
   /** Acceso a servicios */
   servicios?: boolean;
+  /** Ver Analytics y exportar reportes. */
+  analytics?: boolean;
 }
 
 export interface PhotoItem {
