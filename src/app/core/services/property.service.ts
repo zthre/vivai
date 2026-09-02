@@ -21,7 +21,7 @@ import {
   WriteBatch,
   Timestamp,
 } from '@angular/fire/firestore';
-import { Observable, combineLatest, map, switchMap, startWith, shareReplay } from 'rxjs';
+import { Observable, combineLatest, map, of, switchMap, startWith, shareReplay } from 'rxjs';
 import { guardQuery } from './firestore-error.util';
 import {
   Property,
@@ -56,8 +56,9 @@ export class PropertyService {
    * suscripciones sobre la misma colección.
    *
    * `refCount: false` mantiene viva la suscripción entre navegaciones —que es
-   * justo el caso que se quiere evitar—; el `switchMap` sobre `uid$` se encarga
-   * de recrear las consultas al cambiar de sesión.
+   * justo el caso que se quiere evitar—, y por eso `buildAll()` se apoya en
+   * `uidOrNull$`: al cerrar sesión hay que SOLTAR los listeners, no dejarlos
+   * consultando con el uid anterior.
    */
   private readonly properties$: Observable<Property[]> = this.buildAll().pipe(
     shareReplay({ bufferSize: 1, refCount: false })
@@ -68,8 +69,13 @@ export class PropertyService {
   }
 
   private buildAll(): Observable<Property[]> {
-    return this.auth.uid$.pipe(
+    return this.auth.uidOrNull$.pipe(
       switchMap(uid => {
+        // Sesión cerrada: se devuelve lista vacía, y eso cancela las consultas
+        // anteriores. Sin esto, los listeners seguían vivos con el uid de la
+        // sesión anterior y Firestore los denegaba al perderse el token.
+        if (!uid) return of([] as Property[]);
+
         const ref = collection(this.firestore, 'properties');
         const ownerQuery = query(ref, where('ownerId', '==', uid), orderBy('createdAt', 'desc'));
         const collabQuery = query(ref, where('collaboratorUids', 'array-contains', uid));

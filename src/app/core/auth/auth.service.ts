@@ -50,12 +50,23 @@ export class AuthService {
   readonly userRole = computed(() => this._activeRole());
   readonly tenantPropertyId = computed(() => this._tenantPropertyIds()[0] ?? null);
 
-  /** Observable that emits only when uid is available (non-null). Uses Firebase Auth directly to avoid toObservable microtask delays. */
-  readonly uid$: Observable<string> = user(this.auth).pipe(
+  /**
+   * Uid incluyendo el `null` del cierre de sesión.
+   *
+   * Lo necesita quien mantiene consultas vivas más allá de un componente: si la
+   * consulta no se entera de que la sesión terminó, sus listeners siguen abiertos
+   * con el uid anterior y Firestore los deniega —correctamente— llenando la
+   * consola de `permission-denied` al hacer logout.
+   */
+  readonly uidOrNull$: Observable<string | null> = user(this.auth).pipe(
     map(u => u?.uid ?? null),
-    filter((uid): uid is string => !!uid),
     distinctUntilChanged(),
     shareReplay(1),
+  );
+
+  /** Observable that emits only when uid is available (non-null). Uses Firebase Auth directly to avoid toObservable microtask delays. */
+  readonly uid$: Observable<string> = this.uidOrNull$.pipe(
+    filter((uid): uid is string => !!uid),
   );
 
   constructor() {
