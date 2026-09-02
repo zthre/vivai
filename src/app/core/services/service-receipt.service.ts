@@ -8,6 +8,7 @@ import {
   updateDoc,
   deleteDoc,
   getDocs,
+  writeBatch,
   query,
   where,
   serverTimestamp,
@@ -38,6 +39,11 @@ export interface ManualReceiptInput {
   notes?: string;
   /** Marcar como pagado en el mismo momento del registro */
   markPaid?: boolean;
+}
+
+/** Añade una línea a las notas sin perder lo que ya había. */
+function appendNote(existing: string | undefined, line: string): string {
+  return existing ? `${existing}\n${line}` : line;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -325,6 +331,123 @@ export class ServiceReceiptService {
         )
       ),
       map(list => list.find(b => b.assignmentId === assignmentId) ?? null)
+    );
+  }
+
+  /**
+   * Traslada parte del monto de un recibo a otras propiedades, en partes iguales.
+   *
+   * El caso: la luz del 401 incluye zonas comunes, así que se le quitan $20.000 y
+   * se reparten entre otros cuatro apartamentos, $5.000 cada uno.
+   *
+   * El reparto se hace de forma que la suma cuadre EXACTAMENTE con lo que se
+   * quitó. Repartir 20.000 entre 3 da 6.666,67 por cabeza, que multiplicado por 3
+   * son 20.000,01: el céntimo sobrante se ajusta en el último, o el dinero
+   * aparecería de la nada.
+   *
+   * Una propiedad que aún no tenga recibo de ese servicio ese mes recibe uno
+   * nuevo; las que ya lo tengan, lo ven aumentar.
+   *
+   * Todo va en un lote atómico: un reparto a medias descuadraría las cuentas sin
+   * dejar rastro de por qué.
+   */
+  async amortize(
+    source: ServiceReceipt,
+    amount: number,
+    targetPropertyIds: string[]
+  ): Promise<void> {
+    if (amount <= 0) throw new Error('El monto a repartir debe ser mayor que cero.');
+    if (amount > (source.propertyAmount ?? 0)) {
+      throw new Error('No puedes repartir más de lo que tiene el recibo.');
+    }
+    const targets = targetPropertyIds.filter(id => id !== source.propertyId);
+    if (targets.length === 0) throw new Error('Selecciona al menos una propiedad.');
+
+    // Reparto que cuadra al céntimo: el resto se le añade al último.
+    const round = (n: number) => Math.round(n * 100) / 100;
+    const share = round(amount / targets.length);
+    const shares = targets.map(() => share);
+    shares[shares.length - 1] = round(amount - share * (targets.length - 1));
+
+    // Recibos que ya existen para ese servicio y mes, para saber a cuáles sumar.
+    const existing = await getDocs(
+      query(
+        collection(this.firestore, 'serviceReceipts'),
+        where('memberUids', 'array-contains', this.auth.uid()!),
+        where('month', '==', source.month)
+      )
+    );
+    const byProperty = new Map<string, { id: string; amount: number }>();
+    for (const d of existing.docs) {
+      const r = d.data() as ServiceReceipt;
+      if (r.serviceId === source.serviceId && r.propertyId !== source.propertyId) {
+        byProperty.set(r.propertyId, { id: d.id, amount: r.propertyAmount ?? 0 });
+      }
+    }
+
+    const batch = writeBatch(this.firestore);
+    const sourceName = source.propertyName ?? source.propertyId;
+
+    // El origen baja, con constancia de a dónde fue el dinero.
+    batch.update(doc(this.firestore, `serviceReceipts/${source.id}`), {
+      propertyAmount: round((source.propertyAmount ?? 0) - amount),
+      notes: appendNote(
+        source.notes,
+        `Se repartieron $${amount.toLocaleString('es-CO')} entre ${targets.length} propiedad(es).`
+      ),
+      updatedAt: serverTimestamp(),
+    });
+
+    for (let i = 0; i < targets.length; i++) {
+      const propertyId = targets[i];
+      const part = shares[i];
+      const note = `Incluye $${part.toLocaleString('es-CO')} trasladados de ${sourceName}.`;
+      const hit = byProperty.get(propertyId);
+
+      if (hit) {
+        batch.update(doc(this.firestore, `serviceReceipts/${hit.id}`), {
+          propertyAmount: round(hit.amount + part),
+          notes: appendNote(undefined, note),
+          updatedAt: serverTimestamp(),
+        });
+        continue;
+      }
+
+      // Sin recibo previo: se crea uno por su parte.
+      const prop = await this.properties.snapshot(propertyId);
+      const ownerId = prop?.ownerId ?? source.ownerId;
+      batch.set(doc(collection(this.firestore, 'serviceReceipts')), {
+        ownerId,
+        memberUids: prop ? propertyMemberUids(prop) : (source.memberUids ?? [ownerId]),
+        serviceId: source.serviceId,
+        serviceName: source.serviceName,
+        serviceIcon: source.serviceIcon ?? 'receipt_long',
+        assignmentId: null,
+        assignmentCode: '',
+        propertyId,
+        propertyName: prop?.name ?? propertyId,
+        month: source.month,
+        origin: 'manual',
+        totalAmount: part,
+        propertyAmount: part,
+        residentCount: prop?.residentCount ?? 1,
+        isPaid: false,
+        paidAt: null,
+        paidBy: null,
+        expenseId: null,
+        notes: note,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    }
+
+    await loggedWrite(
+      'ServiceReceiptService.amortize',
+      () => batch.commit(),
+      {
+        collection: 'serviceReceipts',
+        query: `amortize ${amount} de ${source.id} entre ${targets.length}`,
+      }
     );
   }
 
