@@ -140,12 +140,13 @@ documento que lo exceda tumba el listado entero) y al abanico de una consulta po
   `getByProperty` sobre una lista — eso está reservado a la vista de UNA propiedad.
 - **Todo camino de escritura nuevo debe sellar `memberUids` y `period`**: un documento
   sin ellos desaparece de estas consultas en silencio, y las cifras salen de menos.
-- **Estado**: las reglas ya lo aceptan **como alternativa más**, sin quitar nada.
-  `firestore.rules` marca con `>>> PASO PENDIENTE <<<` las tres líneas que hay que
-  sustituir para cerrar la lectura abierta de `services` y `serviceReceipts` — solo
-  después de que el backfill termine.
-- **Antes de endurecer**, correr las pruebas de reglas; verifican tanto el estado actual
-  como el endurecido sobre el mismo fixture:
+- **La lectura está cerrada**: `services`, `serviceReceipts` y `serviceAssignments` ya no
+  tienen `allow read: if request.auth != null`. Un documento **sin `memberUids` es
+  ilegible, incluso para su dueño** — por eso todo camino de escritura debe sellarlo, y
+  por eso el backfill tenía que ir antes que este cierre.
+- **Corre las pruebas de reglas al tocar `firestore.rules`.** Un fallo significa una de dos
+  cosas, y ambas importan: o se abrió un acceso que no debía, o se le quitó acceso a
+  alguien que sí lo necesita.
   ```bash
   npx firebase-tools@13 emulators:exec --only firestore --project demo-vivai \
     "npx tsx scripts/rules.test.ts"
