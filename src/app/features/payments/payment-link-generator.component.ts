@@ -19,11 +19,7 @@ import { switchMap, of } from 'rxjs';
 import { PropertyService } from '../../core/services/property.service';
 import { AuthService } from '../../core/auth/auth.service';
 import { PaymentLink } from '../../core/models/payment-link.model';
-
-function currentMonthKey(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
+import { currentMonthKey, monthLabelFromKey } from '../../core/utils/month.util';
 
 @Component({
   selector: 'app-payment-link-generator',
@@ -175,8 +171,7 @@ export class PaymentLinkGeneratorComponent implements OnInit {
   property = signal<any>(null);
 
   monthLabel(): string {
-    const [y, m] = currentMonthKey().split('-');
-    return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('es-CO', { month: 'long', year: 'numeric' });
+    return monthLabelFromKey(currentMonthKey());
   }
 
   ngOnInit() {

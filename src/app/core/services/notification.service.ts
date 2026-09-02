@@ -14,6 +14,7 @@ import {
 import { Observable, map, switchMap } from 'rxjs';
 import { AppNotification } from '../models/notification.model';
 import { AuthService } from '../auth/auth.service';
+import { monthKey } from '../utils/month.util';
 
 @Injectable({ providedIn: 'root' })
 export class NotificationService {
@@ -30,11 +31,7 @@ export class NotificationService {
             let result = list;
             if (propertyId) result = result.filter(n => n.propertyId === propertyId);
             if (month) {
-              result = result.filter(n => {
-                const d = n.sentAt.toDate();
-                const m = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-                return m === month;
-              });
+              result = result.filter(n => monthKey(n.sentAt.toDate()) === month);
             }
             return result;
           })

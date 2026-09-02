@@ -48,8 +48,8 @@ export class UtilityServiceService {
         // en silencio (y con ellos su tarjeta en /services, aunque sus recibos siguieran
         // existiendo y sumando). Se parte en lotes de 10 y se combinan los resultados.
         const chunks: string[][] = [];
-        for (let i = 0; i < ownerUids.length; i += 10) {
-          chunks.push(ownerUids.slice(i, i + 10));
+        for (let i = 0; i < ownerUids.length; i += UtilityServiceService.IN_LIMIT) {
+          chunks.push(ownerUids.slice(i, i + UtilityServiceService.IN_LIMIT));
         }
 
         const ref = collection(this.firestore, 'services');
@@ -110,15 +110,20 @@ export class UtilityServiceService {
     return (collab.docs[0]?.data()?.['ownerId'] as string | undefined) ?? uid;
   }
 
+  /** Cuántas propiedades caben en una cláusula `in` de Firestore. */
+  private static readonly IN_LIMIT = 10;
+
   async create(data: Partial<Service>): Promise<string> {
     const uid = this.auth.uid()!;
     const ownerId = await this.resolveOwnerId(uid);
+    const memberUids = await this.propertyService.ownerCircle(ownerId);
     const ref = collection(this.firestore, 'services');
     const docRef = await loggedWrite(
       'UtilityServiceService.create',
       () => addDoc(ref, {
         ...data,
         ownerId,
+        memberUids,
         createdBy: uid,
         isActive: data.isActive ?? true,
         createdAt: serverTimestamp(),

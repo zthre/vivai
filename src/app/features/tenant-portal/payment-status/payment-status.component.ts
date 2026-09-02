@@ -13,16 +13,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { switchMap, of } from 'rxjs';
 import { AuthService } from '../../../core/auth/auth.service';
 import { PaymentLink } from '../../../core/models/payment-link.model';
-
-function currentMonthKey(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
-
-function monthLabel(): string {
-  const [y, m] = currentMonthKey().split('-');
-  return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('es-CO', { month: 'long', year: 'numeric' });
-}
+import { currentMonthKey, monthLabelFromKey } from '../../../core/utils/month.util';
 
 @Component({
   selector: 'app-payment-status',
@@ -114,7 +105,7 @@ export class PaymentStatusComponent implements OnInit {
 
   loading = signal(true);
   activeLink = signal<PaymentLink | null>(null);
-  monthLabelStr = monthLabel();
+  monthLabelStr = monthLabelFromKey(currentMonthKey());
 
   ngOnInit() {
     const propertyId = this.authService.tenantPropertyId();

@@ -248,7 +248,7 @@ export class ColaboradoresComponent implements OnInit {
     if (this.loading()) return;
     this.loading.set(true);
     try {
-      await this.propertyService.removeColaborador(this.propertyId, uid);
+      await this.propertyService.removeColaboradorFromProperty(this.propertyId, uid);
       this.snackBar.open('Colaborador removido.', 'OK', { duration: 3000 });
       this.propertyService.getById(this.propertyId).subscribe(p => {
         this.property = p;

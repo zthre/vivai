@@ -6,6 +6,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { NotificationService } from '../../core/services/notification.service';
 import { PropertyService } from '../../core/services/property.service';
 import { AppNotification, NotificationType } from '../../core/models/notification.model';
+import { monthKey, monthLabelFromKey } from '../../core/utils/month.util';
 
 @Component({
   selector: 'app-notifications-list',
@@ -137,25 +138,16 @@ export class NotificationsListComponent {
     const month = this.selectedMonth();
     if (pid) list = list.filter(n => n.propertyId === pid);
     if (month) {
-      list = list.filter(n => {
-        const d = n.sentAt.toDate();
-        const m = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        return m === month;
-      });
+      list = list.filter(n => monthKey(n.sentAt.toDate()) === month);
     }
     return list;
   });
 
   availableMonths = computed(() => {
     const months = new Set<string>();
-    this.notifications().forEach(n => {
-      const d = n.sentAt.toDate();
-      months.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
-    });
+    this.notifications().forEach(n => months.add(monthKey(n.sentAt.toDate())));
     return [...months].sort((a, b) => b.localeCompare(a)).map(m => {
-      const [y, mo] = m.split('-');
-      const label = new Date(Number(y), Number(mo) - 1, 1).toLocaleDateString('es-CO', { month: 'long', year: 'numeric' });
-      return { value: m, label };
+      return { value: m, label: monthLabelFromKey(m) };
     });
   });
 

@@ -19,18 +19,8 @@ import { MonthSettlementDialogComponent } from '../../services/month-settlement/
 import { ServiceReceiptService } from '../../../core/services/service-receipt.service';
 import { ServiceReceipt } from '../../../core/models/service-receipt.model';
 import { listingState } from '../../../core/services/listing.util';
-
-function startOfMonth(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), 1);
-}
-function endOfMonth(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
-}
-/** Mes actual en formato 'YYYY-MM' */
-function currentMonthKey(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
+import { PermissionService } from '../../../core/auth/permissions';
+import { currentMonthKey, endOfMonth, startOfMonth } from '../../../core/utils/month.util';
 
 @Component({
   selector: 'app-properties-list',
@@ -220,6 +210,7 @@ export class PropertiesListComponent {
   private paymentService = inject(PaymentService);
   private receiptService = inject(ServiceReceiptService);
   private authService = inject(AuthService);
+  private permissions = inject(PermissionService);
   private dialog = inject(MatDialog);
   private snackBar = inject(MatSnackBar);
 
@@ -295,43 +286,25 @@ export class PropertiesListComponent {
   isOwner = computed(() => this.authService.activeRole() === 'owner');
 
   /** Owner or colaborador with inmueblesUnidades permission */
-  canCreate = computed(() => {
-    if (this.isOwner()) return true;
-    const uid = this.authService.uid();
-    if (!uid) return false;
-    return this.properties().some(p => {
-      const perms = p.collaboratorPermissions?.[uid];
-      return !perms || perms.inmueblesUnidades !== false;
-    });
-  });
+  canCreate = computed(() =>
+    this.isOwner() || this.permissions.canOnAny(this.properties(), 'inmueblesUnidades')
+  );
 
   /** True if user is the direct owner of this property */
   isOwnerOf(property: Property): boolean {
-    return property.ownerId === this.authService.uid();
+    return this.permissions.isOwnerOf(property);
   }
 
   canWrite(property: Property): boolean {
-    const uid = this.authService.uid();
-    if (!uid) return false;
-    if (property.ownerId === uid) return true;
-    const perms = property.collaboratorPermissions?.[uid];
-    return !perms || perms.inmueblesUnidades !== false;
+    return this.permissions.can(property, 'inmueblesUnidades');
   }
 
   canWritePagos(property: Property): boolean {
-    const uid = this.authService.uid();
-    if (!uid) return false;
-    if (property.ownerId === uid) return true;
-    const perms = property.collaboratorPermissions?.[uid];
-    return !perms || perms.inmueblesPagos !== false;
+    return this.permissions.can(property, 'inmueblesPagos');
   }
 
   canWriteServicios(property: Property): boolean {
-    const uid = this.authService.uid();
-    if (!uid) return false;
-    if (property.ownerId === uid) return true;
-    const perms = property.collaboratorPermissions?.[uid];
-    return !perms || perms.servicios !== false;
+    return this.permissions.can(property, 'servicios');
   }
 
   listingVisible(property: Property): boolean {

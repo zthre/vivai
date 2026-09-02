@@ -44,3 +44,7 @@ Thumbs.db
 # Functions
 /functions/node_modules
 /functions/lib
+
+# Migraciones de datos (scripts/)
+/scripts/node_modules
+/scripts/*service-account*.json

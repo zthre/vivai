@@ -2,7 +2,6 @@ import { Injectable, inject } from '@angular/core';
 import {
   Firestore,
   collection,
-  collectionData,
   doc,
   addDoc,
   updateDoc,
@@ -11,18 +10,21 @@ import {
   query,
   where,
   serverTimestamp,
-  getDoc,
   Timestamp,
   Query,
+  QueryConstraint,
   DocumentData,
 } from '@angular/fire/firestore';
 import { Observable, combineLatest, of, map } from 'rxjs';
-import { guardQuery, loggedWrite } from './firestore-error.util';
+import { loggedWrite } from './firestore-error.util';
+import { collection$ } from './firestore-query.util';
 import { ServiceReceipt } from '../models/service-receipt.model';
 import { ServiceAssignment } from '../models/service-assignment.model';
-import { Property } from '../models/property.model';
+import { Property, propertyMemberUids } from '../models/property.model';
 import { AuthService } from '../auth/auth.service';
 import { ExpenseService } from './expense.service';
+import { PropertyService } from './property.service';
+import { accountingDateForMonth, isMonthKey } from '../utils/month.util';
 
 export interface ManualReceiptInput {
   propertyId: string;
@@ -38,33 +40,19 @@ export interface ManualReceiptInput {
   markPaid?: boolean;
 }
 
-/** Fecha con la que se registra el gasto asociado a un recibo. */
-function expenseDateForMonth(month: string): Date {
-  const [y, m] = month.split('-').map(Number);
-  const now = new Date();
-  if (now.getFullYear() === y && now.getMonth() + 1 === m) return now;
-  // Mes pasado o futuro: se ancla al último día de ese mes para que caiga en el periodo correcto
-  return new Date(y, m, 0, 12, 0, 0);
-}
-
 @Injectable({ providedIn: 'root' })
 export class ServiceReceiptService {
   private firestore = inject(Firestore);
   private auth = inject(AuthService);
   private expenseService = inject(ExpenseService);
+  private properties = inject(PropertyService);
 
-  /**
-   * Una consulta caída no puede envenenar la señal que la consume: `toSignal`
-   * relanza el error en cada lectura y eso aborta la detección de cambios de
-   * toda la pantalla. Ante un fallo se degrada a lista vacía.
-   */
   private safe(q: Query<DocumentData>, label: string, queryDesc: string): Observable<ServiceReceipt[]> {
-    return (collectionData(q, { idField: 'id' }) as Observable<ServiceReceipt[]>).pipe(
-      guardQuery(`ServiceReceiptService.${label}`, [] as ServiceReceipt[], {
-        collection: 'serviceReceipts',
-        query: queryDesc,
-      })
-    );
+    return collection$<ServiceReceipt>(q, {
+      label: `ServiceReceiptService.${label}`,
+      collection: 'serviceReceipts',
+      query: queryDesc,
+    });
   }
 
   getByServiceAndMonth(serviceId: string, month: string): Observable<ServiceReceipt[]> {
@@ -95,8 +83,29 @@ export class ServiceReceiptService {
   }
 
   /**
+   * Recibos del mes en todo el círculo del usuario: UNA consulta en lugar de
+   * combinar una por propiedad, que es lo que hace `getByPropertiesAndMonth`.
+   *
+   * TODAVÍA SIN USAR: depende de que el backfill de `memberUids` haya terminado.
+   * Ver el plan, fase 3.
+   */
+  getByCircleAndMonth(month: string): Observable<ServiceReceipt[]> {
+    const uid = this.auth.uid();
+    if (!uid) return of([] as ServiceReceipt[]);
+    const ref = collection(this.firestore, 'serviceReceipts');
+    return this.safe(
+      query(ref, where('memberUids', 'array-contains', uid), where('month', '==', month)),
+      'getByCircleAndMonth',
+      `memberUids array-contains ${uid}, month == ${month}`
+    );
+  }
+
+  /**
    * Recibos de un mes para un conjunto de propiedades. Se consulta por propiedad
    * (no por ownerId) para que funcione igual para dueños y colaboradores.
+   *
+   * Abre una consulta por propiedad. `getByCircleAndMonth` lo reemplaza en cuanto
+   * el backfill termine.
    */
   getByPropertiesAndMonth(propertyIds: string[], month: string): Observable<ServiceReceipt[]> {
     if (propertyIds.length === 0) return of([] as ServiceReceipt[]);
@@ -110,8 +119,10 @@ export class ServiceReceiptService {
   /** Registra un servicio manualmente sobre una propiedad (sin código de distribución). */
   async createManual(input: ManualReceiptInput): Promise<string> {
     const ownerId = await this.ownerIdOf(input.propertyId);
+    const memberUids = await this.properties.memberUidsOf(input.propertyId, ownerId);
     const receipt: ServiceReceipt = {
       ownerId,
+      memberUids,
       serviceId: input.serviceId,
       serviceName: input.serviceName,
       serviceIcon: input.serviceIcon ?? 'receipt_long',
@@ -156,22 +167,28 @@ export class ServiceReceiptService {
     month: string,
     totalAmount: number
   ): Promise<void> {
-    const properties: { id: string; name: string; residentCount: number; ownerId: string }[] = [];
+    const properties: {
+      id: string;
+      name: string;
+      residentCount: number;
+      ownerId: string;
+      memberUids: string[];
+    }[] = [];
     for (const pid of assignment.propertyIds) {
-      const snap = await getDoc(doc(this.firestore, `properties/${pid}`));
-      const data = snap.data() as Property | undefined;
+      const data: Property | null = await this.properties.snapshot(pid);
 
       // Una propiedad borrada que sigue referenciada en propertyIds falseaba el
       // reparto: entraba al cálculo y se llevaba su parte, así que las propiedades
       // reales recibían de menos (con 'partes iguales' entre 2 donde solo queda 1,
       // cada una salía al 50%). Se omite del reparto y no genera recibo.
-      if (!snap.exists() || !data) continue;
+      if (!data) continue;
 
       properties.push({
         id: pid,
         name: data.name ?? pid,
         residentCount: data.residentCount ?? 1,
         ownerId: data.ownerId ?? this.auth.uid()!,
+        memberUids: propertyMemberUids(data),
       });
     }
 
@@ -202,6 +219,7 @@ export class ServiceReceiptService {
     for (const p of properties) {
       await addDoc(ref, {
         ownerId: p.ownerId,
+        memberUids: p.memberUids,
         serviceId: assignment.serviceId,
         serviceName: assignment.serviceName,
         assignmentId: assignment.id,
@@ -257,7 +275,7 @@ export class ServiceReceiptService {
         category: 'servicio',
         description: `${receipt.serviceName}${code}`,
         amount: receipt.propertyAmount,
-        date: expenseDateForMonth(receipt.month),
+        date: accountingDateForMonth(receipt.month),
         notes: receipt.notes || null,
       });
     }
@@ -306,7 +324,7 @@ export class ServiceReceiptService {
    * el recibo quedaría en un mes y el gasto seguiría contando en el otro.
    */
   async changeMonth(receipt: ServiceReceipt, newMonth: string): Promise<void> {
-    if (!/^\d{4}-\d{2}$/.test(newMonth)) {
+    if (!isMonthKey(newMonth)) {
       throw new Error(`Mes inválido: ${newMonth}. Se espera 'YYYY-MM'.`);
     }
     if (newMonth === receipt.month) return;
@@ -315,7 +333,7 @@ export class ServiceReceiptService {
 
     if (receipt.expenseId) {
       await this.expenseService
-        .update(receipt.expenseId, { date: expenseDateForMonth(newMonth) })
+        .update(receipt.expenseId, { date: accountingDateForMonth(newMonth) })
         .catch(() => void 0);
     }
   }
@@ -327,38 +345,48 @@ export class ServiceReceiptService {
     await deleteDoc(doc(this.firestore, `serviceReceipts/${receipt.id}`));
   }
 
+  /** Borra los recibos de un código en un mes, con sus gastos asociados. */
   async deleteByMonth(assignmentId: string, month: string): Promise<void> {
-    const ref = collection(this.firestore, 'serviceReceipts');
-    const q = query(ref, where('assignmentId', '==', assignmentId), where('month', '==', month));
-    const snap = await getDocs(q);
-    await Promise.all(snap.docs.map(async d => {
-      const expenseId = (d.data() as ServiceReceipt).expenseId;
-      if (expenseId) await this.expenseService.delete(expenseId).catch(() => void 0);
-      await deleteDoc(doc(this.firestore, `serviceReceipts/${d.id}`));
-    }));
+    await this.deleteWhere(
+      where('assignmentId', '==', assignmentId),
+      where('month', '==', month)
+    );
   }
 
+  /** Borra los recibos de un servicio en un mes, con sus gastos asociados. */
   async deleteByServiceAndMonth(serviceId: string, month: string): Promise<void> {
-    const uid = this.auth.uid()!;
-    const ref = collection(this.firestore, 'serviceReceipts');
-    const q = query(ref, where('ownerId', '==', uid), where('serviceId', '==', serviceId), where('month', '==', month));
-    const snap = await getDocs(q);
-    await Promise.all(snap.docs.map(async d => {
-      const expenseId = (d.data() as ServiceReceipt).expenseId;
-      if (expenseId) await this.expenseService.delete(expenseId).catch(() => void 0);
-      await deleteDoc(doc(this.firestore, `serviceReceipts/${d.id}`));
-    }));
+    await this.deleteWhere(
+      where('ownerId', '==', this.auth.uid()!),
+      where('serviceId', '==', serviceId),
+      where('month', '==', month)
+    );
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
-  private async ownerIdOf(propertyId: string): Promise<string> {
-    const snap = await getDoc(doc(this.firestore, `properties/${propertyId}`));
-    return (snap.data() as Property | undefined)?.ownerId ?? this.auth.uid()!;
+  /**
+   * Borra los recibos que cumplan los filtros, arrastrando el gasto de cada uno.
+   *
+   * Un gasto que sobrevive a su recibo sigue sumando en Finanzas sin nada que lo
+   * explique, así que se borra primero; si esa parte falla, el recibo se borra
+   * igual y el gasto queda visible y editable a mano, que es el mal menor.
+   */
+  private async deleteWhere(...filters: QueryConstraint[]): Promise<void> {
+    const snap = await getDocs(
+      query(collection(this.firestore, 'serviceReceipts'), ...filters)
+    );
+    await Promise.all(snap.docs.map(async d => {
+      const expenseId = (d.data() as ServiceReceipt).expenseId;
+      if (expenseId) await this.expenseService.delete(expenseId).catch(() => void 0);
+      await deleteDoc(doc(this.firestore, `serviceReceipts/${d.id}`));
+    }));
   }
 
-  private async propertyNameOf(propertyId: string): Promise<string> {
-    const snap = await getDoc(doc(this.firestore, `properties/${propertyId}`));
-    return (snap.data() as Property | undefined)?.name ?? propertyId;
+  private ownerIdOf(propertyId: string): Promise<string> {
+    return this.properties.ownerIdOf(propertyId, this.auth.uid()!);
+  }
+
+  private propertyNameOf(propertyId: string): Promise<string> {
+    return this.properties.nameOf(propertyId);
   }
 }

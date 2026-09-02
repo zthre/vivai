@@ -20,6 +20,8 @@ import { ServiceReceiptService } from '../../../core/services/service-receipt.se
 import { ServiceReceipt } from '../../../core/models/service-receipt.model';
 import { listingState } from '../../../core/services/listing.util';
 import { AuthService } from '../../../core/auth/auth.service';
+import { PermissionService } from '../../../core/auth/permissions';
+import { addMonths, monthKey, monthLabel, startOfMonth } from '../../../core/utils/month.util';
 import { toObservable } from '@angular/core/rxjs-interop';
 import { combineLatest } from 'rxjs';
 
@@ -405,6 +407,7 @@ export class PropertyDetailComponent implements OnInit {
   private paymentService = inject(PaymentService);
   private receiptService = inject(ServiceReceiptService);
   private authService = inject(AuthService);
+  private permissions = inject(PermissionService);
   private dialog = inject(MatDialog);
   private snackBar = inject(MatSnackBar);
   private route = inject(ActivatedRoute);
@@ -423,41 +426,10 @@ export class PropertyDetailComponent implements OnInit {
     residentCount: [1 as number | null],
   });
 
-  canWrite = computed(() => {
-    const uid = this.authService.uid();
-    const prop = this.property();
-    if (!uid || !prop) return false;
-    if (prop.ownerId === uid) return true;
-    const perms = prop.collaboratorPermissions?.[uid];
-    return !perms || perms.inmueblesUnidades !== false;
-  });
-
-  canWritePagos = computed(() => {
-    const uid = this.authService.uid();
-    const prop = this.property();
-    if (!uid || !prop) return false;
-    if (prop.ownerId === uid) return true;
-    const perms = prop.collaboratorPermissions?.[uid];
-    return !perms || perms.inmueblesPagos !== false;
-  });
-
-  canWriteMedia = computed(() => {
-    const uid = this.authService.uid();
-    const prop = this.property();
-    if (!uid || !prop) return false;
-    if (prop.ownerId === uid) return true;
-    const perms = prop.collaboratorPermissions?.[uid];
-    return !perms || perms.inmueblesMedia !== false;
-  });
-
-  canWriteServicios = computed(() => {
-    const uid = this.authService.uid();
-    const prop = this.property();
-    if (!uid || !prop) return false;
-    if (prop.ownerId === uid) return true;
-    const perms = prop.collaboratorPermissions?.[uid];
-    return !perms || perms.servicios !== false;
-  });
+  canWrite = computed(() => this.permissions.can(this.property(), 'inmueblesUnidades'));
+  canWritePagos = computed(() => this.permissions.can(this.property(), 'inmueblesPagos'));
+  canWriteMedia = computed(() => this.permissions.can(this.property(), 'inmueblesMedia'));
+  canWriteServicios = computed(() => this.permissions.can(this.property(), 'servicios'));
 
   listingVisible = computed(() => {
     const prop = this.property();
@@ -472,16 +444,11 @@ export class PropertyDetailComponent implements OnInit {
   );
 
   // ── Servicios del mes ──────────────────────────────────────────────────
-  selectedMonth = signal<Date>(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  selectedMonth = signal<Date>(startOfMonth(new Date()));
 
-  monthKey = computed(() => {
-    const d = this.selectedMonth();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-  });
+  monthKey = computed(() => monthKey(this.selectedMonth()));
 
-  monthLabel = computed(() =>
-    this.selectedMonth().toLocaleDateString('es-CO', { month: 'long', year: 'numeric' })
-  );
+  monthLabel = computed(() => monthLabel(this.selectedMonth()));
 
   monthReceipts = toSignal(
     combineLatest([this.route.paramMap, toObservable(this.monthKey)]).pipe(
@@ -503,8 +470,7 @@ export class PropertyDetailComponent implements OnInit {
     const key = this.monthKey();
     return this.propertyPayments().some(p => {
       const d = p.date?.toDate?.();
-      if (!d) return false;
-      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` === key;
+      return !!d && monthKey(d) === key;
     });
   });
 
@@ -518,13 +484,11 @@ export class PropertyDetailComponent implements OnInit {
   });
 
   prevMonth() {
-    const d = this.selectedMonth();
-    this.selectedMonth.set(new Date(d.getFullYear(), d.getMonth() - 1, 1));
+    this.selectedMonth.set(addMonths(this.selectedMonth(), -1));
   }
 
   nextMonth() {
-    const d = this.selectedMonth();
-    this.selectedMonth.set(new Date(d.getFullYear(), d.getMonth() + 1, 1));
+    this.selectedMonth.set(addMonths(this.selectedMonth(), 1));
   }
 
   openServices(startInPayAll = false) {

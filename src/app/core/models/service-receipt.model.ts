@@ -10,6 +10,8 @@ export type ServiceReceiptOrigin = 'manual' | 'distribucion';
 export interface ServiceReceipt {
   id?: string;
   ownerId: string;
+  /** Círculo de la propiedad: `[ownerId, ...collaboratorUids]`. Ver `propertyMemberUids`. */
+  memberUids?: string[];
   serviceId: string;
   serviceName: string;
   serviceIcon?: string;

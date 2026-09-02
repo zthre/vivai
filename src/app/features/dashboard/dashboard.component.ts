@@ -17,13 +17,15 @@ import { isListingActive, listingState } from '../../core/services/listing.util'
 import { PaymentFormComponent } from '../payments/payment-form/payment-form.component';
 import { MonthSettlementDialogComponent } from '../services/month-settlement/month-settlement-dialog.component';
 import { ListingStatusComponent } from '../../shared/components/listing-status/listing-status.component';
-
-function startOfMonth(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), 1);
-}
-function endOfMonth(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
-}
+import { PermissionService } from '../../core/auth/permissions';
+import {
+  addMonths,
+  endOfMonth,
+  isCurrentMonth,
+  monthKey,
+  monthLabel,
+  startOfMonth,
+} from '../../core/utils/month.util';
 
 @Component({
   selector: 'app-dashboard',
@@ -399,27 +401,16 @@ export class DashboardComponent {
   private paymentService = inject(PaymentService);
   private receiptService = inject(ServiceReceiptService);
   private authService = inject(AuthService);
+  private permissions = inject(PermissionService);
   private dialog = inject(MatDialog);
 
   selectedMonth = signal<Date>(startOfMonth(new Date()));
 
-  private selectedMonthStr = computed(() => {
-    const d = this.selectedMonth();
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    return `${y}-${m}`;
-  });
+  private selectedMonthStr = computed(() => monthKey(this.selectedMonth()));
 
-  monthLabel = computed(() => {
-    const d = this.selectedMonth();
-    return d.toLocaleDateString('es-CO', { month: 'long', year: 'numeric' });
-  });
+  monthLabel = computed(() => monthLabel(this.selectedMonth()));
 
-  isCurrentMonth = computed(() => {
-    const now = new Date();
-    const sel = this.selectedMonth();
-    return sel.getFullYear() === now.getFullYear() && sel.getMonth() === now.getMonth();
-  });
+  isCurrentMonth = computed(() => isCurrentMonth(this.selectedMonth()));
 
   isFutureMonth = computed(() => {
     const now = new Date();
@@ -511,15 +502,10 @@ export class DashboardComponent {
     return name.split(' ')[0];
   });
 
-  canCreate = computed(() => {
-    if (this.authService.activeRole() === 'owner') return true;
-    const uid = this.authService.uid();
-    if (!uid) return false;
-    return this.properties().some(p => {
-      const perms = p.collaboratorPermissions?.[uid];
-      return !perms || perms.inmueblesUnidades !== false;
-    });
-  });
+  canCreate = computed(() =>
+    this.authService.activeRole() === 'owner' ||
+    this.permissions.canOnAny(this.properties(), 'inmueblesUnidades')
+  );
 
   hasPaymentThisMonth(prop: Property): boolean {
     return this.paymentByProperty().has(prop.id!);
@@ -530,19 +516,11 @@ export class DashboardComponent {
   }
 
   canWritePagos(prop: Property): boolean {
-    const uid = this.authService.uid();
-    if (!uid) return false;
-    if (prop.ownerId === uid) return true;
-    const perms = prop.collaboratorPermissions?.[uid];
-    return !perms || perms.inmueblesPagos !== false;
+    return this.permissions.can(prop, 'inmueblesPagos');
   }
 
   canEdit(prop: Property): boolean {
-    const uid = this.authService.uid();
-    if (!uid) return false;
-    if (prop.ownerId === uid) return true;
-    const perms = prop.collaboratorPermissions?.[uid];
-    return !perms || perms.inmueblesUnidades !== false;
+    return this.permissions.can(prop, 'inmueblesUnidades');
   }
 
   whatsappLink(prop: Property): string {
@@ -566,21 +544,15 @@ export class DashboardComponent {
   }
 
   canWriteServicios(prop: Property): boolean {
-    const uid = this.authService.uid();
-    if (!uid) return false;
-    if (prop.ownerId === uid) return true;
-    const perms = prop.collaboratorPermissions?.[uid];
-    return !perms || perms.servicios !== false;
+    return this.permissions.can(prop, 'servicios');
   }
 
   prevMonth() {
-    const d = this.selectedMonth();
-    this.selectedMonth.set(new Date(d.getFullYear(), d.getMonth() - 1, 1));
+    this.selectedMonth.set(addMonths(this.selectedMonth(), -1));
   }
 
   nextMonth() {
-    const d = this.selectedMonth();
-    this.selectedMonth.set(new Date(d.getFullYear(), d.getMonth() + 1, 1));
+    this.selectedMonth.set(addMonths(this.selectedMonth(), 1));
   }
 
   openServiceReceipts(prop: Property, startInPayAll = false) {

@@ -2,6 +2,30 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // `memberUids` = [ownerId, ...collaboratorUids], denormalizado en cada
+    // documento y mantenido por el trigger `syncMemberUids`.
+    //
+    // Resuelve el acceso mirando el propio documento: cero lecturas extra, sin
+    // el tope de accesos por consulta que hace que un solo get() fallido
+    // deniegue un listado entero. Es lo que permite endurecer `services` y
+    // `serviceReceipts`, que estaban abiertos a cualquier autenticado porque su
+    // circulo no se podia expresar de otra forma.
+    //
+    // Se anade COMO ALTERNATIVA a las clausulas que ya habia: mientras queden
+    // documentos anteriores al backfill sin el campo, siguen resolviendo por el
+    // camino viejo. `get(..., [])` da array vacio si el campo no existe, asi que
+    // un documento sin `memberUids` simplemente no pasa por aqui.
+    function isMember() {
+      return request.auth != null
+             && request.auth.uid in resource.data.get('memberUids', []);
+    }
+
+    // En creaciones el documento aun no existe: se mira el payload entrante.
+    function willBeMember() {
+      return request.auth != null
+             && request.auth.uid in request.resource.data.get('memberUids', []);
+    }
+
     // Users: own read/write. Also allow updating colaborator-related fields by other auth'd users
     // (needed when owner assigns existing user as colaborador).
     match /users/{userId} {
@@ -16,14 +40,15 @@ service cloud.firestore {
     // Tenant can update tenantUid + updatedAt on first login (email match).
     match /properties/{propertyId} {
       allow read: if resource.data.isPublic == true
+                  || isMember()
                   || (request.auth != null && request.auth.uid == resource.data.ownerId)
                   || (request.auth != null && request.auth.uid in resource.data.get('collaboratorUids', []))
                   || (request.auth != null && request.auth.uid == resource.data.tenantUid);
       allow create: if request.auth != null && request.auth.uid == request.resource.data.ownerId;
-      allow update, delete: if request.auth != null && (
+      allow update, delete: if isMember() || (request.auth != null && (
         request.auth.uid == resource.data.ownerId
         || request.auth.uid in resource.data.get('collaboratorUids', [])
-      );
+      ));
       // Allow tenant to link their uid on first login (only tenantUid + updatedAt fields)
       allow update: if request.auth != null
                     && request.auth.token.email == resource.data.tenantEmail
@@ -48,26 +73,30 @@ service cloud.firestore {
       // `getByProperty` consulta por propertyId SIN filtrar ownerId, asi que trae pagos
       // de cualquier origen (colaborador, webhook de Stripe, datos antiguos). Sin la
       // clausula de dueno de la propiedad, un solo pago con otro ownerId denegaba todo.
-      allow read: if request.auth != null && (
+      // isMember() va primero y cortocircuita: en el caso normal ni se plantea
+      // el get() sobre la propiedad. La clausula del inquilino se conserva
+      // porque el inquilino NO esta en memberUids: su acceso es mas estrecho
+      // (ve sus pagos, no los gastos ni los recibos).
+      allow read: if isMember() || (request.auth != null && (
         request.auth.uid == resource.data.get('ownerId', '')
         || (paymentPropertyOk() && (
              request.auth.uid == paymentProperty().ownerId
              || request.auth.uid in paymentProperty().get('collaboratorUids', [])
              || request.auth.uid == paymentProperty().get('tenantUid', '')
            ))
-      );
-      allow write: if request.auth != null && (
+      ));
+      allow write: if isMember() || (request.auth != null && (
         request.auth.uid == resource.data.get('ownerId', '')
         || (paymentPropertyOk() && (
              request.auth.uid == paymentProperty().ownerId
              || request.auth.uid in paymentProperty().get('collaboratorUids', [])
            ))
-      );
-      allow create: if request.auth != null && (
+      ));
+      allow create: if willBeMember() || (request.auth != null && (
         request.auth.uid == request.resource.data.ownerId
         || request.auth.uid in get(/databases/$(database)/documents/properties/$(request.resource.data.propertyId))
                                .data.get('collaboratorUids', [])
-      );
+      ));
     }
 
     // Expenses: owner or colaborador de la propiedad puede leer/escribir.
@@ -86,18 +115,18 @@ service cloud.firestore {
       // Igual que en payments y serviceReceipts: sin la clausula de dueno de la
       // propiedad, un gasto creado por un colaborador (o el gasto automatico de un
       // recibo suyo) quedaba ilegible e imborrable para el dueno.
-      allow read, write: if request.auth != null && (
+      allow read, write: if isMember() || (request.auth != null && (
         request.auth.uid == resource.data.get('ownerId', '')
         || (expensePropertyOk() && (
              request.auth.uid == expenseProperty().ownerId
              || request.auth.uid in expenseProperty().get('collaboratorUids', [])
            ))
-      );
-      allow create: if request.auth != null && (
+      ));
+      allow create: if willBeMember() || (request.auth != null && (
         request.auth.uid == request.resource.data.ownerId
         || request.auth.uid in get(/databases/$(database)/documents/properties/$(request.resource.data.propertyId))
                                .data.get('collaboratorUids', [])
-      );
+      ));
     }
 
     // Tickets: owner or colaborador can read/update; tenant can read/create their own.
@@ -108,17 +137,17 @@ service cloud.firestore {
                                       .data.get('collaboratorUids', []);
       }
 
-      allow read: if request.auth != null && (
+      allow read: if isMember() || (request.auth != null && (
         request.auth.uid == resource.data.ownerId
         || request.auth.uid == resource.data.tenantUid
         || isCollaboratorOnTicket()
-      );
+      ));
       allow create: if request.auth != null
                     && request.auth.uid == request.resource.data.tenantUid;
-      allow update: if request.auth != null && (
+      allow update: if isMember() || (request.auth != null && (
         request.auth.uid == resource.data.ownerId
         || isCollaboratorOnTicket()
-      );
+      ));
       allow delete: if false;
     }
 
@@ -169,10 +198,18 @@ service cloud.firestore {
       // Los importes viven en serviceReceipts, cuya escritura si esta restringida
       // al dueño de la propiedad o a sus colaboradores.
       //
-      // Alternativa mas estricta, si se quisiera: denormalizar en cada service un
-      // array con los uids del circulo y validar contra el, manteniendolo en sync
-      // al agregar o quitar colaboradores.
-      allow read: if request.auth != null;
+      // Esa alternativa mas estricta es justo lo que hace ahora `memberUids`: el
+      // circulo del dueno denormalizado en cada service y mantenido por el
+      // trigger `syncMemberUids`.
+      //
+      // >>> PASO PENDIENTE (tras verificar el backfill de memberUids) <<<
+      // Sustituir las dos lineas de abajo por:
+      //     allow read: if isMember();
+      //     allow create: if willBeMember();
+      //     allow update, delete: if isMember();
+      // Hasta entonces se queda la lectura abierta, porque los documentos
+      // anteriores al backfill no tienen el campo y quedarian ilegibles.
+      allow read: if isMember() || request.auth != null;
       allow create, update, delete: if request.auth != null;
     }
 
@@ -183,13 +220,15 @@ service cloud.firestore {
           && request.auth.uid in get(/databases/$(database)/documents/properties/$(resource.data.propertyIds[0])).data.get('collaboratorUids', []);
       }
 
-      allow read: if request.auth != null;
+      // >>> PASO PENDIENTE (tras verificar el backfill) <<<
+      // `allow read` pasa a `if isMember();`.
+      allow read: if isMember() || request.auth != null;
       allow create: if request.auth != null
                     && request.auth.uid == request.resource.data.ownerId;
-      allow update, delete: if request.auth != null && (
+      allow update, delete: if isMember() || (request.auth != null && (
         request.auth.uid == resource.data.ownerId
         || isCollaboratorOnAssignment()
-      );
+      ));
     }
 
     // Service Receipts: owner or collaborator on the receipt's property can read/write.
@@ -213,18 +252,26 @@ service cloud.firestore {
                   ));
       }
 
-      // Lectura permisiva a proposito. Endurecerla con get() por documento arriesga
-      // denegar listados completos: hay un tope de accesos a documentos por consulta,
-      // y basta un documento que lo exceda para tumbar la consulta entera. El hueco
-      // grave era la escritura (cualquier autenticado podia crear o alterar recibos
-      // ajenos) y esa si queda cerrada abajo, donde el coste del get() es por documento.
-      allow read: if request.auth != null;
-      allow create: if request.auth != null && (
+      // La lectura era permisiva a proposito: endurecerla con get() por documento
+      // arriesgaba denegar listados completos, porque hay un tope de accesos a
+      // documentos por consulta y basta uno que lo exceda para tumbar la consulta
+      // entera. `memberUids` quita esa disyuntiva: se resuelve contra el propio
+      // documento, sin lecturas extra y sin tope que exceder.
+      //
+      // >>> PASO PENDIENTE (tras verificar el backfill de memberUids) <<<
+      // Sustituir la linea de lectura por:
+      //     allow read: if isMember();
+      // Es EL paso que cierra el agujero: hoy cualquier cuenta con sesion puede
+      // listar los recibos de todos los duenos, con montos y propertyId. Va al
+      // final y solo, porque es tambien el unico que puede dejar pantallas en
+      // blanco si algun documento se quedo sin el campo.
+      allow read: if isMember() || request.auth != null;
+      allow create: if willBeMember() || (request.auth != null && (
         request.auth.uid == get(/databases/$(database)/documents/properties/$(request.resource.data.propertyId)).data.ownerId
         || request.auth.uid in get(/databases/$(database)/documents/properties/$(request.resource.data.propertyId))
                                .data.get('collaboratorUids', [])
-      );
-      allow update, delete: if request.auth != null && canWriteReceipt();
+      ));
+      allow update, delete: if isMember() || (request.auth != null && canWriteReceipt());
     }
 
     // Mail: write-only from Cloud Functions (Admin SDK). No client access needed.

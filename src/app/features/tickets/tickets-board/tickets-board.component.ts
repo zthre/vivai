@@ -11,6 +11,7 @@ import {
 import { toSignal, toObservable } from '@angular/core/rxjs-interop';
 import { switchMap, of, combineLatest, filter } from 'rxjs';
 import { AuthService } from '../../../core/auth/auth.service';
+import { PermissionService } from '../../../core/auth/permissions';
 import { TicketService } from '../../../core/services/ticket.service';
 import { PropertyService } from '../../../core/services/property.service';
 import { TicketCardComponent } from './ticket-card/ticket-card.component';
@@ -134,6 +135,7 @@ const STATUS_COLORS: Record<string, string> = {
 })
 export class TicketsBoardComponent implements OnInit {
   private authService = inject(AuthService);
+  private permissions = inject(PermissionService);
   private ticketService = inject(TicketService);
   private propertyService = inject(PropertyService);
 
@@ -207,13 +209,10 @@ export class TicketsBoardComponent implements OnInit {
   ngOnInit() {}
 
   canWriteTicketsFor(propertyId: string): boolean {
-    const uid = this.authService.uid();
-    if (!uid) return false;
-    const prop = this.properties().find(p => p.id === propertyId);
-    if (!prop) return false;
-    if (prop.ownerId === uid) return true;
-    const perms = prop.collaboratorPermissions?.[uid];
-    return !perms || perms.tickets !== false;
+    return this.permissions.can(
+      this.properties().find(p => p.id === propertyId),
+      'tickets'
+    );
   }
 
   async onDrop(event: CdkDragDrop<Ticket[]>, newStatus: Ticket['status']) {
