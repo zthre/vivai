@@ -11,16 +11,8 @@ import { UtilityServiceService } from '../../../core/services/utility-service.se
 import { PropertyService } from '../../../core/services/property.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ServiceReceipt } from '../../../core/models/service-receipt.model';
-
-function startOfMonth(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), 1);
-}
-
-function formatMonth(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  return `${y}-${m}`;
-}
+import { PermissionService } from '../../../core/auth/permissions';
+import { addMonths, monthKey, monthLabel, startOfMonth } from '../../../core/utils/month.util';
 
 @Component({
   selector: 'app-service-receipts',
@@ -200,6 +192,7 @@ export class ServiceReceiptsComponent implements OnInit {
   private svcService = inject(UtilityServiceService);
   private propertyService = inject(PropertyService);
   private authService = inject(AuthService);
+  private permissions = inject(PermissionService);
   private route = inject(ActivatedRoute);
   private snackBar = inject(MatSnackBar);
 
@@ -220,20 +213,13 @@ export class ServiceReceiptsComponent implements OnInit {
 
   canWrite = computed(() => {
     const uid = this.authService.uid();
-    const svc = this.service();
     if (!uid) return false;
-    if (svc?.ownerId === uid) return true;
-    return this.allProperties().some(p => {
-      const perms = p.collaboratorPermissions?.[uid];
-      return !perms || perms.servicios !== false;
-    });
+    if (this.service()?.ownerId === uid) return true;
+    return this.permissions.canOnAny(this.allProperties(), 'servicios');
   });
 
-  selectedMonth = computed(() => formatMonth(this.selectedMonthDate()));
-  monthLabel = computed(() => {
-    const d = this.selectedMonthDate();
-    return d.toLocaleDateString('es-CO', { month: 'long', year: 'numeric' });
-  });
+  selectedMonth = computed(() => monthKey(this.selectedMonthDate()));
+  monthLabel = computed(() => monthLabel(this.selectedMonthDate()));
 
   filterCode = signal('');
   markingAll = signal(false);
@@ -279,19 +265,11 @@ export class ServiceReceiptsComponent implements OnInit {
   }
 
   prevMonth() {
-    this.selectedMonthDate.update(d => {
-      const prev = new Date(d);
-      prev.setMonth(prev.getMonth() - 1);
-      return prev;
-    });
+    this.selectedMonthDate.update(d => addMonths(d, -1));
   }
 
   nextMonth() {
-    this.selectedMonthDate.update(d => {
-      const next = new Date(d);
-      next.setMonth(next.getMonth() + 1);
-      return next;
-    });
+    this.selectedMonthDate.update(d => addMonths(d, 1));
   }
 
   async updateAmount(receipt: ServiceReceipt, event: Event) {

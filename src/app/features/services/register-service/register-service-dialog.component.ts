@@ -9,6 +9,8 @@ import { ServiceReceiptService } from '../../../core/services/service-receipt.se
 import { UtilityServiceService } from '../../../core/services/utility-service.service';
 import { PropertyService } from '../../../core/services/property.service';
 import { AuthService } from '../../../core/auth/auth.service';
+import { PermissionService } from '../../../core/auth/permissions';
+import { monthLabelFromKey } from '../../../core/utils/month.util';
 
 export interface RegisterServiceDialogData {
   /** 'YYYY-MM' */
@@ -18,11 +20,6 @@ export interface RegisterServiceDialogData {
   serviceName?: string;
   /** Preselecciona la propiedad */
   propertyId?: string;
-}
-
-function monthLabel(month: string): string {
-  const [y, m] = month.split('-').map(Number);
-  return new Date(y, m - 1, 1).toLocaleDateString('es-CO', { month: 'long', year: 'numeric' });
 }
 
 /**
@@ -148,24 +145,19 @@ export class RegisterServiceDialogComponent {
   private utilityService = inject(UtilityServiceService);
   private propertyService = inject(PropertyService);
   private authService = inject(AuthService);
+  private permissions = inject(PermissionService);
   private snackBar = inject(MatSnackBar);
 
-  label = monthLabel(this.data.month);
+  label = monthLabelFromKey(this.data.month);
   saving = signal(false);
   creatingService = signal(false);
 
   private allProperties = toSignal(this.propertyService.getAll(), { initialValue: [] });
 
   /** Solo propiedades sobre las que se pueden gestionar servicios */
-  properties = computed(() => {
-    const uid = this.authService.uid();
-    return this.allProperties().filter(p => {
-      if (!uid) return false;
-      if (p.ownerId === uid) return true;
-      const perms = p.collaboratorPermissions?.[uid];
-      return !perms || perms.servicios !== false;
-    });
-  });
+  properties = computed(() =>
+    this.permissions.filterByPermission(this.allProperties(), 'servicios')
+  );
 
   private services = toSignal(this.utilityService.getAll(), { initialValue: [] });
   activeServices = computed(() => this.services().filter(s => s.isActive !== false));

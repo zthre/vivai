@@ -19,31 +19,13 @@ import { PaymentListComponent } from './payment-list/payment-list.component';
 import { ExpenseListComponent } from './expense-list/expense-list.component';
 import { ExpenseFormComponent } from './expense-form/expense-form.component';
 import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialog/confirm-dialog.component';
-
-function startOfMonth(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), 1, 0, 0, 0, 0);
-}
-
-function endOfMonth(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
-}
-
-/** 'YYYY-MM', el formato con que se guardan los recibos de servicios */
-function monthKey(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
-
-function toMonthParam(d: Date): string {
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  return `${yyyy}-${mm}`;
-}
-
-function fromMonthParam(param: string): Date | null {
-  const [y, m] = param.split('-').map(Number);
-  if (!y || !m) return null;
-  return new Date(y, m - 1, 1);
-}
+import { PermissionService } from '../../../core/auth/permissions';
+import {
+  endOfMonth,
+  fromMonthKey,
+  monthKey,
+  startOfMonth,
+} from '../../../core/utils/month.util';
 
 @Component({
   selector: 'app-finances-dashboard',
@@ -141,6 +123,7 @@ export class FinancesDashboardComponent implements OnInit {
   private expenseService = inject(ExpenseService);
   private receiptService = inject(ServiceReceiptService);
   private authService = inject(AuthService);
+  private permissions = inject(PermissionService);
   private dialog = inject(MatDialog);
   private router = inject(Router);
   private route = inject(ActivatedRoute);
@@ -276,27 +259,20 @@ export class FinancesDashboardComponent implements OnInit {
   });
 
   canWriteFinances = computed(() => {
-    const uid = this.authService.uid();
-    if (!uid) return false;
+    if (!this.authService.uid()) return false;
     if (this.authService.activeRole() !== 'colaborador') return true;
     const pid = this.selectedPropertyId();
     if (pid) {
-      const prop = this.properties().find(p => p.id === pid);
-      if (!prop) return false;
-      const perms = prop.collaboratorPermissions?.[uid];
-      return !perms || perms.gastos !== false;
+      return this.permissions.can(this.properties().find(p => p.id === pid), 'gastos');
     }
-    // No specific property selected — allow if user has gastos permission on any property
-    return this.properties().some(p => {
-      const perms = p.collaboratorPermissions?.[uid];
-      return !perms || perms.gastos !== false;
-    });
+    // Sin propiedad seleccionada: basta con poder registrar gastos en alguna
+    return this.permissions.canOnAny(this.properties(), 'gastos');
   });
 
   constructor() {
     // Sync filters to queryParams
     effect(() => {
-      const monthParam = toMonthParam(this.selectedMonth());
+      const monthParam = monthKey(this.selectedMonth());
       const pid = this.selectedPropertyId();
       const qp: Record<string, string> = { month: monthParam };
       if (pid) qp['propertyId'] = pid;
@@ -311,7 +287,7 @@ export class FinancesDashboardComponent implements OnInit {
   ngOnInit() {
     const params = this.route.snapshot.queryParams;
     if (params['month']) {
-      const d = fromMonthParam(params['month']);
+      const d = fromMonthKey(params['month']);
       if (d) this.selectedMonth.set(d);
     }
     if (params['propertyId']) {

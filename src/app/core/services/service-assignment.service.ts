@@ -2,7 +2,6 @@ import { Injectable, inject } from '@angular/core';
 import {
   Firestore,
   collection,
-  collectionData,
   doc,
   addDoc,
   updateDoc,
@@ -10,29 +9,28 @@ import {
   query,
   where,
   serverTimestamp,
-  setDoc,
-  getDoc,
   Query,
   DocumentData,
 } from '@angular/fire/firestore';
-import { Observable, switchMap } from 'rxjs';
+import { Observable } from 'rxjs';
 import { ServiceAssignment } from '../models/service-assignment.model';
-import { guardQuery } from './firestore-error.util';
+import { collection$ } from './firestore-query.util';
 import { AuthService } from '../auth/auth.service';
+import { PropertyService } from './property.service';
 
 @Injectable({ providedIn: 'root' })
 export class ServiceAssignmentService {
   private firestore = inject(Firestore);
   private auth = inject(AuthService);
+  private properties = inject(PropertyService);
 
   /** Degrada a lista vacía ante un fallo: un error propagado a `toSignal` rompe la vista. */
   private safe(q: Query<DocumentData>, label: string, queryDesc: string): Observable<ServiceAssignment[]> {
-    return (collectionData(q, { idField: 'id' }) as Observable<ServiceAssignment[]>).pipe(
-      guardQuery(`ServiceAssignmentService.${label}`, [] as ServiceAssignment[], {
-        collection: 'serviceAssignments',
-        query: queryDesc,
-      })
-    );
+    return collection$<ServiceAssignment>(q, {
+      label: `ServiceAssignmentService.${label}`,
+      collection: 'serviceAssignments',
+      query: queryDesc,
+    });
   }
 
   getByService(serviceId: string): Observable<ServiceAssignment[]> {
@@ -64,6 +62,7 @@ export class ServiceAssignmentService {
     const docRef = await addDoc(ref, {
       ...data,
       ownerId: uid,
+      memberUids: await this.properties.ownerCircle(uid),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });

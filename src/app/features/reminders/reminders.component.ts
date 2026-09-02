@@ -6,6 +6,7 @@ import { switchMap } from 'rxjs';
 import { PropertyService } from '../../core/services/property.service';
 import { PaymentService } from '../../core/services/payment.service';
 import { Property } from '../../core/models/property.model';
+import { currentMonthKey, fromMonthKey } from '../../core/utils/month.util';
 
 @Component({
   selector: 'app-reminders',
@@ -140,14 +141,11 @@ export class RemindersComponent {
 
   private now = new Date();
 
-  selectedMonthStr = signal<string>(
-    `${this.now.getFullYear()}-${String(this.now.getMonth() + 1).padStart(2, '0')}`
-  );
+  selectedMonthStr = signal<string>(currentMonthKey());
   selectedPropertyId = signal<string>('');
 
   private selectedMonthDate = computed(() => {
-    const [y, m] = this.selectedMonthStr().split('-').map(Number);
-    return new Date(y, m - 1, 1);
+    return fromMonthKey(this.selectedMonthStr()) ?? new Date();
   });
 
   properties = toSignal(this.propertyService.getAll(), { initialValue: [] });

@@ -2,7 +2,6 @@ import { Injectable, inject } from '@angular/core';
 import {
   Firestore,
   collection,
-  collectionData,
   doc,
   addDoc,
   updateDoc,
@@ -12,18 +11,21 @@ import {
   orderBy,
   serverTimestamp,
   limit,
-  getDoc,
 } from '@angular/fire/firestore';
 import { Observable, switchMap } from 'rxjs';
 import { Payment } from '../models/payment.model';
-import { guardQuery, loggedWrite } from './firestore-error.util';
+import { loggedWrite } from './firestore-error.util';
+import { collection$ } from './firestore-query.util';
 import { AuthService } from '../auth/auth.service';
+import { PropertyService } from './property.service';
+import { monthKey } from '../utils/month.util';
 import { Timestamp } from '@angular/fire/firestore';
 
 @Injectable({ providedIn: 'root' })
 export class PaymentService {
   private firestore = inject(Firestore);
   private auth = inject(AuthService);
+  private properties = inject(PropertyService);
 
   getByMonth(startDate: Date, endDate: Date): Observable<Payment[]> {
     return this.auth.uid$.pipe(
@@ -36,12 +38,11 @@ export class PaymentService {
           where('date', '<=', Timestamp.fromDate(endDate)),
           orderBy('date', 'desc')
         );
-        return (collectionData(q, { idField: 'id' }) as Observable<Payment[]>).pipe(
-          guardQuery('PaymentService.getByMonth', [] as Payment[], {
-            collection: 'payments',
-            query: `ownerId == ${uid}, date entre ${startDate.toISOString()} y ${endDate.toISOString()}`,
-          })
-        );
+        return collection$<Payment>(q, {
+          label: 'PaymentService.getByMonth',
+          collection: 'payments',
+          query: `ownerId == ${uid}, date entre ${startDate.toISOString()} y ${endDate.toISOString()}`,
+        });
       })
     );
   }
@@ -56,12 +57,11 @@ export class PaymentService {
           orderBy('createdAt', 'desc'),
           limit(limitCount)
         );
-        return (collectionData(q, { idField: 'id' }) as Observable<Payment[]>).pipe(
-          guardQuery('PaymentService.getRecent', [] as Payment[], {
-            collection: 'payments',
-            query: `ownerId == ${uid}, orderBy createdAt desc, limit ${limitCount}`,
-          })
-        );
+        return collection$<Payment>(q, {
+          label: 'PaymentService.getRecent',
+          collection: 'payments',
+          query: `ownerId == ${uid}, orderBy createdAt desc, limit ${limitCount}`,
+        });
       })
     );
   }
@@ -73,10 +73,38 @@ export class PaymentService {
       where('propertyId', '==', propertyId),
       orderBy('date', 'desc')
     );
-    return (collectionData(q, { idField: 'id' }) as Observable<Payment[]>).pipe(
-      guardQuery('PaymentService.getByProperty', [] as Payment[], {
-        collection: 'payments',
-        query: `propertyId == ${propertyId}, orderBy date desc`,
+    return collection$<Payment>(q, {
+      label: 'PaymentService.getByProperty',
+      collection: 'payments',
+      query: `propertyId == ${propertyId}, orderBy date desc`,
+    });
+  }
+
+  /**
+   * Pagos del mes en todo el círculo del usuario: una consulta en lugar del
+   * abanico de `getByProperty` por propiedad.
+   *
+   * Sustituye a la vez dos cosas: la consulta por `ownerId` —que no servía a los
+   * colaboradores, y por eso las pantallas acabaron abriendo una consulta por
+   * propiedad— y el filtro de mes en memoria sobre el historial completo.
+   *
+   * TODAVÍA SIN USAR. Depende de que el backfill de `memberUids` y `period` haya
+   * terminado: hasta entonces, un documento sin esos campos quedaría fuera y las
+   * cifras saldrían de menos. Ver el plan, fase 3.
+   */
+  getByCircleAndPeriod(period: string): Observable<Payment[]> {
+    return this.auth.uid$.pipe(
+      switchMap(uid => {
+        const q = query(
+          collection(this.firestore, 'payments'),
+          where('memberUids', 'array-contains', uid),
+          where('period', '==', period)
+        );
+        return collection$<Payment>(q, {
+          label: 'PaymentService.getByCircleAndPeriod',
+          collection: 'payments',
+          query: `memberUids array-contains ${uid}, period == ${period}`,
+        });
       })
     );
   }
@@ -84,15 +112,17 @@ export class PaymentService {
   async create(data: { propertyId: string; amount: number; date: Date; notes: string | null }): Promise<void> {
     const uid = this.auth.uid()!;
     // Always attribute the payment to the property owner (not the colaborador who might be creating it)
-    const propSnap = await getDoc(doc(this.firestore, `properties/${data.propertyId}`));
-    const ownerId = propSnap.data()?.['ownerId'] ?? uid;
+    const ownerId = await this.properties.ownerIdOf(data.propertyId, uid);
+    const memberUids = await this.properties.memberUidsOf(data.propertyId, ownerId);
     const ref = collection(this.firestore, 'payments');
     await loggedWrite(
       'PaymentService.create',
       () => addDoc(ref, {
         ...data,
         date: Timestamp.fromDate(data.date),
+        period: monthKey(data.date),
         ownerId,
+        memberUids,
         createdBy: uid,
         createdAt: serverTimestamp(),
       }),
@@ -107,6 +137,9 @@ export class PaymentService {
       () => updateDoc(ref, {
         amount: data.amount,
         date: Timestamp.fromDate(data.date),
+        // `period` se deriva de `date`: si no se recalcula aquí, corregir la fecha
+        // de un pago lo deja anotado en un mes y contando en otro.
+        period: monthKey(data.date),
         notes: data.notes,
       }),
       { collection: 'payments', query: `update payments/${id}` }

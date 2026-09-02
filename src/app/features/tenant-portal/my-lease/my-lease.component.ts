@@ -9,13 +9,7 @@ import { switchMap, map, of } from 'rxjs';
 import { AuthService } from '../../../core/auth/auth.service';
 import { PaymentService } from '../../../core/services/payment.service';
 import { Property } from '../../../core/models/property.model';
-
-function startOfMonth(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), 1, 0, 0, 0, 0);
-}
-function endOfMonth(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
-}
+import { endOfMonth, startOfMonth } from '../../../core/utils/month.util';
 
 @Component({
   selector: 'app-my-lease',

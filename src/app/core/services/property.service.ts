@@ -17,20 +17,57 @@ import {
   getDocs,
   arrayUnion,
   arrayRemove,
+  writeBatch,
+  WriteBatch,
   Timestamp,
 } from '@angular/fire/firestore';
-import { Observable, combineLatest, map, switchMap, startWith } from 'rxjs';
+import { Observable, combineLatest, map, switchMap, startWith, shareReplay } from 'rxjs';
 import { guardQuery } from './firestore-error.util';
-import { Property, PhotoItem, ColaboradorPermission, ContractFile } from '../models/property.model';
+import {
+  Property,
+  PhotoItem,
+  ColaboradorPermission,
+  ContractFile,
+  propertyMemberUids,
+} from '../models/property.model';
 import { AuthService } from '../auth/auth.service';
+import { DEFAULT_COLABORADOR_PERMISSIONS } from '../auth/permissions';
 import { listingExpiryFrom } from './listing.util';
+
+/** Tope de operaciones por lote en Firestore. */
+const BATCH_LIMIT = 500;
+
+/** Ventana de memoización de `snapshot()`: cubre la ráfaga de una acción, no más. */
+const SNAPSHOT_TTL_MS = 5_000;
 
 @Injectable({ providedIn: 'root' })
 export class PropertyService {
   private firestore = inject(Firestore);
   private auth = inject(AuthService);
 
+  private snapshotCache = new Map<string, { value: Property | null; at: number }>();
+
+  /**
+   * Fuente única de las propiedades visibles para el usuario en sesión.
+   *
+   * `getAll()` se invoca desde dieciocho sitios. Sin compartir, cada componente
+   * abría su propio par de listeners sobre `properties` y volvía a pagar las
+   * lecturas: navegar Dashboard → Inmuebles → Finanzas abría y cerraba seis
+   * suscripciones sobre la misma colección.
+   *
+   * `refCount: false` mantiene viva la suscripción entre navegaciones —que es
+   * justo el caso que se quiere evitar—; el `switchMap` sobre `uid$` se encarga
+   * de recrear las consultas al cambiar de sesión.
+   */
+  private readonly properties$: Observable<Property[]> = this.buildAll().pipe(
+    shareReplay({ bufferSize: 1, refCount: false })
+  );
+
   getAll(): Observable<Property[]> {
+    return this.properties$;
+  }
+
+  private buildAll(): Observable<Property[]> {
     return this.auth.uid$.pipe(
       switchMap(uid => {
         const ref = collection(this.firestore, 'properties');
@@ -91,6 +128,71 @@ export class PropertyService {
     return docData(ref, { idField: 'id' }) as Observable<Property>;
   }
 
+  /**
+   * Lectura puntual de una propiedad, memoizada durante unos segundos.
+   *
+   * Pagos, gastos, recibos y servicios necesitan resolver el dueño (y a veces el
+   * nombre) de la propiedad antes de escribir, y cada uno lo hacía con su propio
+   * `getDoc`: registrar un recibo pagado leía la misma propiedad tres veces
+   * seguidas. La ventana es corta a propósito — resuelve la ráfaga de una acción
+   * sin llegar a servir datos rancios en la siguiente.
+   */
+  async snapshot(id: string): Promise<Property | null> {
+    const cached = this.snapshotCache.get(id);
+    if (cached && Date.now() - cached.at < SNAPSHOT_TTL_MS) return cached.value;
+
+    const snap = await getDoc(doc(this.firestore, `properties/${id}`));
+    const value = snap.exists() ? ({ id: snap.id, ...snap.data() } as Property) : null;
+    this.snapshotCache.set(id, { value, at: Date.now() });
+    return value;
+  }
+
+  /** Dueño de una propiedad, o `fallback` si ya no existe. */
+  async ownerIdOf(propertyId: string, fallback: string): Promise<string> {
+    return (await this.snapshot(propertyId))?.ownerId ?? fallback;
+  }
+
+  /**
+   * Círculo de una propiedad, para sellarlo en los documentos que cuelgan de ella.
+   *
+   * Si la propiedad ya no existe se cae al uid de quien escribe: mejor un documento
+   * legible solo por su autor que uno con `memberUids` vacío, que sería ilegible
+   * para todos en cuanto las reglas dependan del campo.
+   */
+  async memberUidsOf(propertyId: string, fallback: string): Promise<string[]> {
+    const prop = await this.snapshot(propertyId);
+    return prop ? propertyMemberUids(prop) : [fallback];
+  }
+
+  /**
+   * Círculo del dueño: él y todos sus colaboradores, en cualquiera de sus
+   * propiedades.
+   *
+   * Es el ámbito de los documentos que NO cuelgan de una propiedad concreta
+   * —`services` y `serviceAssignments`—, que por eso no podían expresarse en las
+   * reglas y acabaron con lectura abierta a cualquier autenticado.
+   */
+  async ownerCircle(ownerId: string): Promise<string[]> {
+    const snap = await getDocs(
+      query(collection(this.firestore, 'properties'), where('ownerId', '==', ownerId))
+    );
+    const uids = new Set<string>([ownerId]);
+    for (const d of snap.docs) {
+      for (const uid of ((d.data() as Property).collaboratorUids ?? [])) uids.add(uid);
+    }
+    return [...uids].filter(Boolean);
+  }
+
+  /** Nombre de una propiedad, o su id si ya no existe. */
+  async nameOf(propertyId: string): Promise<string> {
+    return (await this.snapshot(propertyId))?.name ?? propertyId;
+  }
+
+  /** Invalida la memoización tras escribir sobre una propiedad. */
+  private forget(id: string): void {
+    this.snapshotCache.delete(id);
+  }
+
   async create(data: Omit<Property, 'id' | 'ownerId' | 'createdAt' | 'updatedAt'>): Promise<string> {
     const uid = this.auth.uid()!;
     const ref = collection(this.firestore, 'properties');
@@ -98,6 +200,7 @@ export class PropertyService {
       ...data,
       ownerId: uid,
       collaboratorUids: [],
+      memberUids: [uid],
       pendingCollaboratorEmails: [],
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -108,11 +211,13 @@ export class PropertyService {
   async update(id: string, data: Partial<Property>): Promise<void> {
     const ref = doc(this.firestore, `properties/${id}`);
     await updateDoc(ref, { ...data, updatedAt: serverTimestamp() });
+    this.forget(id);
   }
 
   async delete(id: string): Promise<void> {
     const ref = doc(this.firestore, `properties/${id}`);
     await deleteDoc(ref);
+    this.forget(id);
   }
 
   /**
@@ -253,90 +358,52 @@ export class PropertyService {
     return 'saved';
   }
 
+  // ── Colaboradores ─────────────────────────────────────────────────────────
+
   async addColaborador(propertyId: string, email: string): Promise<'assigned' | 'pending'> {
-    const usersSnap = await getDocs(
-      query(collection(this.firestore, 'users'), where('email', '==', email), limit(1))
-    );
+    const targetUid = await this.uidByEmail(email);
 
-    if (!usersSnap.empty) {
-      const userDoc = usersSnap.docs[0];
-      const targetUid = userDoc.id;
-
-      const defaultPermission: ColaboradorPermission = {
-        inmueblesUnidades: true,
-        inmueblesPagos: true,
-        inmueblesMedia: true,
-        gastos: true,
-        tickets: true,
-      };
-
+    if (!targetUid) {
       await updateDoc(doc(this.firestore, `properties/${propertyId}`), {
-        collaboratorUids: arrayUnion(targetUid),
-        [`collaboratorPermissions.${targetUid}`]: defaultPermission,
+        pendingCollaboratorEmails: arrayUnion(email),
         updatedAt: serverTimestamp(),
       });
-
-      const userData = userDoc.data();
-      const existingRoles: string[] = Array.isArray(userData['roles'])
-        ? userData['roles']
-        : userData['role'] ? [userData['role']] : ['owner'];
-
-      const updatedRoles = existingRoles.includes('colaborador')
-        ? existingRoles
-        : [...existingRoles, 'colaborador'];
-
-      await updateDoc(doc(this.firestore, `users/${targetUid}`), {
-        collaboratingPropertyIds: arrayUnion(propertyId),
-        roles: updatedRoles,
-        updatedAt: serverTimestamp(),
-      });
-
-      return 'assigned';
+      return 'pending';
     }
 
-    await updateDoc(doc(this.firestore, `properties/${propertyId}`), {
-      pendingCollaboratorEmails: arrayUnion(email),
-      updatedAt: serverTimestamp(),
-    });
-    return 'pending';
+    await this.addColaboradorToProperty(propertyId, targetUid);
+    await this.grantColaboradorRole(targetUid);
+    return 'assigned';
   }
 
   async addColaboradorToProperty(propertyId: string, targetUid: string): Promise<void> {
-    const defaultPermission: ColaboradorPermission = {
-      inmueblesUnidades: true,
-      inmueblesPagos: true,
-      inmueblesMedia: true,
-      gastos: true,
-      tickets: true,
-    };
     await updateDoc(doc(this.firestore, `properties/${propertyId}`), {
       collaboratorUids: arrayUnion(targetUid),
-      [`collaboratorPermissions.${targetUid}`]: defaultPermission,
+      // El círculo completo, NO `arrayUnion(targetUid)`: sobre una propiedad
+      // anterior al backfill, que aún no tiene el campo, `arrayUnion` lo crearía
+      // con solo el colaborador dentro y dejaría fuera al dueño.
+      memberUids: await this.circleWith(propertyId, targetUid),
+      [`collaboratorPermissions.${targetUid}`]: DEFAULT_COLABORADOR_PERMISSIONS,
       updatedAt: serverTimestamp(),
     });
     await updateDoc(doc(this.firestore, `users/${targetUid}`), {
       collaboratingPropertyIds: arrayUnion(propertyId),
     });
+    this.forget(propertyId);
   }
 
   async removeColaboradorFromProperty(propertyId: string, uid: string): Promise<void> {
     await updateDoc(doc(this.firestore, `properties/${propertyId}`), {
       collaboratorUids: arrayRemove(uid),
+      // Igual que al añadir: se escribe el círculo entero. `arrayRemove` sobre un
+      // documento sin el campo lo dejaría en `[]`, sin el dueño.
+      memberUids: await this.circleWithout(propertyId, uid),
       updatedAt: serverTimestamp(),
     });
     await updateDoc(doc(this.firestore, `users/${uid}`), {
       collaboratingPropertyIds: arrayRemove(propertyId),
     });
-  }
-
-  async removeColaborador(propertyId: string, uid: string): Promise<void> {
-    await updateDoc(doc(this.firestore, `properties/${propertyId}`), {
-      collaboratorUids: arrayRemove(uid),
-      updatedAt: serverTimestamp(),
-    });
-    await updateDoc(doc(this.firestore, `users/${uid}`), {
-      collaboratingPropertyIds: arrayRemove(propertyId),
-    });
+    this.forget(propertyId);
   }
 
   async removePendingColaborador(propertyId: string, email: string): Promise<void> {
@@ -355,121 +422,158 @@ export class PropertyService {
       [`collaboratorPermissions.${uid}`]: permissions,
       updatedAt: serverTimestamp(),
     });
+    this.forget(propertyId);
   }
+
+  // ── Colaboradores globales ────────────────────────────────────────────────
+  //
+  // Un colaborador se da de alta sobre todas las propiedades del dueño a la vez.
+  // Antes cada uno de estos métodos recorría las propiedades con `updateDoc`
+  // sueltos —y dos de ellos en un `for` secuencial—: con veinte inmuebles eran
+  // cuarenta escrituras sin atomicidad, y un fallo a mitad de camino dejaba al
+  // colaborador con permisos distintos según la propiedad, sin aviso. Ahora van
+  // en lotes atómicos y el documento del usuario se toca una sola vez.
 
   async updateGlobalCollaboradorPermissions(
     collaboratorUid: string,
     permissions: ColaboradorPermission
   ): Promise<void> {
-    const ownerUid = this.auth.uid()!;
-    const snap = await getDocs(
-      query(collection(this.firestore, 'properties'), where('ownerId', '==', ownerUid))
+    const ids = await this.ownedPropertyIds();
+    await this.batched(ids, (batch, id) =>
+      batch.update(doc(this.firestore, `properties/${id}`), {
+        [`collaboratorPermissions.${collaboratorUid}`]: permissions,
+        updatedAt: serverTimestamp(),
+      })
     );
-    await Promise.all(
-      snap.docs.map(d =>
-        updateDoc(doc(this.firestore, `properties/${d.id}`), {
-          [`collaboratorPermissions.${collaboratorUid}`]: permissions,
-          updatedAt: serverTimestamp(),
-        })
-      )
-    );
+    ids.forEach(id => this.forget(id));
   }
 
   async addGlobalColaborador(email: string): Promise<'assigned' | 'pending'> {
     const ownerUid = this.auth.uid()!;
-    const propsSnap = await getDocs(
-      query(collection(this.firestore, 'properties'), where('ownerId', '==', ownerUid))
-    );
+    const ids = await this.ownedPropertyIds();
+    const targetUid = await this.uidByEmail(email);
 
-    const defaultPermission: ColaboradorPermission = {
-      inmueblesUnidades: true,
-      inmueblesPagos: true,
-      inmueblesMedia: true,
-      gastos: true,
-      tickets: true,
-    };
-
-    const usersSnap = await getDocs(
-      query(collection(this.firestore, 'users'), where('email', '==', email), limit(1))
-    );
-
-    if (!usersSnap.empty) {
-      const userDoc = usersSnap.docs[0];
-      const targetUid = userDoc.id;
-
-      await Promise.all(
-        propsSnap.docs.map(d =>
-          updateDoc(doc(this.firestore, `properties/${d.id}`), {
-            collaboratorUids: arrayUnion(targetUid),
-            [`collaboratorPermissions.${targetUid}`]: defaultPermission,
-            updatedAt: serverTimestamp(),
-          })
-        )
-      );
-
-      const userData = userDoc.data();
-      const existingRoles: string[] = Array.isArray(userData['roles'])
-        ? userData['roles']
-        : userData['role'] ? [userData['role']] : ['owner'];
-      const updatedRoles = existingRoles.includes('colaborador')
-        ? existingRoles
-        : [...existingRoles, 'colaborador'];
-
-      await updateDoc(doc(this.firestore, `users/${targetUid}`), {
-        roles: updatedRoles,
-        updatedAt: serverTimestamp(),
-      });
-      for (const d of propsSnap.docs) {
-        await updateDoc(doc(this.firestore, `users/${targetUid}`), {
-          collaboratingPropertyIds: arrayUnion(d.id),
-        });
-      }
-      return 'assigned';
-    }
-
-    await Promise.all(
-      propsSnap.docs.map(d =>
-        updateDoc(doc(this.firestore, `properties/${d.id}`), {
+    if (!targetUid) {
+      await this.batched(ids, (batch, id) =>
+        batch.update(doc(this.firestore, `properties/${id}`), {
           pendingCollaboratorEmails: arrayUnion(email),
           updatedAt: serverTimestamp(),
         })
-      )
+      );
+      return 'pending';
+    }
+
+    await this.batched(ids, (batch, id) =>
+      batch.update(doc(this.firestore, `properties/${id}`), {
+        collaboratorUids: arrayUnion(targetUid),
+        // Se incluye al dueño explícitamente: en una propiedad anterior al
+        // backfill el campo no existe, y `arrayUnion(targetUid)` a secas lo
+        // crearía sin él.
+        memberUids: arrayUnion(ownerUid, targetUid),
+        [`collaboratorPermissions.${targetUid}`]: DEFAULT_COLABORADOR_PERMISSIONS,
+        updatedAt: serverTimestamp(),
+      })
     );
-    return 'pending';
+
+    // `arrayUnion` admite varios valores: una escritura en vez de una por propiedad.
+    await this.grantColaboradorRole(targetUid, ids);
+    ids.forEach(id => this.forget(id));
+    return 'assigned';
   }
 
   async removeGlobalColaborador(collaboratorUid: string): Promise<void> {
-    const ownerUid = this.auth.uid()!;
-    const snap = await getDocs(
-      query(collection(this.firestore, 'properties'), where('ownerId', '==', ownerUid))
+    const ids = await this.ownedPropertyIds();
+    await this.batched(ids, (batch, id) =>
+      batch.update(doc(this.firestore, `properties/${id}`), {
+        collaboratorUids: arrayRemove(collaboratorUid),
+        memberUids: arrayRemove(collaboratorUid),
+        updatedAt: serverTimestamp(),
+      })
     );
-    await Promise.all(
-      snap.docs.map(d =>
-        updateDoc(doc(this.firestore, `properties/${d.id}`), {
-          collaboratorUids: arrayRemove(collaboratorUid),
-          updatedAt: serverTimestamp(),
-        })
-      )
-    );
-    for (const d of snap.docs) {
+    if (ids.length > 0) {
       await updateDoc(doc(this.firestore, `users/${collaboratorUid}`), {
-        collaboratingPropertyIds: arrayRemove(d.id),
+        collaboratingPropertyIds: arrayRemove(...ids),
       });
     }
+    ids.forEach(id => this.forget(id));
   }
 
   async removePendingGlobalColaborador(email: string): Promise<void> {
+    const ids = await this.ownedPropertyIds();
+    await this.batched(ids, (batch, id) =>
+      batch.update(doc(this.firestore, `properties/${id}`), {
+        pendingCollaboratorEmails: arrayRemove(email),
+        updatedAt: serverTimestamp(),
+      })
+    );
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  /** Círculo de una propiedad con `uid` añadido. */
+  private async circleWith(propertyId: string, uid: string): Promise<string[]> {
+    const prop = await this.snapshot(propertyId);
+    const base = prop ? propertyMemberUids(prop) : [];
+    return [...new Set([...base, uid])].filter(Boolean);
+  }
+
+  /** Círculo de una propiedad sin `uid`. El dueño nunca sale, aunque se pida. */
+  private async circleWithout(propertyId: string, uid: string): Promise<string[]> {
+    const prop = await this.snapshot(propertyId);
+    if (!prop) return [];
+    return propertyMemberUids(prop).filter(u => u === prop.ownerId || u !== uid);
+  }
+
+  /** Ids de las propiedades de las que el usuario en sesión es dueño. */
+  private async ownedPropertyIds(): Promise<string[]> {
     const ownerUid = this.auth.uid()!;
     const snap = await getDocs(
       query(collection(this.firestore, 'properties'), where('ownerId', '==', ownerUid))
     );
-    await Promise.all(
-      snap.docs.map(d =>
-        updateDoc(doc(this.firestore, `properties/${d.id}`), {
-          pendingCollaboratorEmails: arrayRemove(email),
-          updatedAt: serverTimestamp(),
-        })
-      )
+    return snap.docs.map(d => d.id);
+  }
+
+  /** Uid del usuario con ese correo, o `null` si aún no se ha registrado. */
+  private async uidByEmail(email: string): Promise<string | null> {
+    const snap = await getDocs(
+      query(collection(this.firestore, 'users'), where('email', '==', email), limit(1))
     );
+    return snap.empty ? null : snap.docs[0].id;
+  }
+
+  /**
+   * Añade el rol `colaborador` al usuario (sin quitarle los que ya tenga) y, si
+   * se indican, las propiedades en las que colabora.
+   *
+   * Contempla los documentos antiguos con `role` en singular, que el resto de la
+   * app ya migra al iniciar sesión.
+   */
+  private async grantColaboradorRole(targetUid: string, propertyIds: string[] = []): Promise<void> {
+    const userSnap = await getDoc(doc(this.firestore, `users/${targetUid}`));
+    const userData = userSnap.data() ?? {};
+    const existingRoles: string[] = Array.isArray(userData['roles'])
+      ? userData['roles']
+      : userData['role'] ? [userData['role']] : ['owner'];
+    const roles = existingRoles.includes('colaborador')
+      ? existingRoles
+      : [...existingRoles, 'colaborador'];
+
+    const payload: Record<string, any> = { roles, updatedAt: serverTimestamp() };
+    if (propertyIds.length > 0) {
+      payload['collaboratingPropertyIds'] = arrayUnion(...propertyIds);
+    }
+    await updateDoc(doc(this.firestore, `users/${targetUid}`), payload);
+  }
+
+  /** Aplica la misma operación a muchos documentos, en lotes atómicos. */
+  private async batched<T>(
+    items: readonly T[],
+    apply: (batch: WriteBatch, item: T) => void
+  ): Promise<void> {
+    for (let i = 0; i < items.length; i += BATCH_LIMIT) {
+      const batch = writeBatch(this.firestore);
+      for (const item of items.slice(i, i + BATCH_LIMIT)) apply(batch, item);
+      await batch.commit();
+    }
   }
 }

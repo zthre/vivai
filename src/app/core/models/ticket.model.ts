@@ -11,6 +11,8 @@ export interface Ticket {
   propertyId: string;
   propertyName: string;
   ownerId: string;
+  /** Círculo de la propiedad. NO incluye al inquilino: él lee por `tenantUid`. */
+  memberUids?: string[];
   tenantUid: string;
   tenantName: string | null;
   title: string;

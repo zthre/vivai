@@ -1,9 +1,14 @@
 import { APP_INITIALIZER, ApplicationConfig } from '@angular/core';
 import { provideRouter, withComponentInputBinding } from '@angular/router';
 import { provideAnimations } from '@angular/platform-browser/animations';
-import { initializeApp, provideFirebaseApp } from '@angular/fire/app';
+import { getApp, initializeApp, provideFirebaseApp } from '@angular/fire/app';
 import { getAuth, provideAuth } from '@angular/fire/auth';
-import { getFirestore, provideFirestore } from '@angular/fire/firestore';
+import {
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  provideFirestore,
+} from '@angular/fire/firestore';
 import { getStorage, provideStorage } from '@angular/fire/storage';
 import { getFunctions, provideFunctions } from '@angular/fire/functions';
 import { MatIconRegistry } from '@angular/material/icon';
@@ -16,7 +21,24 @@ export const appConfig: ApplicationConfig = {
     provideAnimations(),
     provideFirebaseApp(() => initializeApp(environment.firebase)),
     provideAuth(() => getAuth()),
-    provideFirestore(() => getFirestore()),
+    /**
+     * Caché persistente en IndexedDB.
+     *
+     * Sin ella, volver a una pantalla releía del servidor lo que se acababa de
+     * leer, y una recarga de página empezaba de cero. `persistentMultipleTabManager`
+     * es lo que permite tener la app abierta en varias pestañas: con el manager de
+     * pestaña única, la segunda pestaña se queda sin caché.
+     *
+     * Si el navegador no admite IndexedDB (modo privado, almacenamiento bloqueado),
+     * el SDK cae solo a caché en memoria; no hay que preverlo aquí.
+     */
+    provideFirestore(() =>
+      initializeFirestore(getApp(), {
+        localCache: persistentLocalCache({
+          tabManager: persistentMultipleTabManager(),
+        }),
+      })
+    ),
     provideStorage(() => getStorage()),
     provideFunctions(() => getFunctions()),
     {

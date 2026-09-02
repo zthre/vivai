@@ -10,6 +10,7 @@ import { UtilityServiceService } from '../../../core/services/utility-service.se
 import { PaymentService } from '../../../core/services/payment.service';
 import { ServiceReceipt } from '../../../core/models/service-receipt.model';
 import { Property } from '../../../core/models/property.model';
+import { monthKey, monthLabelFromKey } from '../../../core/utils/month.util';
 
 export interface MonthSettlementDialogData {
   property: Property;
@@ -19,11 +20,6 @@ export interface MonthSettlementDialogData {
   canWriteServicios: boolean;
   /** Abrir directamente en la confirmación de "Pagar todo" */
   startInPayAll?: boolean;
-}
-
-function monthLabel(month: string): string {
-  const [y, m] = month.split('-').map(Number);
-  return new Date(y, m - 1, 1).toLocaleDateString('es-CO', { month: 'long', year: 'numeric' });
 }
 
 /** Fecha con la que se registra el pago del mes seleccionado. */
@@ -381,7 +377,7 @@ export class MonthSettlementDialogComponent {
   private paymentService = inject(PaymentService);
   private snackBar = inject(MatSnackBar);
 
-  label = monthLabel(this.data.month);
+  label = monthLabelFromKey(this.data.month);
   busy = signal(false);
 
   // ── Servicios del mes ──────────────────────────────────────────────────
@@ -408,9 +404,7 @@ export class MonthSettlementDialogComponent {
   rentPayment = computed(() =>
     this.payments().find(p => {
       const d = p.date?.toDate?.();
-      if (!d) return false;
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      return key === this.data.month;
+      return !!d && monthKey(d) === this.data.month;
     })
   );
 

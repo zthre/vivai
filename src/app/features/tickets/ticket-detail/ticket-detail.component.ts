@@ -6,6 +6,7 @@ import { FormsModule } from '@angular/forms';
 import { Subscription } from 'rxjs';
 import { take } from 'rxjs/operators';
 import { AuthService } from '../../../core/auth/auth.service';
+import { PermissionService } from '../../../core/auth/permissions';
 import { TicketService } from '../../../core/services/ticket.service';
 import { PropertyService } from '../../../core/services/property.service';
 import { Ticket } from '../../../core/models/ticket.model';
@@ -158,6 +159,7 @@ const STATUS_COLORS: Record<string, string> = {
 export class TicketDetailComponent implements OnInit, OnDestroy {
   private route = inject(ActivatedRoute);
   private authService = inject(AuthService);
+  private permissions = inject(PermissionService);
   private ticketService = inject(TicketService);
   private propertyService = inject(PropertyService);
 
@@ -172,13 +174,9 @@ export class TicketDetailComponent implements OnInit, OnDestroy {
   isOwner = computed(() => this.authService.userRole() !== 'tenant');
 
   canWriteTickets = computed(() => {
-    const uid = this.authService.uid();
-    if (!uid) return false;
+    if (!this.authService.uid()) return false;
     if (this.authService.activeRole() !== 'colaborador') return true;
-    const prop = this.property();
-    if (!prop) return false;
-    const perms = prop.collaboratorPermissions?.[uid];
-    return !perms || perms.tickets !== false;
+    return this.permissions.can(this.property(), 'tickets');
   });
 
   categoryLabel(cat: string) { return CATEGORY_LABELS[cat] ?? cat; }

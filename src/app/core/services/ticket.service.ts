@@ -17,11 +17,13 @@ import { Observable, combineLatest, of } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { Ticket } from '../models/ticket.model';
 import { AuthService } from '../auth/auth.service';
+import { PropertyService } from './property.service';
 
 @Injectable({ providedIn: 'root' })
 export class TicketService {
   private firestore = inject(Firestore);
   private auth = inject(AuthService);
+  private properties = inject(PropertyService);
 
   getByOwner$(ownerId: string): Observable<Ticket[]> {
     const ref = collection(this.firestore, 'tickets');
@@ -99,8 +101,12 @@ export class TicketService {
     const uid = this.auth.uid()!;
     const ref = collection(this.firestore, 'tickets');
     const initialStatus = 'pendiente';
+    // El ticket lo crea el inquilino, que NO forma parte del círculo: él lee el
+    // suyo por `tenantUid`. `memberUids` es para que lo vean dueño y colaboradores.
+    const memberUids = await this.properties.memberUidsOf(data.propertyId, data.ownerId);
     const docRef = await addDoc(ref, {
       ...data,
+      memberUids,
       tenantUid: uid,
       status: initialStatus,
       photos: [],

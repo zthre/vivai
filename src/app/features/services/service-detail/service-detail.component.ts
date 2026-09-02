@@ -15,16 +15,8 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { ServiceAssignment } from '../../../core/models/service-assignment.model';
 import { ServiceReceipt } from '../../../core/models/service-receipt.model';
 import { RegisterServiceDialogComponent } from '../register-service/register-service-dialog.component';
-
-function startOfMonth(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), 1);
-}
-
-function formatMonth(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  return `${y}-${m}`;
-}
+import { PermissionService } from '../../../core/auth/permissions';
+import { addMonths, monthKey, monthLabel, startOfMonth } from '../../../core/utils/month.util';
 
 type DistMethod = 'por_persona' | 'partes_iguales' | 'manual';
 
@@ -575,6 +567,7 @@ export class ServiceDetailComponent implements OnInit {
   private receiptService = inject(ServiceReceiptService);
   private propertyService = inject(PropertyService);
   private authService = inject(AuthService);
+  private permissions = inject(PermissionService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private dialog = inject(MatDialog);
@@ -603,13 +596,9 @@ export class ServiceDetailComponent implements OnInit {
 
   canWrite = computed(() => {
     const uid = this.authService.uid();
-    const svc = this.service();
     if (!uid) return false;
-    if (svc?.ownerId === uid) return true;
-    return this.allProperties().some(p => {
-      const perms = p.collaboratorPermissions?.[uid];
-      return !perms || perms.servicios !== false;
-    });
+    if (this.service()?.ownerId === uid) return true;
+    return this.permissions.canOnAny(this.allProperties(), 'servicios');
   });
 
   assignments = toSignal(
@@ -621,11 +610,8 @@ export class ServiceDetailComponent implements OnInit {
 
   // ── Mes seleccionado (compartido por ambas pestañas) ──────────────────────
   selectedMonthDate = signal<Date>(startOfMonth(new Date()));
-  selectedMonth = computed(() => formatMonth(this.selectedMonthDate()));
-  monthLabel = computed(() => {
-    const d = this.selectedMonthDate();
-    return d.toLocaleDateString('es-CO', { month: 'long', year: 'numeric' });
-  });
+  selectedMonth = computed(() => monthKey(this.selectedMonthDate()));
+  monthLabel = computed(() => monthLabel(this.selectedMonthDate()));
 
   // ── Pestañas ─────────────────────────────────────────────────────────────
   tab = signal<'recibos' | 'distribucion'>('recibos');
@@ -996,19 +982,11 @@ export class ServiceDetailComponent implements OnInit {
   // ── Month navigation ──────────────────────────────────────────────────────
 
   prevMonth() {
-    this.selectedMonthDate.update(d => {
-      const prev = new Date(d);
-      prev.setMonth(prev.getMonth() - 1);
-      return prev;
-    });
+    this.selectedMonthDate.update(d => addMonths(d, -1));
   }
 
   nextMonth() {
-    this.selectedMonthDate.update(d => {
-      const next = new Date(d);
-      next.setMonth(next.getMonth() + 1);
-      return next;
-    });
+    this.selectedMonthDate.update(d => addMonths(d, 1));
   }
 
   // ── Receipt generation ────────────────────────────────────────────────────

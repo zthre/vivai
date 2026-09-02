@@ -10,10 +10,7 @@ import { ServiceReceiptService } from '../../../core/services/service-receipt.se
 import { PropertyService } from '../../../core/services/property.service';
 import { ServiceReceipt } from '../../../core/models/service-receipt.model';
 import { RegisterServiceDialogComponent } from '../register-service/register-service-dialog.component';
-
-function startOfMonth(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), 1);
-}
+import { addMonths, monthKey, monthLabel, startOfMonth } from '../../../core/utils/month.util';
 
 @Component({
   selector: 'app-service-list',
@@ -194,14 +191,9 @@ export class ServiceListComponent {
 
   selectedMonth = signal<Date>(startOfMonth(new Date()));
 
-  monthKey = computed(() => {
-    const d = this.selectedMonth();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-  });
+  monthKey = computed(() => monthKey(this.selectedMonth()));
 
-  monthLabel = computed(() =>
-    this.selectedMonth().toLocaleDateString('es-CO', { month: 'long', year: 'numeric' })
-  );
+  monthLabel = computed(() => monthLabel(this.selectedMonth()));
 
   /** Recibos del mes en todas las propiedades accesibles */
   private receipts = toSignal(
@@ -266,13 +258,11 @@ export class ServiceListComponent {
   });
 
   prevMonth() {
-    const d = this.selectedMonth();
-    this.selectedMonth.set(new Date(d.getFullYear(), d.getMonth() - 1, 1));
+    this.selectedMonth.set(addMonths(this.selectedMonth(), -1));
   }
 
   nextMonth() {
-    const d = this.selectedMonth();
-    this.selectedMonth.set(new Date(d.getFullYear(), d.getMonth() + 1, 1));
+    this.selectedMonth.set(addMonths(this.selectedMonth(), 1));
   }
 
   openRegister() {

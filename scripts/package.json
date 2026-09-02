@@ -1,0 +1,16 @@
+{
+  "name": "vivai-scripts",
+  "private": true,
+  "description": "Migraciones de datos sobre Firestore (Admin SDK). No forma parte del bundle de la app.",
+  "scripts": {
+    "backfill": "tsx backfill.ts",
+    "rules:test": "firebase emulators:exec --only firestore --project demo-vivai \"tsx rules.test.ts\""
+  },
+  "dependencies": {
+    "firebase-admin": "^12.0.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "typescript": "~5.4.0"
+  }
+}

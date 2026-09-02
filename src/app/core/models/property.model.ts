@@ -30,9 +30,33 @@ export interface ContractFile {
   uploadedAt: Timestamp;
 }
 
+/**
+ * Quiénes forman el círculo de una propiedad: su dueño y sus colaboradores.
+ *
+ * Este array se denormaliza como `memberUids` en cada documento que cuelga de la
+ * propiedad (pagos, gastos, recibos, tickets) y en la propiedad misma. Es lo que
+ * permite a las reglas decidir con `uid in resource.data.memberUids`, sin un
+ * `get()` por documento —que tiene tope por consulta y tumba listados enteros—,
+ * y a las consultas pedir «todo lo de mi círculo» de una vez en lugar de abrir
+ * una consulta por propiedad.
+ *
+ * NO incluye al inquilino: su acceso es más estrecho (ve sus pagos y sus tickets,
+ * no los gastos ni los recibos) y se resuelve con sus propias cláusulas.
+ */
+export function propertyMemberUids(
+  property: Pick<Property, 'ownerId' | 'collaboratorUids'>
+): string[] {
+  return [...new Set([property.ownerId, ...(property.collaboratorUids ?? [])])].filter(Boolean);
+}
+
 export interface Property {
   id?: string;
   ownerId: string;
+  /**
+   * `[ownerId, ...collaboratorUids]`, denormalizado. Lo mantiene al día el
+   * trigger `syncMemberUids`; no lo edites a mano fuera de `create`.
+   */
+  memberUids?: string[];
   name: string;
   address: string;
   type: 'apartamento' | 'casa' | 'local' | 'bodega';

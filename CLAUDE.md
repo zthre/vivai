@@ -72,7 +72,7 @@ All docs owned by a user have `ownerId = uid`. Key collections:
 | `monthlySnapshots` | `ownerId`, `propertyId`, `month: 'YYYY-MM'`, aggregated financials |
 | `mail` | Written by Cloud Functions; consumed by Firebase "Trigger Email" extension |
 
-Firestore rules are in `firestore.rules` y **se despliegan solas**: `.github/workflows/firebase-hosting-merge.yml` corre `firebase deploy --only firestore:rules` en cada push a `main`, antes del hosting. No hay que pegarlas a mano en la consola, y lo pegado a mano se sobrescribe en el siguiente merge a `main`. Fuera de ese flujo: `npx firebase-tools@13 deploy --only firestore:rules --project vivai-now`.
+Firestore rules are in `firestore.rules` y los índices compuestos en `firestore.indexes.json`; ambos **se despliegan solos**: `.github/workflows/firebase-hosting-merge.yml` corre `firebase deploy --only firestore:rules,firestore:indexes` en cada push a `main`, antes del hosting. En modo no interactivo el CLI solo crea los índices que falten — nunca borra los que existan en el proyecto y no estén en el archivo. Si añades una consulta con filtro + orden, añade su índice ahí. No hay que pegarlas a mano en la consola, y lo pegado a mano se sobrescribe en el siguiente merge a `main`. Fuera de ese flujo: `npx firebase-tools@13 deploy --only firestore:rules --project vivai-now`.
 
 Marketplace items are publicly readable when `isPublic == true` on property.
 
@@ -82,9 +82,21 @@ Marketplace items are publicly readable when `isPublic == true` on property.
 
 `ColaboradorPermission` (on `property.collaboratorPermissions[uid]`):
 ```typescript
-{ inmueblesPagos?, inmueblesMedia?, gastos?, tickets? }
+{ inmueblesUnidades?, inmueblesPagos?, inmueblesMedia?, gastos?, tickets?, servicios? }
 ```
-`undefined` field = `true` (backwards compat). Check pattern: `!perms || perms.field !== false`.
+`undefined` field = `true` (backwards compat).
+
+**No reimplementes el chequeo**: vive en `src/app/core/auth/permissions.ts`.
+```typescript
+private permissions = inject(PermissionService);
+canWritePagos = computed(() => this.permissions.can(this.property(), 'inmueblesPagos'));
+// también: canOnAny(props, key), filterByPermission(props, key), isOwnerOf(prop)
+// puras (sin DI): hasPermission(prop, uid, key), hasPermissionOnAny(...)
+```
+`DEFAULT_COLABORADOR_PERMISSIONS` (mismo archivo) es lo que recibe un colaborador nuevo.
+Las variantes que dan acceso total cuando el rol activo no es `colaborador` conservan
+esa línea en el componente (`if (activeRole() !== 'colaborador') return true;`): es una
+regla de rol, no de permiso.
 
 Colaboradores are added globally (all owner's properties at once) via `PropertyService.addGlobalColaborador()`. Per-property methods also exist for legacy use.
 
@@ -101,12 +113,63 @@ data = toSignal(
 filteredData = computed(() => pid ? data().filter(d => d.propertyId === pid) : data());
 ```
 
+### `memberUids` — círculo de acceso (en migración)
+
+`memberUids = [ownerId, ...collaboratorUids]`, denormalizado en `properties`, `payments`,
+`expenses`, `serviceReceipts`, `tickets`, `services` y `serviceAssignments`. Sustituye a los
+`get()` sobre la propiedad en las reglas (que tienen tope de accesos por consulta: un solo
+documento que lo exceda tumba el listado entero) y al abanico de una consulta por propiedad.
+
+- **Dos ámbitos**: por propiedad (`payments`, `expenses`, `serviceReceipts`, `tickets`) usa
+  `propertyMemberUids(prop)`; por dueño (`services`, `serviceAssignments`) usa
+  `PropertyService.ownerCircle(ownerId)`, porque no cuelgan de una propiedad concreta.
+- **NO incluye al inquilino**: su acceso es más estrecho (sus pagos y sus tickets, no los
+  gastos ni los recibos) y se resuelve con las cláusulas `tenantUid` que siguen ahí.
+- **Lo mantiene el trigger `syncMemberUids`** (`functions/src/syncMemberUids.ts`) cuando
+  cambian `ownerId` o `collaboratorUids` de una propiedad. El cliente además lo escribe en
+  el mismo write que `collaboratorUids` para que no haya ventana visible.
+- **Estado**: las reglas ya lo aceptan **como alternativa más**, sin quitar nada.
+  `firestore.rules` marca con `>>> PASO PENDIENTE <<<` las tres líneas que hay que
+  sustituir para cerrar la lectura abierta de `services` y `serviceReceipts` — solo
+  después de que el backfill termine.
+- **Antes de endurecer**, correr las pruebas de reglas; verifican tanto el estado actual
+  como el endurecido sobre el mismo fixture:
+  ```bash
+  npx firebase-tools@13 emulators:exec --only firestore --project demo-vivai \
+    "npx tsx scripts/rules.test.ts"
+  ```
+
+### Migraciones de datos
+
+`scripts/backfill.ts` (Admin SDK, fuera del bundle). Sin `--apply` no escribe nada.
+Idempotente: repetirlo tras una interrupción retoma donde se quedó.
+```bash
+cd scripts && npm install
+GOOGLE_APPLICATION_CREDENTIALS=./service-account.json npx tsx backfill.ts memberUids
+GOOGLE_APPLICATION_CREDENTIALS=./service-account.json npx tsx backfill.ts memberUids --apply
+```
+Migraciones: `period` (clave de mes en pagos y gastos), `memberUids`.
+
+### Utilidades compartidas
+
+- **`core/utils/month.util.ts`** — todo lo de meses en un solo sitio: `monthKey(d)` →
+  `'YYYY-MM'`, `currentMonthKey()`, `fromMonthKey()`, `monthLabel(d)`,
+  `monthLabelFromKey(key)`, `startOfMonth`, `endOfMonth`, `monthRange`, `addMonths`,
+  `isSameMonth`, `isCurrentMonth`, `accountingDateForMonth(key)`. **No vuelvas a escribir
+  `padStart(2, '0')` a mano**: había ocho copias con variantes sutilmente distintas.
+- **`core/services/firestore-query.util.ts`** — `collection$<T>(q, {label, collection, query})`
+  para cualquier consulta de listado: añade `id` y degrada a `[]` con log ante un fallo.
+  Usarlo en vez de `collectionData(...).pipe(guardQuery(...))` a mano.
+- **`core/auth/permissions.ts`** — ver la sección de permisos de colaborador.
+
 ### Feature Structure
 
 ```
 src/app/
   core/
-    auth/           auth.service.ts, auth.guard.ts, owner.guard.ts, tenant.guard.ts, roles.guard.ts
+    auth/           auth.service.ts, permissions.ts, auth.guard.ts, owner.guard.ts,
+                    tenant.guard.ts, roles.guard.ts
+    utils/          month.util.ts
     models/         property, payment, expense, ticket, user-profile,
                     notification, payment-link, monthly-snapshot
     services/       property, payment, expense, ticket, storage,
@@ -160,7 +223,9 @@ Required env vars for functions: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `
 - **`effect()` with signal writes** requires `{ allowSignalWrites: true }` option.
 - **Template literals** in inline TypeScript templates: use `&#36;{{ }}` instead of `${{ }}` to avoid interpolation conflicts.
 - **Marketplace Firestore query** uses `where('isListed', '==', true)` — old properties need re-save to appear.
-- **`PropertyService.getAll()`** does `combineLatest` of owned + collaborated properties, deduplicating by id.
+- **`PropertyService.getAll()`** does `combineLatest` of owned + collaborated properties, deduplicating by id. Está cacheado con `shareReplay({ bufferSize: 1, refCount: false })`: las ~18 pantallas que lo consumen comparten un único par de listeners. No lo envuelvas en otro `shareReplay` ni lo reconstruyas por pantalla.
+- **`PropertyService.snapshot(id)` / `ownerIdOf(id, fallback)` / `nameOf(id)`** — lectura puntual de una propiedad, memoizada 5 s. Pagos, gastos, recibos y servicios la usan para resolver el dueño antes de escribir. No hagas `getDoc(properties/{id})` a mano desde un servicio.
+- **Escrituras masivas**: los métodos globales de colaborador usan `writeBatch` (helper privado `batched()`, lotes de 500). Un `for` con `updateDoc` sueltos no es atómico.
 - **`rolesGuard`** reads Firestore directly (not just the AuthService signal) to avoid race conditions on first load.
 - **Compound Firestore queries** with `ownerId + array-contains` require a composite index — avoid them in global collaborator methods; use single-field `ownerId` filter instead.
 - **`canWrite` input pattern** on child components (`photo-gallery`, `contract-section`, `expense-list`): `canWrite = input<boolean>(true)` to propagate permission down.

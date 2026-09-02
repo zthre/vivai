@@ -18,17 +18,15 @@ import {
   Timestamp,
 } from '@angular/fire/firestore';
 import { AuthService } from '../../../core/auth/auth.service';
+import { addMonths, monthKey, monthLabel } from '../../../core/utils/month.util';
 
+/** Los últimos `count` meses, del más reciente al más antiguo. */
 function monthOptions(count = 24): { value: string; label: string }[] {
-  const result = [];
   const now = new Date();
-  for (let i = 0; i < count; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    const label = d.toLocaleDateString('es-CO', { month: 'long', year: 'numeric' });
-    result.push({ value, label });
-  }
-  return result;
+  return Array.from({ length: count }, (_, i) => {
+    const d = addMonths(now, -i);
+    return { value: monthKey(d), label: monthLabel(d) };
+  });
 }
 
 @Component({
