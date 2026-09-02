@@ -74,6 +74,12 @@ const serviceCircles = new Map<string, Set<string>>();
 const propertyNames = new Map<string, string>();
 /** Arrendamientos por crear, recogidos durante el recorrido de `properties`. */
 const pendingLeases: any[] = [];
+/** Permisos por consolidar, recogidos durante el recorrido de `properties`. */
+/** Facturas por crear, deducidas de los recibos. */
+const pendingBills = new Map<string, any>();
+/** assignmentId → metodo de reparto. */
+const assignmentMethods = new Map<string, string>();
+const pendingPermissions = new Map<string, { ownerId: string; collaboratorUid: string; permissions: Record<string, boolean> }>();
 
 /** Fase 2: clave de mes en pagos y gastos, derivada de `date`. */
 const period: Migration = {
@@ -420,8 +426,122 @@ const leases: Migration = {
   },
 };
 
+/**
+ * Saca los permisos de colaborador de dentro de las propiedades.
+ *
+ * Estaban replicados en `property.collaboratorPermissions[uid]`: un colaborador
+ * en catorce inmuebles, catorce copias del mismo objeto. Se consolidan en un
+ * documento por pareja dueno-colaborador.
+ *
+ * Si un colaborador tuviera permisos distintos segun la propiedad —posible si
+ * una escritura masiva se quedo a medias—, gana el mas RESTRICTIVO: conceder de
+ * mas por accidente es peor que conceder de menos.
+ */
+const collaboratorPermissions: Migration = {
+  name: 'collaboratorPermissions',
+  description: 'Consolida los permisos de colaborador en la coleccion collaborators',
+  collections: ['properties'],
+
+  patch(data) {
+    const ownerId = data['ownerId'] as string | undefined;
+    if (!ownerId) return null;
+
+    const perms = (data['collaboratorPermissions'] ?? {}) as Record<string, Record<string, boolean>>;
+    for (const [uid, p] of Object.entries(perms)) {
+      const key = `${ownerId}_${uid}`;
+      const acc = pendingPermissions.get(key) ?? { ownerId, collaboratorUid: uid, permissions: {} as Record<string, boolean> };
+      for (const [k, v] of Object.entries(p ?? {})) {
+        // El mas restrictivo gana: un false no lo revierte un true de otra propiedad.
+        acc.permissions[k] = acc.permissions[k] === false ? false : v;
+      }
+      pendingPermissions.set(key, acc);
+    }
+    // No se toca la propiedad: el mapa se conserva como respaldo de lectura.
+    return null;
+  },
+
+  async finish(db, apply) {
+    const items = [...pendingPermissions.entries()];
+    console.log(`  ${items.length} relaciones dueno-colaborador ${apply ? 'creadas' : 'se crearian'}`);
+    for (const [id, v] of items.slice(0, 5)) {
+      console.log(`    ${id} → ${JSON.stringify(v.permissions)}`);
+    }
+    if (!apply) return;
+    for (const [id, v] of items) {
+      await db.collection('collaborators').doc(id).set({
+        ...v,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+      }, { merge: true });
+    }
+  },
+};
+
+/**
+ * Crea la factura de cada codigo y mes a partir de sus recibos.
+ *
+ * El total vivia copiado en cada recibo del reparto. Se consolida en un
+ * documento por codigo y mes, para que corregirlo deje de exigir regenerar —es
+ * decir, borrar y recrear— los recibos, incluidos los ya pagados.
+ *
+ * Los recibos manuales no entran: no salen de un reparto, su `assignmentId` es
+ * null y su total ES su monto.
+ */
+const serviceBills: Migration = {
+  name: 'serviceBills',
+  description: 'Crea serviceBills a partir de los recibos de distribucion existentes',
+  collections: ['serviceReceipts'],
+
+  patch(data) {
+    const assignmentId = data['assignmentId'] as string | null | undefined;
+    const month = data['month'] as string | undefined;
+    if (!assignmentId || !month) return null;
+
+    const id = `${assignmentId}_${month}`;
+    if (!pendingBills.has(id)) {
+      pendingBills.set(id, {
+        assignmentId,
+        serviceId: data['serviceId'],
+        ownerId: data['ownerId'],
+        memberUids: (data['memberUids'] as string[] | undefined) ?? [data['ownerId'] as string],
+        month,
+        totalAmount: (data['totalAmount'] as number | undefined) ?? 0,
+        distributionMethod: 'partes_iguales',
+      });
+    }
+
+    return data['billId'] === id ? null : { billId: id };
+  },
+
+  async prepare(db) {
+    // El metodo de reparto vive en el codigo, no en el recibo.
+    const snap = await db.collection('serviceAssignments').get();
+    for (const d of snap.docs) {
+      assignmentMethods.set(d.id, (d.data()['distributionMethod'] as string) ?? 'partes_iguales');
+    }
+  },
+
+  async finish(db, apply) {
+    const items = [...pendingBills.entries()];
+    console.log(`  ${items.length} facturas ${apply ? 'creadas' : 'se crearian'}`);
+    for (const [id, b] of items.slice(0, 5)) {
+      console.log(`    ${id} → total ${b.totalAmount}`);
+    }
+    if (!apply) return;
+    for (const [id, b] of items) {
+      await db.collection('serviceBills').doc(id).set({
+        ...b,
+        distributionMethod: assignmentMethods.get(b.assignmentId) ?? 'partes_iguales',
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+      }, { merge: true });
+    }
+  },
+};
+
 const MIGRATIONS: Migration[] = [
-  period, memberUids, ownerUids, serviceAssignmentOwner, serviceCircle, cleanup, leases,
+  period, memberUids, ownerUids, serviceAssignmentOwner, serviceCircle, cleanup,
+  leases, collaboratorPermissions, serviceBills,
 ];
 
 // ── Motor ───────────────────────────────────────────────────────────────────

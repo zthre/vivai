@@ -18,6 +18,8 @@ export interface ServiceReceipt {
   /** null en recibos manuales */
   assignmentId?: string | null;
   assignmentCode?: string; // denormalized from ServiceAssignment.code
+  /** Factura de la que sale este recibo. Ver `ServiceBill`. */
+  billId?: string | null;
   propertyId: string;
   propertyName?: string;
   month: string; // 'YYYY-MM'

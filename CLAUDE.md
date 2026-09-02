@@ -69,6 +69,8 @@ All docs owned by a user have `ownerId = uid`. Key collections:
 | `paymentLinks` | `propertyId`, `month: 'YYYY-MM'`, `status: 'active'\|'paid'\|'expired'`, `externalId` (Stripe session) |
 | `serviceAssignments` | `ownerId`, `serviceId`, `serviceName`, `code?`, `description?`, `propertyIds[]`, `distributionMethod` |
 | `serviceReceipts` | `ownerId`, `serviceId`, `assignmentId?` (null en manuales), `assignmentCode?`, `propertyId`, `propertyName?`, `month: 'YYYY-MM'`, `origin: 'manual'\|'distribucion'`, `totalAmount`, `propertyAmount`, `isPaid`, `paidAt?`, `expenseId?` |
+| `collaborators` | id `{ownerId}_{uid}`, `permissions` — los permisos de colaborador, ya no dentro de cada propiedad |
+| `serviceBills` | id `{assignmentId}_{month}`, `totalAmount`, `distributionMethod` — el total de la factura, ya no copiado en cada recibo |
 | `leases` | `propertyId`, `ownerId`, `memberUids[]`, `tenantUid?`, `rentPrice`, `priceHistory[]`, `startDate`, `endDate` (null = vigente) |
 | `monthlySnapshots` | `ownerId`, `propertyId`, `month: 'YYYY-MM'`, aggregated financials |
 | `mail` | Written by Cloud Functions; consumed by Firebase "Trigger Email" extension |
@@ -221,6 +223,20 @@ para siempre quién vivía y a cuánto.
   un ciclo de inyección — que TypeScript no detecta y Angular revienta en runtime.
 - Si abrir el arrendamiento falla, la asignación del inquilino **no** se deshace: se pierde
   la entrada de historial, no el dato operativo.
+
+### `collaborators` y `serviceBills` — dos duplicaciones retiradas
+
+- **`collaborators/{ownerId}_{uid}`** guarda los permisos. Antes se replicaban en
+  `property.collaboratorPermissions[uid]`: un colaborador en 14 inmuebles eran 14 copias, y
+  cambiar un permiso, 14 escrituras sin atomicidad. `PermissionService` lee de la colección
+  y **cae al mapa viejo** si no hay documento, que es lo que permite desplegar sin esperar
+  al backfill. El mapa se conserva como respaldo; no lo borres.
+- **`serviceBills/{assignmentId}_{month}`** guarda el total de la factura. Antes se copiaba
+  en cada recibo del reparto, así que corregir un dígito obligaba a **regenerar** — borrar
+  y recrear los recibos, incluidos los pagados con su gasto. Ahora
+  `ServiceReceiptService.updateBillTotal` recalcula los montos **en sitio**: los recibos
+  conservan id, estado de pago y gasto. El reparto vive en `distribute()`
+  (`service-bill.model.ts`) para que generar y corregir usen el mismo cálculo.
 
 ### Cabeceras y diálogos — tres trampas
 

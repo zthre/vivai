@@ -4,6 +4,7 @@ import {
   collection,
   doc,
   addDoc,
+  setDoc,
   updateDoc,
   deleteDoc,
   getDocs,
@@ -19,6 +20,7 @@ import { loggedWrite } from './firestore-error.util';
 import { collection$ } from './firestore-query.util';
 import { ServiceReceipt } from '../models/service-receipt.model';
 import { ServiceAssignment } from '../models/service-assignment.model';
+import { ServiceBill, serviceBillId, distribute } from '../models/service-bill.model';
 import { Property, propertyMemberUids } from '../models/property.model';
 import { AuthService } from '../auth/auth.service';
 import { PropertyService } from './property.service';
@@ -203,20 +205,25 @@ export class ServiceReceiptService {
       );
     }
 
-    const amounts: Record<string, number> = {};
-    if (assignment.distributionMethod === 'por_persona') {
-      const totalPersonas = properties.reduce((sum, p) => sum + p.residentCount, 0);
-      for (const p of properties) {
-        amounts[p.id] = totalPersonas > 0
-          ? Math.round((totalAmount * p.residentCount / totalPersonas) * 100) / 100
-          : 0;
-      }
-    } else if (assignment.distributionMethod === 'partes_iguales') {
-      const perProperty = Math.round((totalAmount / properties.length) * 100) / 100;
-      for (const p of properties) {
-        amounts[p.id] = perProperty;
-      }
-    }
+    const amounts = distribute(totalAmount, assignment.distributionMethod, properties);
+
+    // La factura es la fuente del total; los recibos guardan su parte.
+    const billId = serviceBillId(assignment.id!, month);
+    await setDoc(
+      doc(this.firestore, `serviceBills/${billId}`),
+      {
+        assignmentId: assignment.id,
+        serviceId: assignment.serviceId,
+        ownerId: properties[0].ownerId,
+        memberUids: properties[0].memberUids,
+        month,
+        totalAmount,
+        distributionMethod: assignment.distributionMethod,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
 
     await this.deleteByMonth(assignment.id!, month);
 
@@ -228,6 +235,7 @@ export class ServiceReceiptService {
         serviceId: assignment.serviceId,
         serviceName: assignment.serviceName,
         assignmentId: assignment.id,
+        billId,
         assignmentCode: assignment.code ?? '',
         propertyId: p.id,
         propertyName: p.name,
@@ -244,6 +252,80 @@ export class ServiceReceiptService {
         updatedAt: serverTimestamp(),
       } as any);
     }
+  }
+
+  /**
+   * Corrige el total de una factura y recalcula los montos EN SITIO.
+   *
+   * Antes esto se hacía regenerando: borrar todos los recibos del mes y volver a
+   * crearlos. Eso se llevaba por delante los que ya estaban pagados —con su gasto
+   * asociado— solo por corregir un dígito mal tecleado.
+   *
+   * Aquí los recibos conservan su id, su estado de pago y su gasto; solo cambia
+   * el monto. Y el gasto lo arrastra el trigger, porque cambia `propertyAmount`.
+   */
+  async updateBillTotal(bill: ServiceBill, totalAmount: number): Promise<void> {
+    const receipts = await getDocs(
+      query(
+        collection(this.firestore, 'serviceReceipts'),
+        where('memberUids', 'array-contains', this.auth.uid()!),
+        where('month', '==', bill.month)
+      )
+    );
+
+    const mine = receipts.docs
+      .map(d => ({ id: d.id, ...d.data() } as ServiceReceipt))
+      .filter(r => r.assignmentId === bill.assignmentId);
+
+    const amounts = distribute(
+      totalAmount,
+      bill.distributionMethod,
+      mine.map(r => ({ id: r.propertyId, residentCount: r.residentCount ?? 1 }))
+    );
+
+    await loggedWrite(
+      'ServiceReceiptService.updateBillTotal',
+      async () => {
+        await updateDoc(doc(this.firestore, `serviceBills/${bill.id}`), {
+          totalAmount,
+          updatedAt: serverTimestamp(),
+        });
+        await Promise.all(
+          mine.map(r =>
+            updateDoc(doc(this.firestore, `serviceReceipts/${r.id}`), {
+              totalAmount,
+              // En 'manual' los montos los puso una persona: no se recalculan.
+              ...(bill.distributionMethod === 'manual'
+                ? {}
+                : { propertyAmount: amounts[r.propertyId] ?? r.propertyAmount }),
+              updatedAt: serverTimestamp(),
+            })
+          )
+        );
+      },
+      { collection: 'serviceBills', query: `updateBillTotal ${bill.id}` }
+    );
+  }
+
+  /** La factura de un código en un mes, si existe. */
+  getBill(assignmentId: string, month: string): Observable<ServiceBill | null> {
+    return this.auth.uid$.pipe(
+      switchMap(uid =>
+        collection$<ServiceBill>(
+          query(
+            collection(this.firestore, 'serviceBills'),
+            where('memberUids', 'array-contains', uid),
+            where('month', '==', month)
+          ),
+          {
+            label: 'ServiceReceiptService.getBill',
+            collection: 'serviceBills',
+            query: `memberUids array-contains ${uid}, month == ${month}`,
+          }
+        )
+      ),
+      map(list => list.find(b => b.assignmentId === assignmentId) ?? null)
+    );
   }
 
   // ── Pago ──────────────────────────────────────────────────────────────────

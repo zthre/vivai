@@ -9,6 +9,8 @@ import { Firestore, doc, getDoc } from '@angular/fire/firestore';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { PropertyService } from '../../core/services/property.service';
 import { logFirestoreError } from '../../core/services/firestore-error.util';
+import { CollaboratorService } from '../../core/services/collaborator.service';
+import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { Property, ColaboradorPermission } from '../../core/models/property.model';
 import { PermisoColaboradorDialogComponent } from '../properties/property-detail/colaboradores/permiso-colaborador-dialog.component';
@@ -218,6 +220,7 @@ export class ColaboradoresPageComponent {
   private propertyService = inject(PropertyService);
   private authService = inject(AuthService);
   private firestore = inject(Firestore);
+  private collaboratorService = inject(CollaboratorService);
   private snackBar = inject(MatSnackBar);
   private dialog = inject(DialogService);
 
@@ -250,7 +253,9 @@ export class ColaboradoresPageComponent {
       return;
     }
 
-    // Use permissions from the first property where the collaborator appears
+    // Los permisos viven en `collaborators`, un documento por colaborador. Para
+    // los anteriores a la migración se cae al mapa que había dentro de las
+    // propiedades, que es de donde venían.
     const permMap: Record<string, ColaboradorPermission> = {};
     for (const prop of owned) {
       for (const uid of (prop.collaboratorUids ?? [])) {
@@ -258,6 +263,11 @@ export class ColaboradoresPageComponent {
           permMap[uid] = prop.collaboratorPermissions[uid];
         }
       }
+    }
+    const ownerUid = this.authService.uid();
+    if (ownerUid) {
+      const docs = await firstValueFrom(this.collaboratorService.getByOwner(ownerUid));
+      for (const c of docs) permMap[c.collaboratorUid] = c.permissions ?? {};
     }
 
     // Cada perfil se resuelve por separado y el fallo de uno no tumba al resto:

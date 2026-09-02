@@ -32,6 +32,7 @@ import {
 } from '../models/property.model';
 import { AuthService } from '../auth/auth.service';
 import { LeaseService } from './lease.service';
+import { CollaboratorService } from './collaborator.service';
 import { logFirestoreError } from './firestore-error.util';
 import { DEFAULT_COLABORADOR_PERMISSIONS } from '../auth/permissions';
 import { listingExpiryFrom } from './listing.util';
@@ -47,6 +48,7 @@ export class PropertyService {
   private firestore = inject(Firestore);
   private auth = inject(AuthService);
   private leases = inject(LeaseService);
+  private collaborators = inject(CollaboratorService);
 
   private snapshotCache = new Map<string, { value: Property | null; at: number }>();
 
@@ -441,15 +443,18 @@ export class PropertyService {
   }
 
   async addColaboradorToProperty(propertyId: string, targetUid: string): Promise<void> {
+    const ownerId = await this.ownerIdOf(propertyId, this.auth.uid()!);
     await updateDoc(doc(this.firestore, `properties/${propertyId}`), {
       collaboratorUids: arrayUnion(targetUid),
       // El círculo completo, NO `arrayUnion(targetUid)`: sobre una propiedad
       // anterior al backfill, que aún no tiene el campo, `arrayUnion` lo crearía
       // con solo el colaborador dentro y dejaría fuera al dueño.
       memberUids: await this.circleWith(propertyId, targetUid),
-      [`collaboratorPermissions.${targetUid}`]: DEFAULT_COLABORADOR_PERMISSIONS,
       updatedAt: serverTimestamp(),
     });
+    await this.collaborators.setPermissions(
+      ownerId, targetUid, DEFAULT_COLABORADOR_PERMISSIONS
+    );
     await updateDoc(doc(this.firestore, `users/${targetUid}`), {
       collaboratingPropertyIds: arrayUnion(propertyId),
       // El dueño de ESTA propiedad, no quien ejecuta la acción: un colaborador
@@ -503,18 +508,18 @@ export class PropertyService {
   // colaborador con permisos distintos según la propiedad, sin aviso. Ahora van
   // en lotes atómicos y el documento del usuario se toca una sola vez.
 
+  /**
+   * Cambia los permisos de un colaborador. UNA escritura.
+   *
+   * Antes recorría todas las propiedades del dueño escribiendo el mismo objeto
+   * en cada una: con catorce inmuebles, catorce escrituras que además podían
+   * quedarse a medias.
+   */
   async updateGlobalCollaboradorPermissions(
     collaboratorUid: string,
     permissions: ColaboradorPermission
   ): Promise<void> {
-    const ids = await this.ownedPropertyIds();
-    await this.batched(ids, (batch, id) =>
-      batch.update(doc(this.firestore, `properties/${id}`), {
-        [`collaboratorPermissions.${collaboratorUid}`]: permissions,
-        updatedAt: serverTimestamp(),
-      })
-    );
-    ids.forEach(id => this.forget(id));
+    await this.collaborators.setPermissions(this.auth.uid()!, collaboratorUid, permissions);
   }
 
   async addGlobalColaborador(email: string): Promise<'assigned' | 'pending'> {
@@ -539,9 +544,11 @@ export class PropertyService {
         // backfill el campo no existe, y `arrayUnion(targetUid)` a secas lo
         // crearía sin él.
         memberUids: arrayUnion(ownerUid, targetUid),
-        [`collaboratorPermissions.${targetUid}`]: DEFAULT_COLABORADOR_PERMISSIONS,
         updatedAt: serverTimestamp(),
       })
+    );
+    await this.collaborators.setPermissions(
+      ownerUid, targetUid, DEFAULT_COLABORADOR_PERMISSIONS
     );
 
     // `arrayUnion` admite varios valores: una escritura en vez de una por propiedad.
@@ -560,6 +567,7 @@ export class PropertyService {
         updatedAt: serverTimestamp(),
       })
     );
+    await this.collaborators.remove(ownerUid, collaboratorUid);
     if (ids.length > 0) {
       await updateDoc(doc(this.firestore, `users/${collaboratorUid}`), {
         collaboratingPropertyIds: arrayRemove(...ids),
