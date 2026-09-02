@@ -88,9 +88,10 @@ export class PaymentService {
    * colaboradores, y por eso las pantallas acabaron abriendo una consulta por
    * propiedad— y el filtro de mes en memoria sobre el historial completo.
    *
-   * TODAVÍA SIN USAR. Depende de que el backfill de `memberUids` y `period` haya
-   * terminado: hasta entonces, un documento sin esos campos quedaría fuera y las
-   * cifras saldrían de menos. Ver el plan, fase 3.
+   * Depende de que todo documento tenga `memberUids` y `period`: uno sin ellos
+   * queda fuera y las cifras salen de menos. El backfill los rellenó y los
+   * triggers los mantienen, pero si algún día aparece un camino de escritura
+   * nuevo, tiene que sellar ambos campos.
    */
   getByCircleAndPeriod(period: string): Observable<Payment[]> {
     return this.auth.uid$.pipe(

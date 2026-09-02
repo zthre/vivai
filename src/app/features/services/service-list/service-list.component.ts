@@ -195,15 +195,10 @@ export class ServiceListComponent {
 
   monthLabel = computed(() => monthLabel(this.selectedMonth()));
 
-  /** Recibos del mes en todas las propiedades accesibles */
+  /** Recibos del mes en todo el círculo: una consulta, no una por propiedad. */
   private receipts = toSignal(
-    toObservable(
-      computed(() => ({
-        ids: this.properties().filter(p => p.id).map(p => p.id!),
-        month: this.monthKey(),
-      }))
-    ).pipe(
-      switchMap(({ ids, month }) => this.receiptService.getByPropertiesAndMonth(ids, month))
+    toObservable(this.monthKey).pipe(
+      switchMap(month => this.receiptService.getByCircleAndMonth(month))
     ),
     { initialValue: [] as ServiceReceipt[] }
   );

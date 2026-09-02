@@ -119,7 +119,7 @@ data = toSignal(
 filteredData = computed(() => pid ? data().filter(d => d.propertyId === pid) : data());
 ```
 
-### `memberUids` — círculo de acceso (en migración)
+### `memberUids` — círculo de acceso
 
 `memberUids = [ownerId, ...collaboratorUids]`, denormalizado en `properties`, `payments`,
 `expenses`, `serviceReceipts`, `tickets`, `services` y `serviceAssignments`. Sustituye a los
@@ -134,6 +134,12 @@ documento que lo exceda tumba el listado entero) y al abanico de una consulta po
 - **Lo mantiene el trigger `syncMemberUids`** (`functions/src/syncMemberUids.ts`) cuando
   cambian `ownerId` o `collaboratorUids` de una propiedad. El cliente además lo escribe en
   el mismo write que `collaboratorUids` para que no haya ventana visible.
+- **Las pantallas consultan por círculo**: `PaymentService.getByCircleAndPeriod`,
+  `ExpenseService.getByCircleAndPeriod`, `ServiceReceiptService.getByCircleAndMonth`.
+  Una consulta en lugar de una por propiedad. No vuelvas a abanicar con
+  `getByProperty` sobre una lista — eso está reservado a la vista de UNA propiedad.
+- **Todo camino de escritura nuevo debe sellar `memberUids` y `period`**: un documento
+  sin ellos desaparece de estas consultas en silencio, y las cifras salen de menos.
 - **Estado**: las reglas ya lo aceptan **como alternativa más**, sin quitar nada.
   `firestore.rules` marca con `>>> PASO PENDIENTE <<<` las tres líneas que hay que
   sustituir para cerrar la lectura abierta de `services` y `serviceReceipts` — solo
