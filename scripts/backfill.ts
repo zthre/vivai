@@ -61,6 +61,8 @@ const propertyCircles = new Map<string, string[]>();
 const ownerCircles = new Map<string, Set<string>>();
 /** uid del colaborador → duenos para los que colabora. */
 const collaboratorOwners = new Map<string, Set<string>>();
+/** propertyId → uid de su dueno. */
+const propertyOwners = new Map<string, string>();
 
 /** Fase 2: clave de mes en pagos y gastos, derivada de `date`. */
 const period: Migration = {
@@ -175,7 +177,60 @@ const ownerUids: Migration = {
   },
 };
 
-const MIGRATIONS: Migration[] = [period, memberUids, ownerUids];
+/**
+ * Repara los codigos de distribucion mal atribuidos.
+ *
+ * `ServiceAssignmentService.save` ponia en `ownerId` el uid de quien pulsaba, no
+ * el del dueno de las propiedades — al reves que pagos, gastos, recibos y
+ * servicios. Un codigo creado por un colaborador quedaba con
+ * `memberUids: [uidDelColaborador]`: invisible para el dueno, y suficiente para
+ * denegar la consulta entera de codigos de ese servicio, porque basta un
+ * documento que no pase las reglas para tumbar el listado completo.
+ *
+ * El dueno correcto se deduce de las propiedades del propio codigo.
+ */
+const serviceAssignmentOwner: Migration = {
+  name: 'serviceAssignmentOwner',
+  description: 'Reatribuye serviceAssignments al dueno de sus propiedades',
+  collections: ['serviceAssignments'],
+
+  async prepare(db) {
+    const snap = await db.collection('properties').get();
+    for (const doc of snap.docs) {
+      const data = doc.data();
+      const ownerId = data['ownerId'] as string | undefined;
+      if (!ownerId) continue;
+      propertyOwners.set(doc.id, ownerId);
+
+      const collaborators = (data['collaboratorUids'] as string[] | undefined) ?? [];
+      const owned = ownerCircles.get(ownerId) ?? new Set<string>([ownerId]);
+      for (const uid of [ownerId, ...collaborators]) owned.add(uid);
+      ownerCircles.set(ownerId, owned);
+    }
+    console.log(`  (${propertyOwners.size} propiedades en memoria)\n`);
+  },
+
+  patch(data) {
+    const propertyIds = (data['propertyIds'] as string[] | undefined) ?? [];
+
+    // El dueno sale de la primera propiedad que aun exista. Si ninguna existe,
+    // no hay de donde deducirlo y se deja como esta: mejor un documento con el
+    // dueno viejo que uno sin dueno.
+    const resolved = propertyIds.map(id => propertyOwners.get(id)).find(Boolean);
+    if (!resolved) return null;
+
+    const expectedMembers = [...(ownerCircles.get(resolved) ?? new Set([resolved]))];
+    const currentMembers = (data['memberUids'] as string[] | undefined) ?? [];
+
+    const ownerOk = data['ownerId'] === resolved;
+    const membersOk = sameSet(currentMembers, expectedMembers);
+    if (ownerOk && membersOk) return null;
+
+    return { ownerId: resolved, memberUids: expectedMembers };
+  },
+};
+
+const MIGRATIONS: Migration[] = [period, memberUids, ownerUids, serviceAssignmentOwner];
 
 // ── Motor ───────────────────────────────────────────────────────────────────
 
