@@ -15,9 +15,10 @@ import {
   limit,
   serverTimestamp,
 } from '@angular/fire/firestore';
-import { Observable, of, switchMap, map, combineLatest } from 'rxjs';
+import { Observable, switchMap, map } from 'rxjs';
 import { Service } from '../models/service.model';
-import { guardQuery, loggedWrite } from './firestore-error.util';
+import { loggedWrite } from './firestore-error.util';
+import { collection$ } from './firestore-query.util';
 import { AuthService } from '../auth/auth.service';
 import { PropertyService } from './property.service';
 
@@ -27,60 +28,45 @@ export class UtilityServiceService {
   private auth = inject(AuthService);
   private propertyService = inject(PropertyService);
 
+  /**
+   * Servicios del círculo del usuario.
+   *
+   * Antes se reconstruía el círculo en el cliente —dueños de las propiedades
+   * colaboradas, colaboradores de las propias— y se consultaba `ownerId in [...]`
+   * en lotes de 10, porque `in` no admite más.
+   *
+   * Eso tenía dos problemas. El de fondo: la consulta NO estaba acotada a lo que
+   * el usuario puede leer, y en Firestore basta un documento que no pase las
+   * reglas para denegar el listado entero — un solo servicio de otro círculo
+   * dejaba la pantalla en «Sin servicios», con sus recibos apareciendo como si el
+   * servicio se hubiera eliminado. El otro: el círculo del cliente y el
+   * `memberUids` del documento podían no coincidir.
+   *
+   * Preguntando por `memberUids` desaparecen los dos, y con ellos el troceado,
+   * la deduplicación y la dependencia de `PropertyService`.
+   */
   getAll(): Observable<Service[]> {
-    return this.propertyService.getAll().pipe(
-      switchMap(properties => {
-        const uid = this.auth.uid();
-        if (!uid) return of([] as Service[]);
-
-        // UIDs de propietarios de propiedades colaboradas (para que colaboradores vean servicios del dueño)
-        const collabOwnerUids = properties.filter(p => p.ownerId !== uid).map(p => p.ownerId);
-        // UIDs de colaboradores en propiedades propias (para que el dueño vea servicios creados por colaboradores)
-        const collabWorkerUids = properties
-          .filter(p => p.ownerId === uid)
-          .flatMap(p => p.collaboratorUids ?? []);
-
-        const ownerUids = [...new Set([uid, ...collabOwnerUids, ...collabWorkerUids])]
-          .filter(Boolean);
-        if (ownerUids.length === 0) return of([] as Service[]);
-
-        // `in` admite como máximo 10 valores. Truncar ahí hacía desaparecer servicios
-        // en silencio (y con ellos su tarjeta en /services, aunque sus recibos siguieran
-        // existiendo y sumando). Se parte en lotes de 10 y se combinan los resultados.
-        const chunks: string[][] = [];
-        for (let i = 0; i < ownerUids.length; i += UtilityServiceService.IN_LIMIT) {
-          chunks.push(ownerUids.slice(i, i + UtilityServiceService.IN_LIMIT));
-        }
-
-        const ref = collection(this.firestore, 'services');
-        // Sin orderBy: `in` + orderBy sobre otro campo exigiría un índice compuesto.
-        // El orden se resuelve en memoria.
-        const queries = chunks.map(
-          c => collectionData(query(ref, where('ownerId', 'in', c)), { idField: 'id' }) as Observable<Service[]>
-        );
-
-        return combineLatest(queries).pipe(
-          map(arrays => {
-            const seen = new Set<string>();
-            const merged: Service[] = [];
-            for (const s of arrays.flat()) {
-              if (s.id && !seen.has(s.id)) {
-                seen.add(s.id);
-                merged.push(s);
-              }
-            }
-            return merged.sort(
-              (a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0)
-            );
-          })
-        );
-      }),
-      // Una consulta caída no puede envenenar la señal: `toSignal` relanzaría el
-      // error en cada lectura y rompería la detección de cambios de la pantalla.
-      guardQuery('UtilityServiceService.getAll', [] as Service[], {
-        collection: 'services',
-        query: "ownerId in [uid + colaboradores + otros dueños] (máx. 10)",
-      })
+    return this.auth.uid$.pipe(
+      switchMap(uid =>
+        collection$<Service>(
+          query(
+            collection(this.firestore, 'services'),
+            where('memberUids', 'array-contains', uid)
+          ),
+          {
+            label: 'UtilityServiceService.getAll',
+            collection: 'services',
+            query: `memberUids array-contains ${uid}`,
+          }
+        )
+      ),
+      // Sin `orderBy`: combinarlo con `array-contains` exigiría un índice
+      // compuesto para algo que se resuelve igual de bien en memoria.
+      map(list =>
+        [...list].sort(
+          (a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0)
+        )
+      )
     );
   }
 
