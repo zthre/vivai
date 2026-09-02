@@ -103,14 +103,54 @@ import { currentMonthKey, fromMonthKey } from '../../core/utils/month.util';
               @if (prop.tenantName) {
                 <p class="text-xs text-warm-500 mt-0.5">{{ prop.tenantName }}</p>
               }
-              <div class="flex items-center gap-3 mt-0.5">
-                @if (prop.paymentDueDay) {
-                  <p class="text-xs text-warm-400">Vence el día {{ prop.paymentDueDay }}</p>
+              <!-- Desglose de lo pendiente: arriendo y cada servicio -->
+              @if (!isPaid(prop.id!)) {
+                <div class="mt-2 space-y-1 max-w-sm">
+                  @if (rentPending(prop)) {
+                    <div class="flex items-center justify-between gap-3 text-xs">
+                      <span class="text-warm-600">
+                        Arriendo
+                        @if (prop.paymentDueDay) {
+                          <span class="text-warm-400">· vence el {{ prop.paymentDueDay }}</span>
+                        }
+                      </span>
+                      <span class="text-warm-700 font-medium whitespace-nowrap">
+                        {{ (prop.tenantRentPrice ?? prop.rentPrice ?? 0) | currency:'COP':'symbol-narrow':'1.0-0' }}
+                      </span>
+                    </div>
+                  }
+                  @for (r of pendingServices(prop.id!); track r.id) {
+                    <div class="flex items-center justify-between gap-3 text-xs">
+                      <span class="text-warm-600">{{ r.serviceName }}</span>
+                      <span class="text-warm-700 font-medium whitespace-nowrap">
+                        {{ r.propertyAmount | currency:'COP':'symbol-narrow':'1.0-0' }}
+                      </span>
+                    </div>
+                  }
+                  @if (pendingServices(prop.id!).length > 0 && rentPending(prop)) {
+                    <div class="flex items-center justify-between gap-3 text-xs pt-1 border-t border-warm-100">
+                      <span class="text-warm-500 font-medium">Total</span>
+                      <span class="text-warm-900 font-semibold whitespace-nowrap">
+                        {{ pendingTotal(prop) | currency:'COP':'symbol-narrow':'1.0-0' }}
+                      </span>
+                    </div>
+                  }
+                </div>
+              } @else if (prop.paymentFree) {
+                <p class="text-xs text-warm-400 mt-1">Sin cobro de arriendo</p>
+              }
+
+              <!-- Previsualización del mensaje -->
+              @if (prop.tenantPhone && !isPaid(prop.id!)) {
+                <button (click)="togglePreview(prop.id!)"
+                  class="mt-2 inline-flex items-center gap-1 text-xs text-warm-400 hover:text-warm-600 transition-colors">
+                  <mat-icon class="text-[14px]">{{ isPreviewOpen(prop.id!) ? 'expand_less' : 'expand_more' }}</mat-icon>
+                  {{ isPreviewOpen(prop.id!) ? 'Ocultar mensaje' : 'Ver el mensaje que se enviará' }}
+                </button>
+                @if (isPreviewOpen(prop.id!)) {
+                  <pre class="mt-2 p-3 bg-warm-50 border border-warm-200 rounded-lg text-xs text-warm-700 whitespace-pre-wrap font-sans max-w-sm">{{ messageFor(prop) }}</pre>
                 }
-                @if (prop.tenantRentPrice) {
-                  <p class="text-xs text-warm-400">{{ prop.tenantRentPrice | currency:'COP':'symbol-narrow':'1.0-0' }}/mes</p>
-                }
-              </div>
+              }
               @if (!prop.tenantPhone) {
                 <p class="text-xs text-red-400 mt-0.5">Sin número de teléfono — agrégalo en la propiedad</p>
               }
@@ -257,8 +297,14 @@ export class RemindersComponent {
    * inconexos —o ninguno por los servicios— y no sabía cuánto tenía que pagar en
    * total.
    */
-  whatsappLink(prop: Property): string {
-    const phone = (prop.tenantPhone ?? '').replace(/\D/g, '');
+  /**
+   * El texto exacto que se enviará.
+   *
+   * Se compone aparte de `whatsappLink` para poder enseñarlo antes de enviar. Si
+   * se generara dos veces, la previsualización y el mensaje real podrían acabar
+   * diciendo cosas distintas — que es peor que no previsualizar.
+   */
+  messageFor(prop: Property): string {
     const name = prop.tenantName ?? 'Inquilino';
     const money = (n: number) => `$${n.toLocaleString('es-CO')}`;
 
@@ -278,14 +324,32 @@ export class RemindersComponent {
       total += amount;
     }
 
-    // Sin nada pendiente no se envía nada; el botón no aparece en ese caso.
-    if (lines.length === 0) return `https://wa.me/${phone}`;
+    if (lines.length === 0) return '';
 
     let msg = `Hola ${name}, te recordamos lo pendiente de *${prop.name}* este mes:\n\n`;
     msg += lines.join('\n');
     if (lines.length > 1) msg += `\n\nTotal: *${money(total)}*`;
+    return msg;
+  }
 
-    return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+  whatsappLink(prop: Property): string {
+    const phone = (prop.tenantPhone ?? '').replace(/\D/g, '');
+    const msg = this.messageFor(prop);
+    return msg
+      ? `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`
+      : `https://wa.me/${phone}`;
+  }
+
+  private openPreviews = signal<string[]>([]);
+
+  isPreviewOpen(propertyId: string): boolean {
+    return this.openPreviews().includes(propertyId);
+  }
+
+  togglePreview(propertyId: string) {
+    this.openPreviews.update(ids =>
+      ids.includes(propertyId) ? ids.filter(x => x !== propertyId) : [...ids, propertyId]
+    );
   }
 
   onMonthChange(event: Event) {
