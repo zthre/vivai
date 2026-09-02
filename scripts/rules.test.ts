@@ -1,17 +1,14 @@
 /**
  * Pruebas de las reglas de Firestore contra el emulador.
  *
- * Existen por un paso concreto del plan de datos: retirar
- * `allow read: if request.auth != null` de `services` y `serviceReceipts` y
- * dejar solo `isMember()`. Es el paso que cierra el agujero de lectura y, a la
- * vez, el unico que puede dejar pantallas en blanco si algun documento se quedo
- * sin `memberUids`.
+ * Nacieron para un paso concreto —retirar `allow read: if request.auth != null`
+ * de `services` y `serviceReceipts`— y corrian dos veces, con las reglas de
+ * entonces y con las endurecidas, para demostrar que el cambio era seguro antes
+ * de hacerlo. Ese paso ya esta hecho: ahora corren una vez, contra las reglas
+ * reales, y lo que verifican es que sigan cerradas.
  *
- * Por eso la suite corre DOS veces sobre el mismo fixture:
- *   1. con las reglas tal como estan en firestore.rules (aditivas), y
- *   2. con las sustituciones pendientes ya aplicadas.
- *
- * Si (2) pasa, endurecer es seguro. Si falla, dice que acceso legitimo se rompe.
+ * Un fallo aqui significa una de dos cosas, y ambas importan: o se abrio un
+ * acceso que no debia, o se le quito acceso a alguien que si lo necesita.
  *
  * Habla con el emulador por REST y firma tokens `alg: none` —que es lo que el
  * emulador acepta— en vez de usar `@firebase/rules-unit-testing`: asi no hace
@@ -254,15 +251,19 @@ async function seed(): Promise<void> {
   });
 }
 
-/** Aplica las sustituciones que firestore.rules deja marcadas como pendientes. */
-function tighten(rules: string): string {
-  const out = rules
-    .replace(/allow read: if isMember\(\) \|\| request\.auth != null;/g,
-             'allow read: if isMember();')
-    .replace(/allow create, update, delete: if request\.auth != null;/g,
-             'allow create: if willBeMember();\n      allow update, delete: if isMember();');
-  if (out === rules) throw new Error('tighten() no sustituyo nada — revisa firestore.rules');
-  return out;
+/**
+ * Guarda contra una regresion silenciosa: si alguien reabre la lectura de estas
+ * colecciones, las aserciones de mas abajo lo detectan, pero este chequeo dice
+ * exactamente que paso y por que importa.
+ */
+function assertNoOpenReads(rules: string): void {
+  if (rules.includes('allow read: if request.auth != null;')) {
+    throw new Error(
+      'Hay una coleccion con lectura abierta a cualquier autenticado. ' +
+      'Eso deja los recibos de todos los duenos al alcance de cualquier cuenta ' +
+      'con sesion. Usa isMember().'
+    );
+  }
 }
 
 // ── Suite ───────────────────────────────────────────────────────────────────
@@ -309,10 +310,12 @@ async function suite(strict: boolean): Promise<void> {
   await allowed('inquilino lee su pago legado', read(tenant, 'payments/pay-legacy'));
   await denied('extraño NO lee pago legado', read(stranger, 'payments/pay-legacy'));
 
-  await (strict ? denied : allowed)(
-    `dueño ${strict ? 'PIERDE' : 'conserva'} el recibo legado`,
-    read(owner, 'serviceReceipts/rec-legacy')
-  );
+  // Un recibo sin `memberUids` es ilegible, incluso para su dueño. Es el precio
+  // de cerrar la lectura, y por eso el backfill tenía que ir antes. Si esto
+  // empieza a pasar en producción, es que hay un camino de escritura que no está
+  // sellando el campo.
+  await denied('un recibo SIN memberUids es ilegible, incluso para su dueño',
+    read(owner, 'serviceReceipts/rec-legacy'));
 
   // ── Vinculacion por correo en el primer inicio de sesion ────────────────
   // Sin esto, `AuthService` no puede encontrar la propiedad a la que fue
@@ -337,29 +340,24 @@ async function suite(strict: boolean): Promise<void> {
   await denied('dueño NO lee el perfil de un usuario ajeno',
     read(owner, `users/${STRANGER}`));
 
-  // El motivo de esta suite: hoy pasan, endurecidas deben denegar.
-  const assertFn = strict ? denied : allowed;
-  const verb = strict ? 'NO lee' : 'lee (agujero actual)';
-  await assertFn(`extraño ${verb} serviceReceipts`, read(stranger, 'serviceReceipts/rec-1'));
-  await assertFn(`extraño ${verb} services`, read(stranger, 'services/svc-1'));
+  // El agujero que cerró todo esto.
+  await denied('extraño NO lee serviceReceipts', read(stranger, 'serviceReceipts/rec-1'));
+  await denied('extraño NO lee services', read(stranger, 'services/svc-1'));
+  await denied('extraño NO lee serviceAssignments', read(stranger, 'serviceAssignments/asg-1'));
 }
 
 async function main(): Promise<void> {
   const rules = readFileSync(new URL('../firestore.rules', import.meta.url), 'utf8');
+  assertNoOpenReads(rules);
 
-  for (const [label, source, strict] of [
-    ['reglas actuales (aditivas)', rules, false],
-    ['reglas endurecidas (paso pendiente)', tighten(rules), true],
-  ] as const) {
-    console.log(`\n  ${label}`);
-    await setRules(source);
-    await clear();
-    await seed();
-    await seedLegacy();
-    await seedInvites();
-    await seedUsers();
-    await suite(strict);
-  }
+  console.log('\n  firestore.rules');
+  await setRules(rules);
+  await clear();
+  await seed();
+  await seedLegacy();
+  await seedInvites();
+  await seedUsers();
+  await suite(true);
 
   console.log(`\n  ${passes} ok, ${failures} fallos\n`);
   process.exit(failures > 0 ? 1 : 0);

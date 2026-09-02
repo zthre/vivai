@@ -245,15 +245,9 @@ service cloud.firestore {
       // circulo del dueno denormalizado en cada service y mantenido por el
       // trigger `syncMemberUids`.
       //
-      // >>> PASO PENDIENTE (tras verificar el backfill de memberUids) <<<
-      // Sustituir las dos lineas de abajo por:
-      //     allow read: if isMember();
-      //     allow create: if willBeMember();
-      //     allow update, delete: if isMember();
-      // Hasta entonces se queda la lectura abierta, porque los documentos
-      // anteriores al backfill no tienen el campo y quedarian ilegibles.
-      allow read: if isMember() || request.auth != null;
-      allow create, update, delete: if request.auth != null;
+      allow read: if isMember();
+      allow create: if willBeMember();
+      allow update, delete: if isMember();
     }
 
     // Service Assignments: owner or collaborator on any of the assignment's properties can read/write.
@@ -263,9 +257,7 @@ service cloud.firestore {
           && request.auth.uid in get(/databases/$(database)/documents/properties/$(resource.data.propertyIds[0])).data.get('collaboratorUids', []);
       }
 
-      // >>> PASO PENDIENTE (tras verificar el backfill) <<<
-      // `allow read` pasa a `if isMember();`.
-      allow read: if isMember() || request.auth != null;
+      allow read: if isMember();
       allow create: if request.auth != null
                     && request.auth.uid == request.resource.data.ownerId;
       allow update, delete: if isMember() || (request.auth != null && (
@@ -301,14 +293,11 @@ service cloud.firestore {
       // entera. `memberUids` quita esa disyuntiva: se resuelve contra el propio
       // documento, sin lecturas extra y sin tope que exceder.
       //
-      // >>> PASO PENDIENTE (tras verificar el backfill de memberUids) <<<
-      // Sustituir la linea de lectura por:
-      //     allow read: if isMember();
-      // Es EL paso que cierra el agujero: hoy cualquier cuenta con sesion puede
-      // listar los recibos de todos los duenos, con montos y propertyId. Va al
-      // final y solo, porque es tambien el unico que puede dejar pantallas en
-      // blanco si algun documento se quedo sin el campo.
-      allow read: if isMember() || request.auth != null;
+      // Cerrado: antes era `if request.auth != null`, es decir cualquier cuenta
+      // con sesion podia listar los recibos de todos los duenos, con montos y
+      // propertyId. Se pudo cerrar cuando el backfill sello `memberUids` en todos
+      // los documentos existentes.
+      allow read: if isMember();
       allow create: if willBeMember() || (request.auth != null && (
         request.auth.uid == get(/databases/$(database)/documents/properties/$(request.resource.data.propertyId)).data.ownerId
         || request.auth.uid in get(/databases/$(database)/documents/properties/$(request.resource.data.propertyId))
