@@ -222,13 +222,18 @@ para siempre quién vivía y a cuánto.
 - Si abrir el arrendamiento falla, la asignación del inquilino **no** se deshace: se pierde
   la entrada de historial, no el dato operativo.
 
-### Cabeceras y diálogos — dos trampas
+### Cabeceras y diálogos — tres trampas
 
 - **`Cross-Origin-Opener-Policy: same-origin-allow-popups`** (`firebase.json`). NO lo cambies
   a `same-origin`: `signInWithPopup` necesita conservar la referencia a la ventana de Google
   para sondear `popup.closed`, y con la política estricta el login se queda colgado sin
   ningún error que apunte a la cabecera. El aviso «COOP policy would block the window.closed
   call» que sale en consola es preventivo, no un fallo.
+- **Caché del hosting**: `index.html` va con `Cache-Control: no-cache` y los ficheros con
+  hash con `immutable`. Sin eso, desplegar con una pestaña abierta rompe la navegación:
+  el `index.html` cacheado pide trozos de la versión anterior que el despliegue ya
+  reemplazó, y sale «Failed to fetch dynamically imported module». Para quien ya la tenía
+  abierta, `recoverFromStaleChunk` en `app.config.ts` recarga una vez.
 - **Abre los diálogos con `DialogService`, no con `MatDialog`.** Material 17 marca el fondo
   con `aria-hidden` antes de mover el foco, así que el botón que abrió el diálogo se queda
   con el foco dentro de la zona oculta y Chrome se niega a aplicarlo. `DialogService` suelta
